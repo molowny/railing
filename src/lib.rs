@@ -8,6 +8,8 @@ pub mod ui;
 pub mod tui;
 
 
+#[cfg(feature = "picker")]
+pub mod picker;
 
 pub use comfy_table::Table;
 pub use error::CliError;
