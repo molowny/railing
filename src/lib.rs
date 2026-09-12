@@ -4,6 +4,8 @@ pub mod output;
 pub mod prompts;
 pub mod ui;
 
+#[cfg(feature = "tui")]
+pub mod tui;
 
 
 
