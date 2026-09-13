@@ -7,6 +7,8 @@ pub mod ui;
 #[cfg(feature = "tui")]
 pub mod tui;
 
+#[cfg(feature = "picker")]
+pub mod detail;
 
 #[cfg(feature = "picker")]
 pub mod picker;
