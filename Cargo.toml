@@ -36,3 +36,11 @@ unicode-width = { version = "0.2", optional = true }
 default = []
 picker = ["crossterm", "nucleo-matcher", "tui"]
 tui = ["ratatui", "unicode-width"]
+
+[[example]]
+name = "picker"
+required-features = ["picker"]
+
+[[example]]
+name = "tui"
+required-features = ["tui"]
