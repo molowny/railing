@@ -100,7 +100,7 @@ pub fn pick(items: &[PickerItem], config: &PickerConfig) -> io::Result<PickerRes
         .read(true)
         .write(true)
         .open("/dev/tty")
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("cannot open /dev/tty: {e}")))?;
+        .map_err(|e| io::Error::other(format!("cannot open /dev/tty: {e}")))?;
 
     // Adaptive list size based on terminal height:
     //   tall (>=40):  ~30% of terminal
@@ -270,6 +270,7 @@ fn run_loop(
 // Rendering
 // ---------------------------------------------------------------------------
 
+#[allow(clippy::too_many_arguments)]
 fn render_picker(
     buf: &mut Buffer,
     area: Rect,
@@ -291,12 +292,16 @@ fn render_picker(
 
     // -- Item rows (content + gap between items) --
     let visible_end = (scroll_offset + max_list).min(filtered.len());
-    for i in scroll_offset..visible_end {
+    for (i, scored) in filtered
+        .iter()
+        .enumerate()
+        .skip(scroll_offset)
+        .take(max_list)
+    {
         if y + 1 >= area.y + area.height {
             break;
         }
 
-        let scored = &filtered[i];
         let item = &items[scored.original_index];
         let is_sel = i == selected;
 
@@ -506,7 +511,7 @@ fn render_item_row(
         } else {
             title_style
         };
-        buf.set_string(col, y, &ch.to_string(), style);
+        buf.set_string(col, y, ch.to_string(), style);
         col += 1;
     }
 }

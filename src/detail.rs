@@ -68,7 +68,7 @@ where
         .read(true)
         .write(true)
         .open("/dev/tty")
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("cannot open /dev/tty: {e}")))?;
+        .map_err(|e| io::Error::other(format!("cannot open /dev/tty: {e}")))?;
 
     let term_height = terminal::size().map(|(_, h)| h as usize).unwrap_or(24);
     let content_lines = count_content_lines(&item.sections, !item.meta.is_empty());
@@ -342,7 +342,7 @@ fn render_detail(
         line_idx += 1;
 
         // Fields
-        for (_fi, field) in section.fields.iter().enumerate() {
+        for field in section.fields.iter() {
             let is_sel = nav_idx == selected;
 
             if line_idx >= scroll_offset && y < content_bottom {

@@ -37,6 +37,12 @@ struct FlexChild<'a> {
     child: Box<dyn Component + 'a>,
 }
 
+impl<'a> Default for FlexRenderable<'a> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'a> FlexRenderable<'a> {
     pub fn new() -> Self {
         Self {
