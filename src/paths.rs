@@ -35,9 +35,7 @@ impl AppDirs {
     pub fn config_dir(&self) -> Result<PathBuf, CliError> {
         Ok(dirs::config_dir()
             .ok_or_else(|| {
-                CliError::Internal(anyhow::anyhow!(
-                    "unable to determine XDG config directory"
-                ))
+                CliError::Internal(anyhow::anyhow!("unable to determine XDG config directory"))
             })?
             .join(self.app))
     }
@@ -46,9 +44,7 @@ impl AppDirs {
     pub fn state_dir(&self) -> Result<PathBuf, CliError> {
         Ok(dirs::state_dir()
             .ok_or_else(|| {
-                CliError::Internal(anyhow::anyhow!(
-                    "unable to determine XDG state directory"
-                ))
+                CliError::Internal(anyhow::anyhow!("unable to determine XDG state directory"))
             })?
             .join(self.app))
     }
@@ -57,9 +53,7 @@ impl AppDirs {
     pub fn data_dir(&self) -> Result<PathBuf, CliError> {
         Ok(dirs::data_dir()
             .ok_or_else(|| {
-                CliError::Internal(anyhow::anyhow!(
-                    "unable to determine XDG data directory"
-                ))
+                CliError::Internal(anyhow::anyhow!("unable to determine XDG data directory"))
             })?
             .join(self.app))
     }
@@ -68,9 +62,7 @@ impl AppDirs {
     pub fn cache_dir(&self) -> Result<PathBuf, CliError> {
         Ok(dirs::cache_dir()
             .ok_or_else(|| {
-                CliError::Internal(anyhow::anyhow!(
-                    "unable to determine XDG cache directory"
-                ))
+                CliError::Internal(anyhow::anyhow!("unable to determine XDG cache directory"))
             })?
             .join(self.app))
     }
