@@ -74,7 +74,7 @@ mod tests {
     #[test]
     fn matches_substring() {
         let mut fuzzy = Fuzzy::new();
-        let results = fuzzy.score("git", &["github.com", "example.org", "gitlab"]);
+        let results = fuzzy.score("git", ["github.com", "example.org", "gitlab"]);
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].index, 0);
         assert_eq!(results[1].index, 2);
@@ -85,7 +85,7 @@ mod tests {
         // Empty queries produce matches with score 0 in nucleo — callers
         // typically short-circuit and skip scoring entirely. Documented here.
         let mut fuzzy = Fuzzy::new();
-        let results = fuzzy.score("", &["a", "b"]);
+        let results = fuzzy.score("", ["a", "b"]);
         assert!(results.iter().all(|r| r.score == 0));
     }
 }
