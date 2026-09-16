@@ -1,4 +1,3 @@
-
 [package]
 name = "cli-kit"
 version = "0.1.0"
@@ -30,12 +29,7 @@ tempfile = { version = "3" }
 
 [features]
 default = []
-picker = ["crossterm", "nucleo-matcher", "tui"]
-tui = ["ratatui", "unicode-width"]
-
-[[example]]
-name = "picker"
-required-features = ["picker"]
+tui = ["ratatui", "crossterm", "nucleo-matcher", "unicode-width"]
 
 [[example]]
 name = "tui"

@@ -8,12 +8,6 @@ pub mod ui;
 #[cfg(feature = "tui")]
 pub mod tui;
 
-#[cfg(feature = "picker")]
-pub mod detail;
-
-#[cfg(feature = "picker")]
-pub mod picker;
-
 pub use comfy_table::Table;
 pub use error::CliError;
 pub use output::{
