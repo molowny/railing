@@ -33,11 +33,11 @@ fn run() -> Result<(), CliError> {
         ],
     )?;
 
-    if !prompts::confirm_default_no("Send telemetry?")? {
+    if !prompts::confirm("Send telemetry?", false)? {
         ui::info("telemetry disabled");
     }
 
-    if !prompts::confirm("Save profile?")? {
+    if !prompts::confirm("Save profile?", true)? {
         return Err(CliError::Cancelled);
     }
 

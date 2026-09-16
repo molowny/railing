@@ -11,7 +11,7 @@
 //!
 //! let path = prompts::input("Certificate PEM path", "")?;
 //! let pass = prompts::password("Key passphrase (leave blank if none)")?;
-//! if prompts::confirm("Are you sure?")? { … }
+//! if prompts::confirm("Are you sure?", false)? { … }
 //! ```
 
 use crate::error::{map_prompt_err, CliError};
@@ -80,20 +80,14 @@ pub fn password(prompt: &str) -> Result<String, CliError> {
 // Confirm (yes / no)
 // ---------------------------------------------------------------------------
 
-/// Ask a yes/no question and return the boolean answer.
+/// Ask a yes/no question with an explicit pre-selected default.
 ///
+/// Pass `true` for happy-path confirmations ("Commit this?") and `false`
+/// for destructive or skippable steps ("Delete everything?").
 /// Returns `Err(CliError::Cancelled)` if the user cancels.
-pub fn confirm(prompt: &str) -> Result<bool, CliError> {
-    cliclack::confirm(prompt).interact().map_err(map_prompt_err)
-}
-
-/// Ask a yes/no question with **No** as the pre-selected default.
-///
-/// Use this for optional / skippable steps where the safe choice is to skip.
-/// Returns `Err(CliError::Cancelled)` if the user cancels.
-pub fn confirm_default_no(prompt: &str) -> Result<bool, CliError> {
+pub fn confirm(prompt: &str, default: bool) -> Result<bool, CliError> {
     cliclack::confirm(prompt)
-        .initial_value(false)
+        .initial_value(default)
         .interact()
         .map_err(map_prompt_err)
 }
