@@ -4,6 +4,7 @@ pub mod output;
 pub mod paths;
 pub mod prompts;
 pub mod ui;
+pub mod workspace;
 
 #[cfg(feature = "tui")]
 pub mod tui;
