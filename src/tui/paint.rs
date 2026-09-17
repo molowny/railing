@@ -70,8 +70,10 @@ pub fn badge(buf: &mut Buffer, x: u16, y: u16, text: &str, fg: Color, bg: Color)
 
 /// Render a section header: "── Title ──────────" filling width.
 pub fn section_header(buf: &mut Buffer, x: u16, y: u16, width: u16, title: &str, style: Style) {
+    use unicode_width::UnicodeWidthStr;
     let header = format!("── {} ", title);
-    let pad_len = (width as usize).saturating_sub(header.len());
+    let header_w = UnicodeWidthStr::width(header.as_str());
+    let pad_len = (width as usize).saturating_sub(header_w);
     let pad = "─".repeat(pad_len);
     buf.set_string(x, y, format!("{header}{pad}"), style);
 }

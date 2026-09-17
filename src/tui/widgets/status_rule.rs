@@ -37,7 +37,7 @@ impl<'a> Segment<'a> {
 /// Builder for a horizontal rule with optional content floating on it.
 #[derive(Default)]
 pub struct StatusRule<'a> {
-    left: Option<Segment<'a>>,
+    left: Vec<Segment<'a>>,
     right: Vec<Segment<'a>>,
 }
 
@@ -46,9 +46,17 @@ impl<'a> StatusRule<'a> {
         Self::default()
     }
 
-    /// Set the left segment (overwrites any previous left).
+    /// Set the first left segment (resets any previous left).
     pub fn left(mut self, seg: Segment<'a>) -> Self {
-        self.left = Some(seg);
+        self.left.clear();
+        self.left.push(seg);
+        self
+    }
+
+    /// Append an additional left segment. Left segments are painted in the
+    /// order they were pushed, separated by two spaces.
+    pub fn push_left(mut self, seg: Segment<'a>) -> Self {
+        self.left.push(seg);
         self
     }
 
@@ -71,19 +79,34 @@ impl<'a> StatusRule<'a> {
         let rule: String = "\u{2500}".repeat(width as usize);
         buf.set_string(x, y, &rule, hr_style);
 
-        // -- Left segment -------------------------------------------------
-        if let Some(seg) = self.left.as_ref() {
+        // -- Left segments ------------------------------------------------
+        if !self.left.is_empty() {
             // Leading padding space.
             buf.set_string(x, y, " ", pad_style);
-            let crumb_x = x + 1;
-            let crumb_w = width.saturating_sub(2);
-            paint::truncated_str(buf, crumb_x, y, seg.text, crumb_w, seg.style);
-            // Trailing padding space — positioned by *visual* width, not
-            // the byte length that `truncated_str` returns. Breadcrumbs use
-            // multi-byte glyphs like `▸` and would otherwise leave a gap.
-            let visual = (UnicodeWidthStr::width(seg.text) as u16).min(crumb_w);
-            if crumb_x + visual < x + width {
-                buf.set_string(crumb_x + visual, y, " ", pad_style);
+            let mut lx = x + 1;
+            let end = x + width;
+            for (i, seg) in self.left.iter().enumerate() {
+                if lx >= end {
+                    break;
+                }
+                if i > 0 {
+                    if lx + 2 > end {
+                        break;
+                    }
+                    buf.set_string(lx, y, "  ", pad_style);
+                    lx += 2;
+                }
+                let remaining = end.saturating_sub(lx).saturating_sub(1);
+                if remaining == 0 {
+                    break;
+                }
+                paint::truncated_str(buf, lx, y, seg.text, remaining, seg.style);
+                let visual = (UnicodeWidthStr::width(seg.text) as u16).min(remaining);
+                lx += visual;
+            }
+            // Trailing padding space after the last left segment.
+            if lx < end {
+                buf.set_string(lx, y, " ", pad_style);
             }
         }
 

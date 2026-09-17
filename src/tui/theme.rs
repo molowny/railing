@@ -41,3 +41,10 @@ pub fn dim_selected() -> Style {
 pub fn selected_bg() -> Style {
     Style::default().bg(BG_SELECTED)
 }
+
+/// Highlight for in-place substring matches (e.g. detail pane search).
+pub fn match_hit() -> Style {
+    Style::default()
+        .fg(Color::Yellow)
+        .add_modifier(Modifier::UNDERLINED | Modifier::BOLD)
+}
