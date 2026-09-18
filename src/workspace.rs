@@ -17,10 +17,7 @@ use std::path::{Path, PathBuf};
 ///
 /// A malformed file is surfaced as an `Err`, not silently skipped: if the
 /// user put a file there, they meant for it to take effect.
-pub fn find<T: DeserializeOwned>(
-    filename: &str,
-    start_dir: &Path,
-) -> Result<Option<(T, PathBuf)>> {
+pub fn find<T: DeserializeOwned>(filename: &str, start_dir: &Path) -> Result<Option<(T, PathBuf)>> {
     let mut current = start_dir;
     loop {
         let candidate = current.join(filename);
