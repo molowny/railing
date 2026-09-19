@@ -96,6 +96,77 @@ impl Renderable for DiagnosticsOutput {
 }
 
 // ---------------------------------------------------------------------------
+// Health-check report
+// ---------------------------------------------------------------------------
+
+/// Status of a single health check.
+#[derive(Clone, Copy, Debug)]
+pub enum CheckStatus {
+    Pass,
+    Warn,
+    Fail,
+}
+
+impl CheckStatus {
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Pass => "PASS",
+            Self::Warn => "WARN",
+            Self::Fail => "FAIL",
+        }
+    }
+}
+
+/// One row in a [`ChecksReport`].
+pub struct CheckRow {
+    pub status: CheckStatus,
+    pub name: String,
+    pub detail: String,
+}
+
+impl CheckRow {
+    pub fn new(status: CheckStatus, name: impl Into<String>, detail: impl Into<String>) -> Self {
+        Self {
+            status,
+            name: name.into(),
+            detail: detail.into(),
+        }
+    }
+}
+
+/// A list of diagnostic checks rendered as colored status rows or JSON.
+pub struct ChecksReport(pub Vec<CheckRow>);
+
+impl Renderable for ChecksReport {
+    fn render_pretty(&self) {
+        use console::style;
+        for row in &self.0 {
+            let icon = match row.status {
+                CheckStatus::Pass => style("→").green(),
+                CheckStatus::Warn => style("⚠").yellow(),
+                CheckStatus::Fail => style("✖").red(),
+            };
+            println!("{icon} {:<22} {}", row.name, row.detail);
+        }
+    }
+
+    fn render_json(&self) {
+        let items: Vec<_> = self
+            .0
+            .iter()
+            .map(|r| {
+                serde_json::json!({
+                    "name": r.name,
+                    "status": r.status.label(),
+                    "detail": r.detail,
+                })
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&items).unwrap());
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Convenience free functions
 // ---------------------------------------------------------------------------
 
@@ -166,5 +237,55 @@ mod tests {
     #[test]
     fn output_format_default_is_pretty() {
         assert!(matches!(OutputFormat::default(), OutputFormat::Pretty));
+    }
+
+    fn checks_report_json(report: &ChecksReport) -> String {
+        let items: Vec<_> = report
+            .0
+            .iter()
+            .map(|r| {
+                serde_json::json!({
+                    "name": r.name,
+                    "status": r.status.label(),
+                    "detail": r.detail,
+                })
+            })
+            .collect();
+        serde_json::to_string_pretty(&items).unwrap()
+    }
+
+    #[test]
+    fn check_status_labels() {
+        assert_eq!(CheckStatus::Pass.label(), "PASS");
+        assert_eq!(CheckStatus::Warn.label(), "WARN");
+        assert_eq!(CheckStatus::Fail.label(), "FAIL");
+    }
+
+    #[test]
+    fn checks_report_json_shape() {
+        let report = ChecksReport(vec![
+            CheckRow::new(CheckStatus::Pass, "Store exists", "/data"),
+            CheckRow::new(CheckStatus::Warn, "KDF strength", "Argon2id 64 MB"),
+            CheckRow::new(CheckStatus::Fail, "Socket", "missing"),
+        ]);
+        let json = checks_report_json(&report);
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let arr = v.as_array().expect("expected JSON array");
+        assert_eq!(arr.len(), 3);
+        assert_eq!(arr[0]["name"], "Store exists");
+        assert_eq!(arr[0]["status"], "PASS");
+        assert_eq!(arr[0]["detail"], "/data");
+        assert_eq!(arr[1]["status"], "WARN");
+        assert_eq!(arr[2]["status"], "FAIL");
+    }
+
+    #[test]
+    fn checks_report_json_clean() {
+        let report = ChecksReport(vec![CheckRow::new(
+            CheckStatus::Pass,
+            "Store exists",
+            "/data",
+        )]);
+        assert_clean_json(&checks_report_json(&report));
     }
 }
