@@ -5,7 +5,7 @@
 use std::thread::sleep;
 use std::time::Duration;
 
-use cli_kit::{ui, CliError};
+use cli_kit::{CliError, ui};
 
 fn run() -> Result<(), CliError> {
     ui::intro(" cli-kit ui demo ")?;

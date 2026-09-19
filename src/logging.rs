@@ -9,7 +9,7 @@
 //! Call [`init`] once at the start of `main`, before any other work, passing
 //! the `verbose` count from the parsed CLI args.
 
-use tracing_subscriber::{fmt, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt};
 
 /// Initialise the global `tracing` subscriber.
 ///

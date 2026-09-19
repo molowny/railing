@@ -7,7 +7,7 @@
 //! - [`make_table`] builds [`comfy_table`] tables with a consistent style.
 //! - [`DiagnosticsOutput`] is used by `config show`.
 
-use comfy_table::{presets::UTF8_BORDERS_ONLY, Cell, ContentArrangement, Table};
+use comfy_table::{Cell, ContentArrangement, Table, presets::UTF8_BORDERS_ONLY};
 
 // ---------------------------------------------------------------------------
 // OutputFormat

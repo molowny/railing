@@ -14,7 +14,7 @@
 //! if prompts::confirm("Are you sure?", false)? { … }
 //! ```
 
-use crate::error::{map_prompt_err, CliError};
+use crate::error::{CliError, map_prompt_err};
 
 // ---------------------------------------------------------------------------
 // Text input

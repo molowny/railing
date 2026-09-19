@@ -12,5 +12,5 @@ pub mod tui;
 pub use comfy_table::Table;
 pub use error::CliError;
 pub use output::{
-    make_table, print_success, DiagnosticsOutput, GlobalOpts, OutputFormat, Renderable,
+    DiagnosticsOutput, GlobalOpts, OutputFormat, Renderable, make_table, print_success,
 };

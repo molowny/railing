@@ -7,4 +7,4 @@ pub mod widgets;
 
 pub use component::{Component, FlexRenderable, HorizontalSplit};
 pub use fuzzy::{Fuzzy, FuzzyMatch};
-pub use inline::{is_interactive, run, Flow, InlineApp};
+pub use inline::{Flow, InlineApp, is_interactive, run};

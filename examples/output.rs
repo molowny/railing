@@ -4,7 +4,7 @@
 //!   cargo run --example output
 //!   cargo run --example output -- json
 
-use cli_kit::{make_table, DiagnosticsOutput, OutputFormat, Renderable};
+use cli_kit::{DiagnosticsOutput, OutputFormat, Renderable, make_table};
 
 struct User {
     name: String,

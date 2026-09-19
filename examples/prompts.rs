@@ -4,7 +4,7 @@
 //!
 //! Press Esc or Ctrl+C at any prompt to see `CliError::Cancelled` propagate.
 
-use cli_kit::{prompts, ui, CliError};
+use cli_kit::{CliError, prompts, ui};
 
 fn run() -> Result<(), CliError> {
     ui::intro(" cli-kit prompts demo ")?;
