@@ -1,12 +1,9 @@
 [package]
 name = "cli-kit"
 version = "0.1.0"
-edition = "2021"
 description = "Reusable CLI helpers: structured output, interactive prompts, and logging bootstrap"
+edition = "2024"
 license = "MIT"
-
-  [package.metadata.release]
-  tag-name = "{{version}}"
 
 [dependencies]
 anyhow             = { version = "1" }
