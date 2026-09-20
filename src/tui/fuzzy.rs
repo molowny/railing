@@ -62,7 +62,7 @@ impl Fuzzy {
                 })
             })
             .collect();
-        results.sort_by(|a, b| b.score.cmp(&a.score));
+        results.sort_by_key(|m| std::cmp::Reverse(m.score));
         results
     }
 }
