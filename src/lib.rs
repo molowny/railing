@@ -10,6 +10,7 @@ pub mod workspace;
 pub mod tui;
 
 pub use comfy_table::Table;
+pub use console::style;
 pub use error::CliError;
 pub use output::{
     CheckRow, CheckStatus, ChecksReport, DiagnosticsOutput, GlobalOpts, OutputFormat, Renderable,
