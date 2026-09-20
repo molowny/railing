@@ -94,3 +94,39 @@ pub fn outro_warning(msg: &str) -> Result<(), CliError> {
     cliclack::outro(format!("{} {}", style("⚠").yellow(), style(msg).yellow()))
         .map_err(|e| CliError::Internal(anyhow::anyhow!(e)))
 }
+
+// ---------------------------------------------------------------------------
+// Ambient notices (direnv-style)
+// ---------------------------------------------------------------------------
+//
+// For tools that emit "what just happened" status lines around shell hooks
+// or background activity. Output goes to **stderr** so it never interferes
+// with `eval`/`source` of stdout, and color codes are auto-suppressed when
+// stderr isn't a TTY.
+
+/// Emit a tagged status line to stderr: `{tag}: {body}`.
+///
+/// The tag is dimmed (so the eye lands on the body). Use this for
+/// direnv-style activity messages — env-var changes on `cd`, "vault locked"
+/// reminders, "loading config" hints. Designed to be safe to call from
+/// shell hooks because output is stderr-only.
+pub fn notice(tag: &str, body: &str) {
+    eprintln!("{} {}", style(format!("{tag}:")).dim(), body);
+}
+
+/// Render a `+name` token in green. Use when listing items that were
+/// added in a transition (e.g. env vars set by direnv-style activate).
+pub fn diff_added(name: &str) -> String {
+    format!("{}{}", style("+").green(), style(name).green())
+}
+
+/// Render a `-name` token in red. Use when listing items that were removed.
+pub fn diff_removed(name: &str) -> String {
+    format!("{}{}", style("-").red(), style(name).red())
+}
+
+/// Render `(detail)` in dim style. Use as a trailing hint on notice lines —
+/// e.g. the path of the config file that drove the transition.
+pub fn dim_hint(detail: &str) -> String {
+    style(format!("({detail})")).dim().to_string()
+}
