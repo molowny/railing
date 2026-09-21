@@ -103,6 +103,19 @@ pub fn outro_warning(msg: &str) -> Result<(), CliError> {
 // or background activity. Output goes to **stderr** so it never interferes
 // with `eval`/`source` of stdout, and color codes are auto-suppressed when
 // stderr isn't a TTY.
+//
+// We do our own `IsTerminal` + `NO_COLOR` check rather than rely on the
+// upstream `console` crate's auto-detection, which has been observed to
+// misfire inside shell hook contexts (notably fish `--on-event` and
+// `--on-variable` handlers, where stderr inheritance is non-obvious).
+
+fn stderr_color_enabled() -> bool {
+    use std::io::IsTerminal;
+    if std::env::var_os("NO_COLOR").is_some() {
+        return false;
+    }
+    std::io::stderr().is_terminal()
+}
 
 /// Emit a tagged status line to stderr: `{tag}: {body}`.
 ///
@@ -111,22 +124,50 @@ pub fn outro_warning(msg: &str) -> Result<(), CliError> {
 /// reminders, "loading config" hints. Designed to be safe to call from
 /// shell hooks because output is stderr-only.
 pub fn notice(tag: &str, body: &str) {
-    eprintln!("{} {}", style(format!("{tag}:")).dim(), body);
+    let head = format!("{tag}:");
+    if stderr_color_enabled() {
+        eprintln!("{} {}", style(head).dim().force_styling(true), body);
+    } else {
+        eprintln!("{head} {body}");
+    }
 }
 
 /// Render a `+name` token in green. Use when listing items that were
 /// added in a transition (e.g. env vars set by direnv-style activate).
 pub fn diff_added(name: &str) -> String {
-    format!("{}{}", style("+").green(), style(name).green())
+    if stderr_color_enabled() {
+        format!(
+            "{}{}",
+            style("+").green().force_styling(true),
+            style(name).green().force_styling(true)
+        )
+    } else {
+        format!("+{name}")
+    }
 }
 
 /// Render a `-name` token in red. Use when listing items that were removed.
 pub fn diff_removed(name: &str) -> String {
-    format!("{}{}", style("-").red(), style(name).red())
+    if stderr_color_enabled() {
+        format!(
+            "{}{}",
+            style("-").red().force_styling(true),
+            style(name).red().force_styling(true)
+        )
+    } else {
+        format!("-{name}")
+    }
 }
 
 /// Render `(detail)` in dim style. Use as a trailing hint on notice lines —
 /// e.g. the path of the config file that drove the transition.
 pub fn dim_hint(detail: &str) -> String {
-    style(format!("({detail})")).dim().to_string()
+    if stderr_color_enabled() {
+        style(format!("({detail})"))
+            .dim()
+            .force_styling(true)
+            .to_string()
+    } else {
+        format!("({detail})")
+    }
 }
