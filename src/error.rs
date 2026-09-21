@@ -70,21 +70,29 @@ impl CliError {
             }
             CliError::Rendered(_) => ExitCode::FAILURE,
             CliError::Usage(msg) => {
-                eprintln!("{} {}", style("✖").red(), style(msg).red());
+                eprintln!(
+                    "{} {}",
+                    style("✖").for_stderr().red(),
+                    style(msg).for_stderr().red()
+                );
                 ExitCode::from(2) // conventional usage-error code
             }
             CliError::Auth(msg) => {
                 error!(error = %self, "command failed");
                 eprintln!(
                     "{} {}",
-                    style("✖").red(),
-                    style(format!("Authentication error: {msg}")).red()
+                    style("✖").for_stderr().red(),
+                    style(format!("Authentication error: {msg}")).for_stderr().red()
                 );
                 ExitCode::FAILURE
             }
             other => {
                 error!(error = %other, "command failed");
-                eprintln!("{} {}", style("✖").red(), style(other).red());
+                eprintln!(
+                    "{} {}",
+                    style("✖").for_stderr().red(),
+                    style(other).for_stderr().red()
+                );
                 ExitCode::FAILURE
             }
         }

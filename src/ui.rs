@@ -27,7 +27,11 @@ pub fn info(msg: &str) {
 
 /// Print an error message in red.
 pub fn error(msg: &str) {
-    eprintln!("{} {}", style("✖").red(), style(msg).red());
+    eprintln!(
+        "{} {}",
+        style("✖").for_stderr().red(),
+        style(msg).for_stderr().red()
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -134,24 +138,43 @@ pub fn init_colors() {
 /// reminders, "loading config" hints. Designed to be safe to call from
 /// shell hooks because output is stderr-only.
 pub fn notice(tag: &str, body: &str) {
-    eprintln!("{} {}", style(format!("{tag}:")).dim(), body);
+    eprintln!("{} {}", style(format!("{tag}:")).for_stderr().dim(), body);
 }
 
 /// Render a `+name` token in green. Use when listing items that were
 /// added in a transition (e.g. env vars set by direnv-style activate).
+///
+/// Designed to be embedded in stderr-bound output (e.g. via [`notice`]),
+/// so the color decision uses the **stderr** color flag — important
+/// because shell hooks are typically invoked with stdout piped.
 pub fn diff_added(name: &str) -> String {
-    format!("{}{}", style("+").green(), style(name).green())
+    format!(
+        "{}{}",
+        style("+").for_stderr().green(),
+        style(name).for_stderr().green()
+    )
 }
 
 /// Render a `-name` token in red. Use when listing items that were removed.
+///
+/// Stderr-bound; see [`diff_added`] for color-flag rationale.
 pub fn diff_removed(name: &str) -> String {
-    format!("{}{}", style("-").red(), style(name).red())
+    format!(
+        "{}{}",
+        style("-").for_stderr().red(),
+        style(name).for_stderr().red()
+    )
 }
 
 /// Render `(detail)` in dim style. Use as a trailing hint on notice lines —
 /// e.g. the path of the config file that drove the transition.
+///
+/// Stderr-bound; see [`diff_added`] for color-flag rationale.
 pub fn dim_hint(detail: &str) -> String {
-    style(format!("({detail})")).dim().to_string()
+    style(format!("({detail})"))
+        .for_stderr()
+        .dim()
+        .to_string()
 }
 
 // ---------------------------------------------------------------------------
@@ -183,16 +206,55 @@ mod tests {
     fn diff_added_emits_ansi_when_colors_on() {
         let _g = lock();
         console::set_colors_enabled(true);
+        console::set_colors_enabled_stderr(true);
         let out = diff_added("FOO");
         assert!(out.contains(CSI), "should contain CSI: {out:?}");
         assert!(out.contains('+'));
         assert!(out.contains("FOO"));
     }
 
+    /// Regression: `sealward hook-env -s fish | source` has stdout piped
+    /// (not a TTY) but stderr still attached to the user's terminal. The
+    /// stderr-bound helpers (notice, diff_added, diff_removed, dim_hint)
+    /// must check the **stderr** color flag, not stdout's.
+    ///
+    /// Reproduces the bug the user observed: error notices and `+VAR`
+    /// transition messages displaying without color in fish.
+    #[test]
+    fn diff_added_respects_stderr_flag_when_stdout_piped() {
+        let _g = lock();
+        console::set_colors_enabled(false); // stdout: piped, no color
+        console::set_colors_enabled_stderr(true); // stderr: TTY, should color
+        let out = diff_added("FOO");
+        assert!(
+            out.contains(CSI),
+            "diff_added is meant for stderr; must respect stderr color flag. got: {out:?}"
+        );
+    }
+
+    #[test]
+    fn diff_removed_respects_stderr_flag_when_stdout_piped() {
+        let _g = lock();
+        console::set_colors_enabled(false);
+        console::set_colors_enabled_stderr(true);
+        let out = diff_removed("FOO");
+        assert!(out.contains(CSI), "got: {out:?}");
+    }
+
+    #[test]
+    fn dim_hint_respects_stderr_flag_when_stdout_piped() {
+        let _g = lock();
+        console::set_colors_enabled(false);
+        console::set_colors_enabled_stderr(true);
+        let out = dim_hint("~/p");
+        assert!(out.contains(CSI), "got: {out:?}");
+    }
+
     #[test]
     fn diff_added_is_plain_when_colors_off() {
         let _g = lock();
         console::set_colors_enabled(false);
+        console::set_colors_enabled_stderr(false);
         let out = diff_added("FOO");
         assert_eq!(out, "+FOO", "no ANSI when disabled: {out:?}");
     }
@@ -201,6 +263,7 @@ mod tests {
     fn diff_removed_emits_ansi_when_colors_on() {
         let _g = lock();
         console::set_colors_enabled(true);
+        console::set_colors_enabled_stderr(true);
         let out = diff_removed("BAR");
         assert!(out.contains(CSI), "{out:?}");
         assert!(out.contains('-'));
@@ -211,6 +274,7 @@ mod tests {
     fn diff_removed_is_plain_when_colors_off() {
         let _g = lock();
         console::set_colors_enabled(false);
+        console::set_colors_enabled_stderr(false);
         assert_eq!(diff_removed("BAR"), "-BAR");
     }
 
@@ -218,6 +282,7 @@ mod tests {
     fn dim_hint_emits_ansi_when_colors_on() {
         let _g = lock();
         console::set_colors_enabled(true);
+        console::set_colors_enabled_stderr(true);
         let out = dim_hint("~/p");
         assert!(out.contains(CSI), "{out:?}");
         assert!(out.contains("(~/p)"));
@@ -227,6 +292,7 @@ mod tests {
     fn dim_hint_is_plain_when_colors_off() {
         let _g = lock();
         console::set_colors_enabled(false);
+        console::set_colors_enabled_stderr(false);
         assert_eq!(dim_hint("~/p"), "(~/p)");
     }
 
