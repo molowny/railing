@@ -96,26 +96,36 @@ pub fn outro_warning(msg: &str) -> Result<(), CliError> {
 }
 
 // ---------------------------------------------------------------------------
+// Color detection
+// ---------------------------------------------------------------------------
+
+/// Configure `console`'s color globals based on our own `IsTerminal` check.
+///
+/// The upstream `console` crate's auto-detection has been observed to
+/// misfire inside shell hook contexts (notably fish `--on-event` /
+/// `--on-variable` handlers, where stderr inheritance is non-obvious),
+/// silently dropping color from error renders, ambient notices, and
+/// table output. Calling this once early in `main()` overrides
+/// console's inference with a direct `IsTerminal` check on stdout/stderr,
+/// honoring `NO_COLOR` when set.
+///
+/// `cli_kit::logging::init` calls this automatically — most binaries
+/// don't need to invoke it explicitly.
+pub fn init_colors() {
+    use std::io::IsTerminal;
+    let no_color = std::env::var_os("NO_COLOR").is_some();
+    console::set_colors_enabled(std::io::stdout().is_terminal() && !no_color);
+    console::set_colors_enabled_stderr(std::io::stderr().is_terminal() && !no_color);
+}
+
+// ---------------------------------------------------------------------------
 // Ambient notices (direnv-style)
 // ---------------------------------------------------------------------------
 //
 // For tools that emit "what just happened" status lines around shell hooks
 // or background activity. Output goes to **stderr** so it never interferes
-// with `eval`/`source` of stdout, and color codes are auto-suppressed when
-// stderr isn't a TTY.
-//
-// We do our own `IsTerminal` + `NO_COLOR` check rather than rely on the
-// upstream `console` crate's auto-detection, which has been observed to
-// misfire inside shell hook contexts (notably fish `--on-event` and
-// `--on-variable` handlers, where stderr inheritance is non-obvious).
-
-fn stderr_color_enabled() -> bool {
-    use std::io::IsTerminal;
-    if std::env::var_os("NO_COLOR").is_some() {
-        return false;
-    }
-    std::io::stderr().is_terminal()
-}
+// with `eval`/`source` of stdout. Color codes are gated by `console`'s
+// stderr-color global, which `init_colors` configures correctly at startup.
 
 /// Emit a tagged status line to stderr: `{tag}: {body}`.
 ///
@@ -124,50 +134,180 @@ fn stderr_color_enabled() -> bool {
 /// reminders, "loading config" hints. Designed to be safe to call from
 /// shell hooks because output is stderr-only.
 pub fn notice(tag: &str, body: &str) {
-    let head = format!("{tag}:");
-    if stderr_color_enabled() {
-        eprintln!("{} {}", style(head).dim().force_styling(true), body);
-    } else {
-        eprintln!("{head} {body}");
-    }
+    eprintln!("{} {}", style(format!("{tag}:")).dim(), body);
 }
 
 /// Render a `+name` token in green. Use when listing items that were
 /// added in a transition (e.g. env vars set by direnv-style activate).
 pub fn diff_added(name: &str) -> String {
-    if stderr_color_enabled() {
-        format!(
-            "{}{}",
-            style("+").green().force_styling(true),
-            style(name).green().force_styling(true)
-        )
-    } else {
-        format!("+{name}")
-    }
+    format!("{}{}", style("+").green(), style(name).green())
 }
 
 /// Render a `-name` token in red. Use when listing items that were removed.
 pub fn diff_removed(name: &str) -> String {
-    if stderr_color_enabled() {
-        format!(
-            "{}{}",
-            style("-").red().force_styling(true),
-            style(name).red().force_styling(true)
-        )
-    } else {
-        format!("-{name}")
-    }
+    format!("{}{}", style("-").red(), style(name).red())
 }
 
 /// Render `(detail)` in dim style. Use as a trailing hint on notice lines —
 /// e.g. the path of the config file that drove the transition.
 pub fn dim_hint(detail: &str) -> String {
-    if stderr_color_enabled() {
-        style(format!("({detail})"))
-            .dim()
-            .force_styling(true)
-            .to_string()
-    } else {
-        format!("({detail})")
+    style(format!("({detail})")).dim().to_string()
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    /// Tests in this module mutate `console`'s global color flags and
+    /// `NO_COLOR`. Serialize them through this lock so parallel `cargo test`
+    /// can't observe inconsistent state. Poisoning is ignored — once one
+    /// test panics, the others might double-fail but that's strictly
+    /// better than masking the original failure.
+    fn lock() -> std::sync::MutexGuard<'static, ()> {
+        static M: Mutex<()> = Mutex::new(());
+        M.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// ANSI Control Sequence Introducer (ESC `[`). Reliable marker that
+    /// some color escape was emitted.
+    const CSI: &str = "\x1b[";
+
+    // ---- diff helpers: color-on vs color-off state -----------------------
+
+    #[test]
+    fn diff_added_emits_ansi_when_colors_on() {
+        let _g = lock();
+        console::set_colors_enabled(true);
+        let out = diff_added("FOO");
+        assert!(out.contains(CSI), "should contain CSI: {out:?}");
+        assert!(out.contains('+'));
+        assert!(out.contains("FOO"));
+    }
+
+    #[test]
+    fn diff_added_is_plain_when_colors_off() {
+        let _g = lock();
+        console::set_colors_enabled(false);
+        let out = diff_added("FOO");
+        assert_eq!(out, "+FOO", "no ANSI when disabled: {out:?}");
+    }
+
+    #[test]
+    fn diff_removed_emits_ansi_when_colors_on() {
+        let _g = lock();
+        console::set_colors_enabled(true);
+        let out = diff_removed("BAR");
+        assert!(out.contains(CSI), "{out:?}");
+        assert!(out.contains('-'));
+        assert!(out.contains("BAR"));
+    }
+
+    #[test]
+    fn diff_removed_is_plain_when_colors_off() {
+        let _g = lock();
+        console::set_colors_enabled(false);
+        assert_eq!(diff_removed("BAR"), "-BAR");
+    }
+
+    #[test]
+    fn dim_hint_emits_ansi_when_colors_on() {
+        let _g = lock();
+        console::set_colors_enabled(true);
+        let out = dim_hint("~/p");
+        assert!(out.contains(CSI), "{out:?}");
+        assert!(out.contains("(~/p)"));
+    }
+
+    #[test]
+    fn dim_hint_is_plain_when_colors_off() {
+        let _g = lock();
+        console::set_colors_enabled(false);
+        assert_eq!(dim_hint("~/p"), "(~/p)");
+    }
+
+    // ---- init_colors honors NO_COLOR -------------------------------------
+
+    #[test]
+    fn init_colors_disables_when_no_color_set() {
+        let _g = lock();
+        // SAFETY: NO_COLOR mutation is serialized via `lock()`.
+        unsafe {
+            std::env::set_var("NO_COLOR", "1");
+        }
+        init_colors();
+        // Whatever stdout/stderr is in the test harness, NO_COLOR forces off.
+        assert!(!console::colors_enabled());
+        assert!(!console::colors_enabled_stderr());
+        unsafe {
+            std::env::remove_var("NO_COLOR");
+        }
+    }
+
+    #[test]
+    fn init_colors_no_color_takes_priority_over_tty() {
+        let _g = lock();
+        // Even if we pre-force colors on, NO_COLOR must turn them off.
+        console::set_colors_enabled(true);
+        console::set_colors_enabled_stderr(true);
+        unsafe {
+            std::env::set_var("NO_COLOR", "anything");
+        }
+        init_colors();
+        assert!(!console::colors_enabled());
+        assert!(!console::colors_enabled_stderr());
+        unsafe {
+            std::env::remove_var("NO_COLOR");
+        }
+    }
+
+    #[test]
+    fn init_colors_without_no_color_matches_isterminal_check() {
+        use std::io::IsTerminal;
+        let _g = lock();
+        unsafe {
+            std::env::remove_var("NO_COLOR");
+        }
+        init_colors();
+        // After init_colors, the global flags equal what we'd compute from
+        // IsTerminal — which is what `style()` callers depend on.
+        assert_eq!(console::colors_enabled(), std::io::stdout().is_terminal());
+        assert_eq!(
+            console::colors_enabled_stderr(),
+            std::io::stderr().is_terminal()
+        );
+    }
+
+    // ---- notice / alerts: smoke tests (just verify no panic) -------------
+    //
+    // notice() / success() / warning() / info() / error() write to stdio
+    // streams; we can't capture cleanly in unit tests without restructuring.
+    // These smoke tests at least verify the code paths don't panic in
+    // either color state.
+
+    #[test]
+    fn notice_does_not_panic_in_either_color_state() {
+        let _g = lock();
+        console::set_colors_enabled_stderr(true);
+        notice("test", "with color");
+        console::set_colors_enabled_stderr(false);
+        notice("test", "without color");
+    }
+
+    #[test]
+    fn alert_helpers_do_not_panic_in_either_color_state() {
+        let _g = lock();
+        for &on in &[true, false] {
+            console::set_colors_enabled(on);
+            console::set_colors_enabled_stderr(on);
+            success("ok");
+            warning("careful");
+            info("note");
+            error("fail");
+        }
     }
 }

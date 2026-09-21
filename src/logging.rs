@@ -21,7 +21,14 @@ use tracing_subscriber::{EnvFilter, fmt};
 ///
 /// The subscriber writes to **stderr** only, keeping stdout clean for
 /// structured (JSON) command output.
+///
+/// **Side effect**: also calls [`crate::ui::init_colors`] to configure
+/// `console` color output based on our own `IsTerminal` check, fixing a
+/// class of "no colors in shell hook" bugs caused by `console`'s
+/// auto-detection misfiring under unusual stderr inheritance.
 pub fn init(verbosity: u8) {
+    crate::ui::init_colors();
+
     let filter = match verbosity {
         0 => {
             // Suppress all log output by default.
