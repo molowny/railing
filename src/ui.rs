@@ -174,6 +174,31 @@ pub fn dim_hint(detail: &str) -> String {
     style(format!("({detail})")).for_stderr().dim().to_string()
 }
 
+/// Render a warning body in yellow. Use as the body of a [`notice_warn`]
+/// or compose into a longer stderr message that includes a non-fatal
+/// warning fragment.
+///
+/// Stderr-bound; see [`diff_added`] for color-flag rationale.
+pub fn warn_body(body: &str) -> String {
+    style(body).for_stderr().yellow().to_string()
+}
+
+/// Like [`notice`] but the body is rendered yellow — for non-fatal
+/// warnings: failed-but-skipped lookups, deprecation hints, partial
+/// success messages. Output is stderr-only.
+///
+/// ```text
+/// sealward: FOO: ipc: field not found — skipping
+/// └─ dim     └─ yellow
+/// ```
+pub fn notice_warn(tag: &str, body: &str) {
+    eprintln!(
+        "{} {}",
+        style(format!("{tag}:")).for_stderr().dim(),
+        warn_body(body)
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -196,6 +221,35 @@ mod tests {
     /// ANSI Control Sequence Introducer (ESC `[`). Reliable marker that
     /// some color escape was emitted.
     const CSI: &str = "\x1b[";
+
+    // ---- warn_body / notice_warn (yellow-bodied notices) -----------------
+
+    #[test]
+    fn warn_body_emits_yellow_when_stderr_color_on() {
+        let _g = lock();
+        console::set_colors_enabled(false); // hook-env case: stdout piped
+        console::set_colors_enabled_stderr(true);
+        let out = warn_body("ONLY_HERE: field not found — skipping");
+        assert!(out.contains(CSI), "got: {out:?}");
+        assert!(out.contains("ONLY_HERE"), "body content preserved: {out:?}");
+    }
+
+    #[test]
+    fn warn_body_is_plain_when_stderr_color_off() {
+        let _g = lock();
+        console::set_colors_enabled(false);
+        console::set_colors_enabled_stderr(false);
+        assert_eq!(warn_body("hello"), "hello");
+    }
+
+    #[test]
+    fn notice_warn_does_not_panic_in_either_color_state() {
+        let _g = lock();
+        for &on in &[true, false] {
+            console::set_colors_enabled_stderr(on);
+            notice_warn("sealward", "FOO: skipping");
+        }
+    }
 
     // ---- diff helpers: color-on vs color-off state -----------------------
 
