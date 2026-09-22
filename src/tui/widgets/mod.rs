@@ -5,3 +5,4 @@ pub mod overlay;
 pub mod prompt;
 pub mod status_rule;
 pub mod top_bar;
+pub mod which_key;
