@@ -82,7 +82,9 @@ impl CliError {
                 eprintln!(
                     "{} {}",
                     style("✖").for_stderr().red(),
-                    style(format!("Authentication error: {msg}")).for_stderr().red()
+                    style(format!("Authentication error: {msg}"))
+                        .for_stderr()
+                        .red()
                 );
                 ExitCode::FAILURE
             }

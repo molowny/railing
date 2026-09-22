@@ -171,10 +171,7 @@ pub fn diff_removed(name: &str) -> String {
 ///
 /// Stderr-bound; see [`diff_added`] for color-flag rationale.
 pub fn dim_hint(detail: &str) -> String {
-    style(format!("({detail})"))
-        .for_stderr()
-        .dim()
-        .to_string()
+    style(format!("({detail})")).for_stderr().dim().to_string()
 }
 
 // ---------------------------------------------------------------------------
