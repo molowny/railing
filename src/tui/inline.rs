@@ -6,6 +6,7 @@
 
 use std::fs::File;
 use std::io::{self, IsTerminal, Write};
+use std::time::Duration;
 
 use crossterm::event::{self, Event, KeyEvent, KeyEventKind};
 use crossterm::terminal;
@@ -47,6 +48,15 @@ pub trait InlineApp {
     /// Hook called before each draw. Useful for expiring transient UI
     /// (e.g. copy-feedback lines). Default: no-op.
     fn on_tick(&mut self) {}
+
+    /// If `Some(d)`, the event loop polls for input with timeout `d`; on
+    /// timeout it calls [`InlineApp::on_tick`] and redraws without
+    /// dispatching a key. Use this to drive timeout-based UI such as
+    /// chord-prefix expiry or feedback fade. Default: `None` (blocking
+    /// `event::read()`, no behavior change for existing apps).
+    fn tick_interval(&self) -> Option<Duration> {
+        None
+    }
 }
 
 /// True if an interactive inline TUI can be shown — i.e. `/dev/tty` exists
@@ -110,8 +120,20 @@ fn event_loop<A: InlineApp>(
         )?;
         term.backend_mut().flush()?;
 
-        let Event::Key(key) = event::read()? else {
-            continue;
+        let key = if let Some(timeout) = app.tick_interval() {
+            if !event::poll(timeout)? {
+                // Timeout: re-tick + redraw without dispatching a key.
+                continue;
+            }
+            let Event::Key(k) = event::read()? else {
+                continue;
+            };
+            k
+        } else {
+            let Event::Key(k) = event::read()? else {
+                continue;
+            };
+            k
         };
         if key.kind != KeyEventKind::Press {
             continue;
