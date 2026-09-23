@@ -4,5 +4,6 @@ pub mod footer_hints;
 pub mod overlay;
 pub mod prompt;
 pub mod status_rule;
+pub mod text_input;
 pub mod top_bar;
 pub mod which_key;

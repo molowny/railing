@@ -22,13 +22,14 @@ thiserror          = { version = "2" }
 tracing            = { version = "0.1" }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 unicode-width      = { version = "0.2", optional = true }
+zeroize            = { version = "1.7", features = ["derive"], optional = true }
 
 [dev-dependencies]
 tempfile = { version = "3" }
 
 [features]
 default = []
-tui = ["ratatui", "crossterm", "nucleo-matcher", "unicode-width"]
+tui = ["ratatui", "crossterm", "nucleo-matcher", "unicode-width", "zeroize"]
 
 [[example]]
 name = "tui"
