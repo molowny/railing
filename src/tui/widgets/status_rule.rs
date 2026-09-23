@@ -35,10 +35,20 @@ impl<'a> Segment<'a> {
 }
 
 /// Builder for a horizontal rule with optional content floating on it.
-#[derive(Default)]
 pub struct StatusRule<'a> {
     left: Vec<Segment<'a>>,
     right: Vec<Segment<'a>>,
+    left_sep: &'a str,
+}
+
+impl Default for StatusRule<'_> {
+    fn default() -> Self {
+        Self {
+            left: Vec::new(),
+            right: Vec::new(),
+            left_sep: "  ",
+        }
+    }
 }
 
 impl<'a> StatusRule<'a> {
@@ -54,9 +64,18 @@ impl<'a> StatusRule<'a> {
     }
 
     /// Append an additional left segment. Left segments are painted in the
-    /// order they were pushed, separated by two spaces.
+    /// order they were pushed, separated by [`left_separator`] (default two
+    /// spaces).
     pub fn push_left(mut self, seg: Segment<'a>) -> Self {
         self.left.push(seg);
+        self
+    }
+
+    /// Override the string used to join left segments. Useful for
+    /// breadcrumb-style rules where segments should be joined by a glyph
+    /// like `" ▸ "` rather than the default whitespace gap.
+    pub fn left_separator(mut self, sep: &'a str) -> Self {
+        self.left_sep = sep;
         self
     }
 
@@ -85,16 +104,17 @@ impl<'a> StatusRule<'a> {
             buf.set_string(x, y, " ", pad_style);
             let mut lx = x + 1;
             let end = x + width;
+            let sep_w = UnicodeWidthStr::width(self.left_sep) as u16;
             for (i, seg) in self.left.iter().enumerate() {
                 if lx >= end {
                     break;
                 }
                 if i > 0 {
-                    if lx + 2 > end {
+                    if lx + sep_w > end {
                         break;
                     }
-                    buf.set_string(lx, y, "  ", pad_style);
-                    lx += 2;
+                    buf.set_string(lx, y, self.left_sep, pad_style);
+                    lx += sep_w;
                 }
                 let remaining = end.saturating_sub(lx).saturating_sub(1);
                 if remaining == 0 {
