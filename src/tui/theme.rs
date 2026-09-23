@@ -12,6 +12,13 @@ pub const FG_SECONDARY: Color = Color::Gray;
 /// Dim text (borders, metadata, inactive hints).
 pub const FG_DIM: Color = Color::DarkGray;
 
+/// Accent color for keycaps, group titles, and other call-to-action chrome.
+pub const ACCENT: Color = Color::Cyan;
+
+/// Color for search/filter queries and mode titles (e.g. the which-key group
+/// name), distinct from the [`ACCENT`] used for keys.
+pub const SEARCH: Color = Color::Yellow;
+
 /// Style for selected row text.
 pub fn selected(bold: bool) -> Style {
     let s = Style::default().fg(FG_PRIMARY).bg(BG_SELECTED);
