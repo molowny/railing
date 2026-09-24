@@ -36,7 +36,8 @@ pub trait InlineApp {
     type Output;
 
     /// Pick a viewport height given the current terminal height.
-    /// Called once before entering the event loop.
+    /// Called before entering the event loop and again on every terminal
+    /// resize, so it must be a pure function of `term_height`.
     fn initial_viewport_height(&self, term_height: u16) -> u16;
 
     /// Draw one frame into `buf` at `area`.
@@ -77,18 +78,12 @@ pub fn run<A: InlineApp>(mut app: A) -> io::Result<Option<A::Output>> {
     let term_height = terminal::size().map(|(_, h)| h).unwrap_or(24);
     let viewport_height = app.initial_viewport_height(term_height);
 
-    let backend = CrosstermBackend::new(tty);
-    let mut term = Terminal::with_options(
-        backend,
-        TerminalOptions {
-            viewport: Viewport::Inline(viewport_height),
-        },
-    )?;
+    let mut term = new_terminal(&tty, viewport_height)?;
 
     terminal::enable_raw_mode()?;
     term.hide_cursor()?;
 
-    let result = event_loop(&mut term, &mut app);
+    let result = event_loop(&mut term, &mut app, &tty, viewport_height);
 
     let _ = term.show_cursor();
     let _ = terminal::disable_raw_mode();
@@ -98,10 +93,43 @@ pub fn run<A: InlineApp>(mut app: A) -> io::Result<Option<A::Output>> {
     result
 }
 
+fn new_terminal(tty: &File, viewport_height: u16) -> io::Result<Terminal<CrosstermBackend<File>>> {
+    let backend = CrosstermBackend::new(tty.try_clone()?);
+    Terminal::with_options(
+        backend,
+        TerminalOptions {
+            viewport: Viewport::Inline(viewport_height),
+        },
+    )
+}
+
+/// Re-create the terminal with a new inline viewport height.
+///
+/// `Viewport::Inline(h)` is fixed at construction: ratatui clamps it down to
+/// the terminal height on resize but never grows it back past the height it
+/// was built with. So a window that starts small keeps a small app forever
+/// unless we rebuild. Clearing first leaves the cursor at the old viewport's
+/// top-left, which is where the new viewport reserves its rows — the frame
+/// re-anchors in place instead of marching down the scrollback.
+fn resize_viewport(
+    term: &mut Terminal<CrosstermBackend<File>>,
+    tty: &File,
+    viewport_height: u16,
+) -> io::Result<()> {
+    term.clear()?;
+    term.backend_mut().flush()?;
+    *term = new_terminal(tty, viewport_height)?;
+    term.hide_cursor()?;
+    Ok(())
+}
+
 fn event_loop<A: InlineApp>(
     term: &mut Terminal<CrosstermBackend<File>>,
     app: &mut A,
+    tty: &File,
+    initial_viewport_height: u16,
 ) -> io::Result<Option<A::Output>> {
+    let mut viewport_height = initial_viewport_height;
     loop {
         app.on_tick();
 
@@ -120,20 +148,26 @@ fn event_loop<A: InlineApp>(
         )?;
         term.backend_mut().flush()?;
 
-        let key = if let Some(timeout) = app.tick_interval() {
-            if !event::poll(timeout)? {
-                // Timeout: re-tick + redraw without dispatching a key.
+        if let Some(timeout) = app.tick_interval()
+            && !event::poll(timeout)?
+        {
+            // Timeout: re-tick + redraw without dispatching a key.
+            continue;
+        }
+        let key = match event::read()? {
+            Event::Key(k) => k,
+            // Ratatui's autoresize handles the width and clamps the height on
+            // the next draw; the viewport only has to be rebuilt when the app
+            // now wants a different height (e.g. the window grew).
+            Event::Resize(_, h) => {
+                let desired = app.initial_viewport_height(h);
+                if desired != viewport_height {
+                    viewport_height = desired;
+                    resize_viewport(term, tty, desired)?;
+                }
                 continue;
             }
-            let Event::Key(k) = event::read()? else {
-                continue;
-            };
-            k
-        } else {
-            let Event::Key(k) = event::read()? else {
-                continue;
-            };
-            k
+            _ => continue,
         };
         if key.kind != KeyEventKind::Press {
             continue;
