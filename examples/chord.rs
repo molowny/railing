@@ -43,7 +43,7 @@ fn render_popup(width: u16, resolver: &ChordResolver<Action, Scope>, scope: &Sco
     let mut buf = Buffer::empty(area);
     let conts = resolver.continuations(scope);
     let conts_borrowed: Vec<(KeyEvent, &str)> = conts.iter().map(|(k, l)| (*k, *l)).collect();
-    which_key::render(&mut buf, 0, 0, width, resolver.pending(), &conts_borrowed);
+    which_key::render(&mut buf, 0, 0, width, None, resolver.pending(), &conts_borrowed);
     let mut line = String::new();
     for x in 0..width {
         line.push_str(buf.cell(Position::new(x, 0)).unwrap().symbol());

@@ -21,6 +21,11 @@
 //! chord shares that prefix in the current scope; in that case the resolver
 //! waits for further input or the timeout (default 800 ms). On timeout, an
 //! exact match (if any) commits; otherwise the chord is cancelled.
+//!
+//! The timeout can be disabled entirely with [`ChordResolver::persistent`], so
+//! a pending prefix waits indefinitely (yazi-style) until it is completed or
+//! cancelled by `Esc` / a non-matching key. That is only safe when no length-1
+//! chord shares a prefix with a longer chord in the same scope.
 
 use std::time::{Duration, Instant};
 
@@ -81,7 +86,8 @@ pub struct ChordResolver<A: Clone, S: ChordScope> {
     specs: Vec<ChordSpec<A, S>>,
     pending: Vec<KeyEvent>,
     started_at: Option<Instant>,
-    timeout: Duration,
+    /// `None` disables the timeout: a pending prefix waits indefinitely.
+    timeout: Option<Duration>,
 }
 
 impl<A: Clone, S: ChordScope> ChordResolver<A, S> {
@@ -91,13 +97,23 @@ impl<A: Clone, S: ChordScope> ChordResolver<A, S> {
             specs,
             pending: Vec::new(),
             started_at: None,
-            timeout: Duration::from_millis(800),
+            timeout: Some(Duration::from_millis(800)),
         }
     }
 
     /// Override the chord timeout (default: 800 ms).
     pub fn with_timeout(mut self, t: Duration) -> Self {
-        self.timeout = t;
+        self.timeout = Some(t);
+        self
+    }
+
+    /// Disable the chord timeout — a pending prefix waits indefinitely until it
+    /// is completed by a valid continuation or cancelled (`Esc` / a non-matching
+    /// key). Only safe when no length-1 chord shares a prefix with a longer
+    /// chord in the same scope, since such a shorter match would then never
+    /// commit (nothing left to fire it).
+    pub fn persistent(mut self) -> Self {
+        self.timeout = None;
         self
     }
 
@@ -206,8 +222,9 @@ impl<A: Clone, S: ChordScope> ChordResolver<A, S> {
     /// returns either `Resolved` (for the longest exact match of the current
     /// pending prefix) or `Cancelled`. Returns `None` otherwise.
     pub fn on_tick(&mut self) -> Option<ChordOutcome<A>> {
+        let timeout = self.timeout?;
         let started = self.started_at?;
-        if started.elapsed() < self.timeout {
+        if started.elapsed() < timeout {
             return None;
         }
         // Timeout fired. Look for an exact match of the current pending
@@ -482,5 +499,29 @@ mod tests {
         assert_eq!(r.on_key(key_char('g'), &Scope::Any), ChordOutcome::Pending);
         std::thread::sleep(Duration::from_millis(25));
         assert_eq!(r.on_tick(), Some(ChordOutcome::Resolved(Act::Down)));
+    }
+
+    #[test]
+    fn persistent_prefix_never_times_out() {
+        let mut r = ChordResolver::new(vec![ChordSpec::new(
+            vec![key_char('c'), key_char('u')],
+            "cu",
+            Act::CopyUrl,
+            Scope::Any,
+        )])
+        .persistent();
+        assert_eq!(r.on_key(key_char('c'), &Scope::Any), ChordOutcome::Pending);
+        // No timeout: ticking (even after a delay) never cancels the prefix.
+        std::thread::sleep(Duration::from_millis(25));
+        assert_eq!(r.on_tick(), None);
+        assert!(r.is_pending());
+        assert_eq!(r.on_tick(), None);
+        assert!(r.is_pending());
+        // The continuation still completes the chord.
+        assert_eq!(
+            r.on_key(key_char('u'), &Scope::Any),
+            ChordOutcome::Resolved(Act::CopyUrl)
+        );
+        assert!(!r.is_pending());
     }
 }
