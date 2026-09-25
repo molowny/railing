@@ -34,7 +34,7 @@ cli-kit = { version = "0.1", features = ["picker"] }
 
 | Module | Feature flag | Description |
 |--------|-------------|-------------|
-| `tui` | `tui` | Ratatui-based component model with flex layout, paint utilities, theme constants, and widgets |
+| `tui` | `tui` | Ratatui-based component model with flex layout, paint utilities, theme constants, widgets, and the [`screen`](#tui-surfaces) app runner |
 | `picker` | `picker` | Inline fuzzy picker with match highlighting, adaptive sizing, and score-based sorting |
 
 ## Feature flags
@@ -57,6 +57,26 @@ Runnable examples live in [`examples/`](examples/) — one per module.
 | `ui` | `cargo run --example ui` | Alerts (`success`/`warning`/`info`/`error`), `Spinner`, intro/outro banners |
 | `picker` | `cargo run --example picker --features picker` | Inline fuzzy picker with badges and footer hints |
 | `tui` | `cargo run --example tui --features tui` | `FlexRenderable` component model + `top_bar`/`footer`/`prompt` widgets |
+| `screen_canary` | `cargo run --example screen_canary --features tui` | `ScreenApp` on either surface; the probe used by `tools/altscreen-canary.sh` |
+
+## TUI surfaces
+
+`tui::screen::run` drives a `ScreenApp` on the surface it asks for:
+
+| Surface | Where it draws | Use for |
+|---------|----------------|---------|
+| `Surface::AltScreen` (default) | Full window, alternate screen | Anything sensitive, anything long-lived. Content never enters scrollback and is discarded on exit; resizing is a plain repaint |
+| `Surface::Inline { height }` | Rows below the shell prompt, primary screen | Short widgets that are part of the session and show nothing secret |
+
+Inline output lands on the primary screen, so a terminal that reflows on resize
+(kitty, VTE, alacritty) can push those rows into scrollback where the app can
+neither find nor erase them — **never render secrets on the inline surface**. On
+its first resize an inline app is moved to the alternate screen, because an
+inline viewport cannot be repaired once the terminal has reflowed around it.
+
+`tools/altscreen-canary.sh` is the regression test for all of this: it drives a
+real kitty instance, resizes it, and asserts a canary string painted by the app
+is gone from screen *and* scrollback afterwards.
 
 ## Design
 
@@ -64,6 +84,7 @@ Runnable examples live in [`examples/`](examples/) — one per module.
 - **Dual rendering** -- Output types implement both pretty-printed and JSON formats via the `Renderable` trait
 - **Prompt cancellation** -- Esc/Ctrl+C maps to `CliError::Cancelled` (exit code 130)
 - **Terminal-aware** -- Footer hints collapse for narrow terminals; picker adapts to terminal height; synchronized rendering eliminates flicker
+- **Explicit surfaces** -- A TUI app states whether it draws inline or on the alternate screen; the default is the one that cannot leak into scrollback
 
 ## Contributing
 
