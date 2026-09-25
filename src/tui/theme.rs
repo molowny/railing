@@ -49,6 +49,21 @@ pub fn selected_bg() -> Style {
     Style::default().bg(BG_SELECTED)
 }
 
+/// Style for one row of a list or outline, given its selection state and
+/// whether its pane is unfocused.
+///
+/// `dim` wins over `selected`: an unfocused pane still tracks a cursor, but
+/// showing it at full contrast competes with the pane that actually has focus.
+pub fn row(is_selected: bool, dim_pane: bool) -> Style {
+    if dim_pane {
+        dim()
+    } else if is_selected {
+        selected(false)
+    } else {
+        normal()
+    }
+}
+
 /// Highlight for in-place substring matches (e.g. detail pane search).
 pub fn match_hit() -> Style {
     Style::default()
