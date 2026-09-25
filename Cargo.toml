@@ -39,3 +39,7 @@ required-features = ["tui"]
 [[example]]
 name = "chord"
 required-features = ["tui"]
+
+[[example]]
+name = "screen_canary"
+required-features = ["tui"]
