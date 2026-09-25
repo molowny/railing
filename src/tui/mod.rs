@@ -3,6 +3,7 @@ pub mod component;
 pub mod fuzzy;
 pub mod paint;
 pub mod screen;
+pub mod text;
 pub mod theme;
 pub mod widgets;
 
