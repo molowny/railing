@@ -137,6 +137,94 @@ pub mod fs {
             .with_context(|| format!("Failed to write file: {}", path.display()))
     }
 
+    /// Write `data` to `path` atomically, with owner-only permissions
+    /// (`0o600` on Unix).
+    ///
+    /// Unlike [`write_private_file`], a reader never observes a truncated or
+    /// partially written file: the data goes to a sibling temporary file which
+    /// is then renamed onto `path`. Rename within a directory is atomic on
+    /// POSIX, so `path` always holds either the complete previous contents or
+    /// the complete new ones.
+    ///
+    /// Use this for state files that are re-read on the next run — a crash or
+    /// `^C` midway through a plain write can otherwise leave behind a file that
+    /// no longer parses.
+    ///
+    /// The temporary file is created with the target permissions *before* any
+    /// bytes are written, so the contents are never briefly readable at the
+    /// process umask. It is removed on failure.
+    pub fn write_private_file_atomic(path: &Path, data: impl AsRef<[u8]>) -> Result<()> {
+        _write_private_file_atomic(path, data.as_ref())
+    }
+
+    #[cfg(unix)]
+    fn _write_private_file_atomic(path: &Path, data: &[u8]) -> Result<()> {
+        use std::fs::OpenOptions;
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+
+        let tmp_path = temp_sibling(path);
+
+        let write_tmp = || -> Result<()> {
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(&tmp_path)
+                .with_context(|| {
+                    format!("Failed to create temporary file: {}", tmp_path.display())
+                })?;
+
+            file.write_all(data)
+                .with_context(|| format!("Failed to write file: {}", tmp_path.display()))?;
+
+            // Flush to disk before the rename so a crash cannot leave the
+            // renamed file present but empty.
+            file.sync_all()
+                .with_context(|| format!("Failed to flush file: {}", tmp_path.display()))
+        };
+
+        if let Err(e) = write_tmp() {
+            let _ = std::fs::remove_file(&tmp_path);
+            return Err(e);
+        }
+
+        std::fs::rename(&tmp_path, path).map_err(|e| {
+            let _ = std::fs::remove_file(&tmp_path);
+            anyhow::Error::new(e).context(format!("Failed to replace file: {}", path.display()))
+        })
+    }
+
+    #[cfg(not(unix))]
+    fn _write_private_file_atomic(path: &Path, data: &[u8]) -> Result<()> {
+        let tmp_path = temp_sibling(path);
+
+        if let Err(e) = std::fs::write(&tmp_path, data)
+            .with_context(|| format!("Failed to write file: {}", tmp_path.display()))
+        {
+            let _ = std::fs::remove_file(&tmp_path);
+            return Err(e);
+        }
+
+        // Windows `rename` fails when the destination exists.
+        let _ = std::fs::remove_file(path);
+        std::fs::rename(&tmp_path, path).map_err(|e| {
+            let _ = std::fs::remove_file(&tmp_path);
+            anyhow::Error::new(e).context(format!("Failed to replace file: {}", path.display()))
+        })
+    }
+
+    /// Build the temporary path used by [`write_private_file_atomic`].
+    ///
+    /// It must live in the same directory as the target, otherwise the rename
+    /// could cross a filesystem boundary and stop being atomic. The PID keeps
+    /// concurrent writers from clobbering each other's temporaries.
+    fn temp_sibling(path: &Path) -> std::path::PathBuf {
+        let mut name = path.file_name().unwrap_or_default().to_os_string();
+        name.push(format!(".tmp.{}", std::process::id()));
+        path.with_file_name(name)
+    }
+
     /// Create `dir` and all parents with owner-only permissions
     /// (`0o700` on Unix). Idempotent.
     pub fn create_private_dir_all(dir: &Path) -> Result<()> {
@@ -224,6 +312,84 @@ pub mod fs {
             let meta = std::fs::metadata(&path).unwrap();
             let mode = meta.permissions().mode() & 0o777;
             assert_eq!(mode, 0o600, "expected mode 0o600, got 0o{:o}", mode);
+        }
+
+        #[test]
+        fn test_write_private_file_atomic_creates_file() {
+            let tmp = TempDir::new().unwrap();
+            let path = tmp.path().join("secret.json");
+            write_private_file_atomic(&path, b"{\"test\": true}").unwrap();
+            let content = std::fs::read_to_string(&path).unwrap();
+            assert_eq!(content, "{\"test\": true}");
+        }
+
+        #[test]
+        #[cfg(unix)]
+        fn test_write_private_file_atomic_mode_600() {
+            use std::os::unix::fs::PermissionsExt;
+            let tmp = TempDir::new().unwrap();
+            let path = tmp.path().join("secret.json");
+            write_private_file_atomic(&path, b"data").unwrap();
+            let meta = std::fs::metadata(&path).unwrap();
+            let mode = meta.permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600, "expected mode 0o600, got 0o{:o}", mode);
+        }
+
+        #[test]
+        fn test_write_private_file_atomic_replaces_existing() {
+            let tmp = TempDir::new().unwrap();
+            let path = tmp.path().join("secret.json");
+            write_private_file_atomic(&path, b"old contents, much longer").unwrap();
+            write_private_file_atomic(&path, b"new").unwrap();
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), "new");
+        }
+
+        /// The temporary file must not survive a successful write — a stray
+        /// `.tmp.<pid>` sibling would be mistaken for state by directory walks
+        /// such as `ksef auth purge`.
+        #[test]
+        fn test_write_private_file_atomic_leaves_no_temp_file() {
+            let tmp = TempDir::new().unwrap();
+            let path = tmp.path().join("secret.json");
+            write_private_file_atomic(&path, b"data").unwrap();
+
+            let leftovers: Vec<_> = std::fs::read_dir(tmp.path())
+                .unwrap()
+                .flatten()
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .filter(|n| n != "secret.json")
+                .collect();
+            assert!(leftovers.is_empty(), "unexpected leftovers: {leftovers:?}");
+        }
+
+        /// A failed write must leave the previous contents intact — that is the
+        /// whole point of going through a temporary file.
+        #[test]
+        fn test_write_private_file_atomic_failure_preserves_original() {
+            let tmp = TempDir::new().unwrap();
+            let path = tmp.path().join("secret.json");
+            write_private_file_atomic(&path, b"original").unwrap();
+
+            // A directory in place of the temp file makes create_new fail.
+            let tmp_path = temp_sibling(&path);
+            std::fs::create_dir(&tmp_path).unwrap();
+
+            assert!(write_private_file_atomic(&path, b"replacement").is_err());
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), "original");
+        }
+
+        #[test]
+        fn test_temp_sibling_stays_in_same_directory() {
+            let path = Path::new("/some/dir/tokens.json");
+            let tmp_path = temp_sibling(path);
+            assert_eq!(tmp_path.parent(), path.parent());
+            assert!(
+                tmp_path
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .starts_with("tokens.json.tmp.")
+            );
         }
 
         #[test]
