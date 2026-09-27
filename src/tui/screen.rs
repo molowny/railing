@@ -81,8 +81,16 @@ pub trait ScreenApp {
     fn on_key(&mut self, key: KeyEvent) -> Flow<Self::Output>;
 
     /// Hook called before each draw. Useful for expiring transient UI
-    /// (e.g. copy-feedback lines). Default: no-op.
-    fn on_tick(&mut self) {}
+    /// (e.g. copy-feedback lines). Default: keep running.
+    ///
+    /// Returns a [`Flow`] for the same reason [`ScreenApp::on_key`] does: an
+    /// app that watches something outside the keyboard — a clock, a socket, a
+    /// file — may learn from a tick that there is nothing left to show, and
+    /// waiting for a keystroke to act on that would mean drawing a frame the
+    /// app has already disowned.
+    fn on_tick(&mut self) -> Flow<Self::Output> {
+        Flow::Continue
+    }
 
     /// If `Some(d)`, the event loop polls for input with timeout `d`; on
     /// timeout it calls [`ScreenApp::on_tick`] and redraws without
@@ -244,7 +252,11 @@ fn event_loop<A: ScreenApp>(
             }
         }
 
-        app.on_tick();
+        match app.on_tick() {
+            Flow::Continue => {}
+            Flow::Exit(v) => return Ok(Some(v)),
+            Flow::Cancel => return Ok(None),
+        }
 
         crossterm::queue!(
             term.backend_mut(),

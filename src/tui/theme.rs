@@ -39,9 +39,14 @@ pub fn dim() -> Style {
     Style::default().fg(FG_DIM)
 }
 
-/// Style for dim text on selected background.
+/// Style for dim text on the selected background.
+///
+/// Not `dim().bg(BG_SELECTED)`: [`FG_DIM`] and [`BG_SELECTED`] are the same
+/// color, so that spelling paints the text invisibly. Metadata on a selected
+/// row has to dim *relative to* that row, which means stepping the foreground
+/// down from [`FG_PRIMARY`] rather than all the way to [`FG_DIM`].
 pub fn dim_selected() -> Style {
-    Style::default().fg(FG_DIM).bg(BG_SELECTED)
+    Style::default().fg(FG_SECONDARY).bg(BG_SELECTED)
 }
 
 /// Background style for selected area (spaces/fill).
@@ -69,4 +74,37 @@ pub fn match_hit() -> Style {
     Style::default()
         .fg(Color::Yellow)
         .add_modifier(Modifier::UNDERLINED | Modifier::BOLD)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Text the same color as the cell behind it is not dim, it is gone.
+    /// `FG_DIM == BG_SELECTED` today, so any style pairing them is a bug.
+    #[test]
+    fn no_style_paints_text_in_its_own_background_color() {
+        let cases = [
+            ("selected", selected(false)),
+            ("selected_bold", selected(true)),
+            ("dim_selected", dim_selected()),
+            ("row_selected", row(true, false)),
+            ("match_hit", match_hit()),
+        ];
+        for (name, style) in cases {
+            if let (Some(fg), Some(bg)) = (style.fg, style.bg) {
+                assert_ne!(fg, bg, "{name} is invisible");
+            }
+        }
+    }
+
+    /// The point of `dim_selected` is to read as metadata next to
+    /// full-contrast text on the same row.
+    #[test]
+    fn dim_selected_sits_between_primary_and_the_background() {
+        let s = dim_selected();
+        assert_eq!(s.bg, Some(BG_SELECTED), "must keep the selected row's fill");
+        assert_ne!(s.fg, Some(FG_PRIMARY), "not dimmer than primary text");
+        assert_ne!(s.fg, Some(BG_SELECTED), "invisible against its own row");
+    }
 }
