@@ -58,6 +58,8 @@ Runnable examples live in [`examples/`](examples/) — one per module.
 | `picker` | `cargo run --example picker --features picker` | Inline fuzzy picker with badges and footer hints |
 | `tui` | `cargo run --example tui --features tui` | `FlexRenderable` component model + `top_bar`/`footer`/`prompt` widgets |
 | `screen_canary` | `cargo run --example screen_canary --features tui` | `ScreenApp` on either surface; the probe used by `tools/altscreen-canary.sh` |
+| `outline` | `cargo run --example outline --features tui` | `OutlineBuilder`/`OutlineState` fold-aware tree: keyed fold state, `fold_right`, `expand_all` |
+| `text_area` | `cargo run --example text_area --features tui` | `TextArea` multi-line input: newline on `Enter`, wrapping, `desired_height`, line-scoped `Ctrl-u` |
 
 ## TUI surfaces
 

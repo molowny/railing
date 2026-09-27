@@ -1,4 +1,3 @@
-
 [package]
 name = "cli-kit"
 version = "0.3.0"
@@ -42,4 +41,12 @@ required-features = ["tui"]
 
 [[example]]
 name = "screen_canary"
+required-features = ["tui"]
+
+[[example]]
+name = "outline"
+required-features = ["tui"]
+
+[[example]]
+name = "text_area"
 required-features = ["tui"]
