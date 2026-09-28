@@ -7,10 +7,13 @@
 #   AltScreen: after resizing and quitting, the canary string must appear
 #              NOWHERE in the terminal buffer (screen + scrollback), and the
 #              shell output printed before the app must still be there.
+#   Bigtext:   the same assertion, with the canary drawn as sealward's Large
+#              Type panel draws a secret — block glyphs over a literal row.
+#              The largest plaintext footprint this runner produces.
 #   Inline:    the widget renders inline, and the first resize moves it to the
 #              alternate screen (exactly one frame on screen from then on).
 #
-# Usage: cli-kit/tools/altscreen-canary.sh [altscreen|inline|both]
+# Usage: cli-kit/tools/altscreen-canary.sh [altscreen|inline|bigtext|both]
 # Requires: kitty (any window; a separate minimized instance is used).
 
 set -u
@@ -60,7 +63,7 @@ run_case() {
   left=$(kitty @ --to "$sock" get-text --match "id:$id" --extent all | grep -c "$CANARY")
   shell_lines=$(kitty @ --to "$sock" get-text --match "id:$id" --extent all | grep -c 'shell output line')
 
-  if [ "$mode" = "altscreen" ]; then
+  if [ "$mode" != "inline" ]; then
     if [ "$left" = "0" ]; then
       echo "  ok: canary gone from screen and scrollback"
     else
@@ -84,9 +87,9 @@ run_case() {
 }
 
 case "$MODE" in
-  altscreen|inline) run_case "$MODE" ;;
-  both) run_case altscreen; run_case inline ;;
-  *) echo "usage: $0 [altscreen|inline|both]"; exit 2 ;;
+  altscreen|inline|bigtext) run_case "$MODE" ;;
+  both) run_case altscreen; run_case bigtext; run_case inline ;;
+  *) echo "usage: $0 [altscreen|inline|bigtext|both]"; exit 2 ;;
 esac
 
 [ "$FAILED" = "0" ] && echo "PASS" || echo "FAIL"
