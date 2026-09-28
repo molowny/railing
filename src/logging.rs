@@ -27,13 +27,16 @@ use tracing_subscriber::{EnvFilter, fmt};
 /// class of "no colors in shell hook" bugs caused by `console`'s
 /// auto-detection misfiring under unusual stderr inheritance.
 pub fn init(verbosity: u8) {
+    init_with_floor(verbosity, "off");
+}
+
+/// Like [`init`], but with a level that is always on at verbosity 0 — e.g.
+/// `"warn"` for a tool whose failures must not be silent by default.
+pub fn init_with_floor(verbosity: u8, floor: &str) {
     crate::ui::init_colors();
 
     let filter = match verbosity {
-        0 => {
-            // Suppress all log output by default.
-            EnvFilter::new("off")
-        }
+        0 => EnvFilter::new(floor),
         1 => EnvFilter::new("info"),
         _ => EnvFilter::new("debug"),
     };
