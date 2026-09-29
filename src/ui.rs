@@ -100,6 +100,108 @@ pub fn outro_warning(msg: &str) -> Result<(), CliError> {
 }
 
 // ---------------------------------------------------------------------------
+// Inside a prompt group: notes and gutter log lines
+// ---------------------------------------------------------------------------
+//
+// Between `intro` and `outro`, plain `println!` breaks the `│` gutter that
+// cliclack draws. These render inside it: a boxed note for a block of text
+// and one-line log entries with the group's own symbols.
+
+fn io_err(e: std::io::Error) -> CliError {
+    CliError::Internal(anyhow::anyhow!(e))
+}
+
+/// A titled, boxed block of text inside the prompt group (`┌ title ─┐ … └─┘`).
+pub fn note(title: &str, body: &str) -> Result<(), CliError> {
+    cliclack::note(title, body).map_err(io_err)
+}
+
+/// One-line log entries drawn with the prompt group's gutter.
+pub mod log {
+    use super::{CliError, io_err};
+
+    /// A completed step (`◇`).
+    pub fn step(msg: &str) -> Result<(), CliError> {
+        cliclack::log::step(msg).map_err(io_err)
+    }
+
+    /// An informational line (`●`).
+    pub fn info(msg: &str) -> Result<(), CliError> {
+        cliclack::log::info(msg).map_err(io_err)
+    }
+
+    /// A dim remark (`│`).
+    pub fn remark(msg: &str) -> Result<(), CliError> {
+        cliclack::log::remark(msg).map_err(io_err)
+    }
+
+    pub fn success(msg: &str) -> Result<(), CliError> {
+        cliclack::log::success(msg).map_err(io_err)
+    }
+
+    pub fn warning(msg: &str) -> Result<(), CliError> {
+        cliclack::log::warning(msg).map_err(io_err)
+    }
+
+    pub fn error(msg: &str) -> Result<(), CliError> {
+        cliclack::log::error(msg).map_err(io_err)
+    }
+}
+
+/// Streams text inside the prompt group: every line starts with the gutter
+/// bar, however the text arrives (a token at a time is fine). Call
+/// [`Gutter::finish`] before printing anything else so the last line is closed.
+#[derive(Default)]
+pub struct Gutter {
+    at_line_start: bool,
+    open: bool,
+}
+
+impl Gutter {
+    pub fn new() -> Self {
+        Self {
+            at_line_start: true,
+            open: false,
+        }
+    }
+
+    /// Whether a line is currently open (text written without a trailing newline).
+    pub fn mid_line(&self) -> bool {
+        self.open && !self.at_line_start
+    }
+
+    #[allow(clippy::print_stdout)]
+    pub fn write(&mut self, delta: &str) {
+        use std::io::Write;
+        let bar = style("│").color256(8);
+        let mut out = std::io::stdout().lock();
+        for part in delta.split_inclusive('\n') {
+            if self.at_line_start {
+                let _ = write!(out, "{bar}  ");
+            }
+            let _ = write!(out, "{part}");
+            self.at_line_start = part.ends_with('\n');
+            self.open = true;
+        }
+        let _ = out.flush();
+    }
+
+    /// Close an open line and leave the group's usual empty `│` line.
+    #[allow(clippy::print_stdout)]
+    pub fn finish(&mut self) {
+        if !self.open {
+            return;
+        }
+        if !self.at_line_start {
+            println!();
+        }
+        println!("{}", style("│").color256(8));
+        self.at_line_start = true;
+        self.open = false;
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Color detection
 // ---------------------------------------------------------------------------
 
