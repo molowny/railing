@@ -58,6 +58,16 @@ impl CliError {
         CliError::Internal(e)
     }
 
+    /// The process exit code for this error: 130 for a cancelled prompt,
+    /// 2 for a usage error, 1 otherwise.
+    pub fn exit_code(&self) -> ExitCode {
+        match self {
+            CliError::Cancelled => ExitCode::from(130),
+            CliError::Usage(_) => ExitCode::from(2),
+            _ => ExitCode::FAILURE,
+        }
+    }
+
     /// Render this error to stderr in the shared style and return the
     /// appropriate exit code.
     ///

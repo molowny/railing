@@ -137,6 +137,39 @@ impl CheckRow {
 /// A list of diagnostic checks rendered as colored status rows or JSON.
 pub struct ChecksReport(pub Vec<CheckRow>);
 
+impl ChecksReport {
+    /// Number of (passed, warned, failed) checks.
+    pub fn counts(&self) -> (usize, usize, usize) {
+        self.0.iter().fold((0, 0, 0), |(p, w, f), r| match r.status {
+            CheckStatus::Pass => (p + 1, w, f),
+            CheckStatus::Warn => (p, w + 1, f),
+            CheckStatus::Fail => (p, w, f + 1),
+        })
+    }
+
+    /// The worst status seen, as a flow outcome.
+    pub fn outcome(&self) -> crate::flow::Outcome {
+        match self.counts() {
+            (_, _, f) if f > 0 => crate::flow::Outcome::Fail,
+            (_, w, _) if w > 0 => crate::flow::Outcome::Warn,
+            _ => crate::flow::Outcome::Ok,
+        }
+    }
+
+    /// `5 passed`, `4 passed · 1 warning · 2 failed`.
+    pub fn summary(&self) -> String {
+        let (p, w, f) = self.counts();
+        let mut parts = vec![format!("{p} passed")];
+        if w > 0 {
+            parts.push(format!("{w} warning{}", if w == 1 { "" } else { "s" }));
+        }
+        if f > 0 {
+            parts.push(format!("{f} failed"));
+        }
+        parts.join(" · ")
+    }
+}
+
 impl Renderable for ChecksReport {
     fn render_pretty(&self) {
         use console::style;
