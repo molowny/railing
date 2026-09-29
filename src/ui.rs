@@ -112,8 +112,42 @@ fn io_err(e: std::io::Error) -> CliError {
 }
 
 /// A titled, boxed block of text inside the prompt group (`┌ title ─┐ … └─┘`).
+/// Lines longer than the terminal are word-wrapped so the box always fits.
 pub fn note(title: &str, body: &str) -> Result<(), CliError> {
-    cliclack::note(title, body).map_err(io_err)
+    let cols = console::Term::stdout().size().1 as usize;
+    let width = cols.saturating_sub(8).clamp(40, 120);
+    cliclack::note(title, wrap_to(body, width)).map_err(io_err)
+}
+
+/// Word-wrap every line of `text` to `width` visible columns (ANSI styling is
+/// not counted). Existing line breaks are kept; leading indentation of a
+/// wrapped line is carried onto its continuations.
+pub fn wrap_to(text: &str, width: usize) -> String {
+    let mut out = Vec::new();
+    for line in text.lines() {
+        if console::measure_text_width(line) <= width {
+            out.push(line.to_string());
+            continue;
+        }
+        let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
+        let mut cur = indent.clone();
+        let mut cur_w = console::measure_text_width(&cur);
+        for word in line.split_whitespace() {
+            let w = console::measure_text_width(word);
+            if cur_w > indent.len() && cur_w + 1 + w > width {
+                out.push(std::mem::replace(&mut cur, indent.clone()));
+                cur_w = indent.len();
+            }
+            if cur_w > indent.len() {
+                cur.push(' ');
+                cur_w += 1;
+            }
+            cur.push_str(word);
+            cur_w += w;
+        }
+        out.push(cur);
+    }
+    out.join("\n")
 }
 
 /// One-line log entries drawn with the prompt group's gutter.
@@ -528,5 +562,21 @@ mod tests {
             info("note");
             error("fail");
         }
+    }
+}
+
+#[cfg(test)]
+mod wrap_tests {
+    use super::wrap_to;
+
+    #[test]
+    fn wraps_long_lines_and_keeps_short_ones() {
+        let t = "short\n  a long indented line that must wrap somewhere sensible";
+        let w = wrap_to(t, 30);
+        assert_eq!(
+            w,
+            "short\n  a long indented line that\n  must wrap somewhere sensible"
+        );
+        assert!(w.lines().all(|l| l.chars().count() <= 30));
     }
 }
