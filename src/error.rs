@@ -356,13 +356,19 @@ mod tests {
         let ext = CliError::External("item not found".into()).to_json();
         assert_eq!(ext["error"]["kind"], "external");
         assert_eq!(ext["error"]["message"], "item not found");
-        assert_eq!(CliError::Rendered("x".into()).to_json()["error"]["kind"], "failed");
+        assert_eq!(
+            CliError::Rendered("x".into()).to_json()["error"]["kind"],
+            "failed"
+        );
     }
 
     #[test]
     fn json_internal_message_has_the_chain() {
         let e = CliError::from_anyhow(anyhow::anyhow!("root cause").context("outer"));
-        let msg = e.to_json()["error"]["message"].as_str().unwrap().to_string();
+        let msg = e.to_json()["error"]["message"]
+            .as_str()
+            .unwrap()
+            .to_string();
         assert!(msg.contains("outer") && msg.contains("root cause"), "{msg}");
     }
 

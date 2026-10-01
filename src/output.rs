@@ -159,11 +159,13 @@ pub struct ChecksReport(pub Vec<CheckRow>);
 impl ChecksReport {
     /// Number of (passed, warned, failed) checks.
     pub fn counts(&self) -> (usize, usize, usize) {
-        self.0.iter().fold((0, 0, 0), |(p, w, f), r| match r.status {
-            CheckStatus::Pass => (p + 1, w, f),
-            CheckStatus::Warn => (p, w + 1, f),
-            CheckStatus::Fail => (p, w, f + 1),
-        })
+        self.0
+            .iter()
+            .fold((0, 0, 0), |(p, w, f), r| match r.status {
+                CheckStatus::Pass => (p + 1, w, f),
+                CheckStatus::Warn => (p, w + 1, f),
+                CheckStatus::Fail => (p, w, f + 1),
+            })
     }
 
     /// The worst status seen, as a flow outcome.

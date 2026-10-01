@@ -61,7 +61,9 @@ pub enum Outcome {
 pub fn end(outcome: Outcome, message: &str) {
     let closing = outro_text(message);
     let prev = DEPTH
-        .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |d| Some(d.saturating_sub(1)))
+        .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |d| {
+            Some(d.saturating_sub(1))
+        })
         .unwrap_or(0);
     let _ = match (prev <= 1, outcome) {
         (true, Outcome::Ok) => ui::outro_success(&closing),
@@ -397,7 +399,10 @@ mod tests {
     #[test]
     fn closing_lines_stay_aligned_under_the_first() {
         assert_eq!(outro_text("one"), "one");
-        assert_eq!(outro_text("bad input\nrun --help"), "bad input\n   run --help");
+        assert_eq!(
+            outro_text("bad input\nrun --help"),
+            "bad input\n   run --help"
+        );
     }
 
     #[test]
