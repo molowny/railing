@@ -9,7 +9,7 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use comfy_table::{Cell, ContentArrangement, Table, presets::UTF8_BORDERS_ONLY};
+use comfy_table::{Attribute, Cell, ContentArrangement, Table, presets::UTF8_BORDERS_ONLY};
 
 // ---------------------------------------------------------------------------
 // OutputFormat
@@ -76,14 +76,26 @@ pub trait Renderable {
 // Table helper
 // ---------------------------------------------------------------------------
 
-/// Build a [`comfy_table::Table`] with the shared CLI preset.
+/// Build a [`comfy_table::Table`] with the shared CLI preset: bold header,
+/// styled only when stdout has colour. Prefer [`crate::Grid`], which also
+/// draws inside a live flow and takes [`crate::Tone`]s.
 pub fn make_table(headers: &[&str], no_header: bool) -> Table {
     let mut table = Table::new();
     table
         .load_preset(UTF8_BORDERS_ONLY)
         .set_content_arrangement(ContentArrangement::Dynamic);
+    if console::colors_enabled() {
+        table.enforce_styling();
+    } else {
+        table.force_no_tty();
+    }
     if !no_header {
-        table.set_header(headers.iter().map(Cell::new).collect::<Vec<_>>());
+        table.set_header(
+            headers
+                .iter()
+                .map(|h| Cell::new(h).add_attribute(Attribute::Bold))
+                .collect::<Vec<_>>(),
+        );
     }
     table
 }

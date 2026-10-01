@@ -340,16 +340,16 @@ pub fn notice_warn(tag: &str, body: &str) {
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use std::sync::Mutex;
 
-    /// Tests in this module mutate `console`'s global color flags and
+    /// Tests here and in `grid` mutate `console`'s global color flags and
     /// `NO_COLOR`. Serialize them through this lock so parallel `cargo test`
     /// can't observe inconsistent state. Poisoning is ignored — once one
     /// test panics, the others might double-fail but that's strictly
     /// better than masking the original failure.
-    fn lock() -> std::sync::MutexGuard<'static, ()> {
+    pub(crate) fn lock() -> std::sync::MutexGuard<'static, ()> {
         static M: Mutex<()> = Mutex::new(());
         M.lock().unwrap_or_else(|e| e.into_inner())
     }

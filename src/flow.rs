@@ -24,11 +24,12 @@
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use comfy_table::{Attribute, Cell, ContentArrangement, Table, presets::NOTHING};
 use console::style;
 
 use crate::error::CliError;
-use crate::output::{CheckStatus, ChecksReport, Renderable, make_table};
+pub use crate::grid::Grid;
+use crate::grid::boxed_note;
+use crate::output::{CheckStatus, ChecksReport, Renderable};
 use crate::ui;
 
 /// Nesting depth of open live groups.
@@ -114,99 +115,6 @@ fn wrapped(msg: &str) -> String {
     ui::wrap_to(msg, note_width())
 }
 
-/// A table with optional lead lines, shown as a titled box in a live flow.
-#[derive(Clone, Debug, Default)]
-pub struct Grid {
-    lead: Vec<String>,
-    headers: Vec<String>,
-    rows: Vec<Vec<String>>,
-    no_header: bool,
-}
-
-impl Grid {
-    pub fn new(headers: &[&str]) -> Self {
-        Self {
-            headers: headers.iter().map(|h| h.to_string()).collect(),
-            ..Self::default()
-        }
-    }
-
-    /// A two-column key/value grid with no header row.
-    pub fn kv() -> Self {
-        Self {
-            headers: vec!["Property".into(), "Value".into()],
-            no_header: true,
-            ..Self::default()
-        }
-    }
-
-    /// Hide the header row (`--no-header`).
-    pub fn no_header(mut self, yes: bool) -> Self {
-        self.no_header |= yes;
-        self
-    }
-
-    /// A line above the table, inside the box (`Branch: master`).
-    pub fn lead(&mut self, line: impl Into<String>) -> &mut Self {
-        self.lead.push(line.into());
-        self
-    }
-
-    pub fn row<I, S>(&mut self, cells: I) -> &mut Self
-    where
-        I: IntoIterator<Item = S>,
-        S: Into<String>,
-    {
-        self.rows.push(cells.into_iter().map(Into::into).collect());
-        self
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.rows.is_empty()
-    }
-
-    /// Borderless, header dimmed, fitted to `width` columns — the box around
-    /// it is the border.
-    fn boxed(&self, width: usize) -> String {
-        let mut t = Table::new();
-        t.load_preset(NOTHING)
-            .set_content_arrangement(ContentArrangement::Dynamic)
-            .set_width(width as u16);
-        if console::colors_enabled_stderr() {
-            t.enforce_styling();
-        }
-        if !self.no_header {
-            t.set_header(
-                self.headers
-                    .iter()
-                    .map(|h| Cell::new(h.to_uppercase()).add_attribute(Attribute::Dim)),
-            );
-        }
-        for r in &self.rows {
-            t.add_row(r.clone());
-        }
-        // NOTHING pads every cell by one; the box already has its margin.
-        if let Some(first) = t.column_mut(0) {
-            first.set_padding((0, 1));
-        }
-        let mut out: Vec<String> = self.lead.clone();
-        out.extend(t.to_string().lines().map(|l| l.trim_end().to_string()));
-        out.join("\n")
-    }
-
-    /// The bordered table for plain output.
-    pub fn plain(&self) -> String {
-        let headers: Vec<&str> = self.headers.iter().map(String::as_str).collect();
-        let mut t = make_table(&headers, self.no_header);
-        for r in &self.rows {
-            t.add_row(r.clone());
-        }
-        let mut out = self.lead.clone();
-        out.push(t.to_string());
-        out.join("\n")
-    }
-}
-
 /// Width available inside a note box on this terminal.
 fn note_width() -> usize {
     let cols = console::Term::stderr().size().1 as usize;
@@ -240,10 +148,13 @@ impl Flow {
         self.live
     }
 
-    /// A table in a titled box (live) or the bordered table on stdout (plain).
+    /// A table in its own titled box (live) or the bordered table on stdout
+    /// (plain). Not a [`Flow::note`]: a note dims its body, a table keeps its
+    /// [`crate::Tone`]s.
     pub fn table(&self, title: &str, grid: &Grid) {
         if self.live {
-            let _ = cliclack::note(style(title).bold(), grid.boxed(note_width()));
+            let _ =
+                console::Term::stderr().write_str(&boxed_note(title, &grid.boxed(note_width())));
         } else {
             println!("{}", grid.plain());
         }
@@ -263,7 +174,7 @@ impl Flow {
                 };
                 g.row([icon.to_string(), row.name.clone(), row.detail.clone()]);
             }
-            let _ = cliclack::note(style(title).bold(), g.boxed(note_width()));
+            let _ = console::Term::stderr().write_str(&boxed_note(title, &g.boxed(note_width())));
         } else {
             report.render_pretty();
         }
@@ -376,39 +287,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn boxed_grid_is_borderless_and_unindented() {
-        let mut g = Grid::new(&["Id", "Title"]);
-        g.row(["a1", "github"]);
-        let s = g.boxed(80);
-        assert!(!s.contains('│') && !s.contains('─'), "{s}");
-        let first = console::strip_ansi_codes(s.lines().next().unwrap()).to_string();
-        assert!(first.starts_with("ID"), "{first:?}");
-    }
-
-    #[test]
-    fn kv_has_no_header_and_lead_comes_first() {
-        let mut g = Grid::kv();
-        g.lead("Branch: master").row(["Agent", "running"]);
-        let s = g.boxed(80);
-        let lines: Vec<_> = s.lines().collect();
-        assert_eq!(lines[0], "Branch: master");
-        assert!(lines[1].starts_with("Agent"), "{s}");
-        assert!(!s.contains("PROPERTY"));
-    }
-
-    #[test]
     fn closing_lines_stay_aligned_under_the_first() {
         assert_eq!(outro_text("one"), "one");
         assert_eq!(
             outro_text("bad input\nrun --help"),
             "bad input\n   run --help"
         );
-    }
-
-    #[test]
-    fn plain_grid_keeps_the_bordered_table() {
-        let mut g = Grid::new(&["Id"]);
-        g.row(["a1"]);
-        assert!(g.plain().contains('│'));
     }
 }
