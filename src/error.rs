@@ -13,6 +13,23 @@
 //! | `Config` | Config or state file I/O failures |
 //! | `External` | Remote API / network errors |
 //! | `Internal` | Unexpected I/O, serialisation, or invariant violations |
+//!
+//! ## JSON mode
+//!
+//! An app that offers machine output calls [`crate::output::set_format`] once
+//! at startup. From then on an error that reaches `main` is printed as one
+//! JSON document on **stdout** — the stream a client is already parsing —
+//! instead of styled text on stderr:
+//!
+//! ```json
+//! {"error": {"kind": "usage", "message": "...", "exit_code": 2}}
+//! ```
+//!
+//! `kind` is [`CliError::kind`]; `details` is present when the error carries
+//! structured data ([`CliError::with_details`], e.g. the candidates of an
+//! ambiguous lookup). A success prints the command's own document, so in JSON
+//! mode stdout holds exactly one document either way and the exit code says
+//! which it is.
 
 use std::process::ExitCode;
 
@@ -50,6 +67,15 @@ pub enum CliError {
     /// Error already displayed (e.g. via outro_error). Just set exit code.
     #[error("{0}")]
     Rendered(String),
+
+    /// Another error plus structured data for JSON mode
+    /// ([`CliError::with_details`]). Displays, exits and renders as text
+    /// exactly like the error it wraps.
+    #[error("{error}")]
+    Detailed {
+        error: Box<CliError>,
+        details: serde_json::Value,
+    },
 }
 
 impl CliError {
@@ -58,23 +84,95 @@ impl CliError {
         CliError::Internal(e)
     }
 
-    /// The process exit code for this error: 130 for a cancelled prompt,
-    /// 2 for a usage error, 1 otherwise.
-    pub fn exit_code(&self) -> ExitCode {
-        match self {
-            CliError::Cancelled => ExitCode::from(130),
-            CliError::Usage(_) => ExitCode::from(2),
-            _ => ExitCode::FAILURE,
+    /// Attach structured data that JSON mode reports as `error.details`.
+    pub fn with_details(self, details: serde_json::Value) -> Self {
+        CliError::Detailed {
+            error: Box::new(self),
+            details,
         }
     }
 
-    /// Render this error to stderr in the shared style and return the
-    /// appropriate exit code.
+    /// The error without any [`CliError::Detailed`] wrapper.
+    pub(crate) fn inner(&self) -> &CliError {
+        match self {
+            CliError::Detailed { error, .. } => error.inner(),
+            other => other,
+        }
+    }
+
+    /// The stable, machine-readable bucket: `usage`, `cancelled`, `auth`,
+    /// `config`, `external`, `internal`, or `failed` for an error a flow has
+    /// already shown ([`CliError::Rendered`]).
+    pub fn kind(&self) -> &'static str {
+        match self.inner() {
+            CliError::Usage(_) => "usage",
+            CliError::Cancelled => "cancelled",
+            CliError::Auth(_) => "auth",
+            CliError::Config(_) => "config",
+            CliError::External(_) => "external",
+            CliError::Internal(_) => "internal",
+            CliError::Rendered(_) => "failed",
+            CliError::Detailed { .. } => unreachable!("inner() unwraps Detailed"),
+        }
+    }
+
+    /// The numeric exit code, as [`CliError::exit_code`] returns it.
+    pub fn code(&self) -> u8 {
+        match self.inner() {
+            CliError::Cancelled => 130,
+            CliError::Usage(_) => 2,
+            _ => 1,
+        }
+    }
+
+    /// The process exit code for this error: 130 for a cancelled prompt,
+    /// 2 for a usage error, 1 otherwise.
+    pub fn exit_code(&self) -> ExitCode {
+        ExitCode::from(self.code())
+    }
+
+    /// The JSON-mode document for this error (see the module docs).
+    pub fn to_json(&self) -> serde_json::Value {
+        // The bare message: `kind` already says what the text prefix
+        // ("API error: ") would.
+        let message = match self.inner() {
+            CliError::Usage(m)
+            | CliError::Auth(m)
+            | CliError::Config(m)
+            | CliError::External(m)
+            | CliError::Rendered(m) => m.clone(),
+            // The whole context chain: a client has no `-v` to ask for it.
+            CliError::Internal(e) => format!("{e:#}"),
+            other => other.to_string(),
+        };
+        let mut error = serde_json::json!({
+            "kind": self.kind(),
+            "message": message,
+            "exit_code": self.code(),
+        });
+        if let CliError::Detailed { details, .. } = self {
+            error["details"] = details.clone();
+        }
+        serde_json::json!({ "error": error })
+    }
+
+    /// Render this error and return the appropriate exit code: as JSON on
+    /// stdout in JSON mode ([`crate::output::set_format`]), otherwise to
+    /// stderr in the shared style.
     ///
     /// Internal details are also emitted at `tracing::error` level so they
     /// appear when verbosity is enabled.
+    #[allow(clippy::print_stdout)]
     pub fn render(&self) -> ExitCode {
+        if crate::output::is_json() {
+            if !matches!(self.inner(), CliError::Cancelled) {
+                error!(error = %self, "command failed");
+            }
+            println!("{}", serde_json::to_string_pretty(&self.to_json()).unwrap());
+            return self.exit_code();
+        }
         match self {
+            CliError::Detailed { error, .. } => error.render(),
             CliError::Cancelled => {
                 ExitCode::from(130) // conventional SIGINT exit code
             }
@@ -113,7 +211,7 @@ impl CliError {
     /// Return a multi-line string with the full error chain, suitable for
     /// verbose / debug output.
     pub fn chain(&self) -> String {
-        match self {
+        match self.inner() {
             CliError::Internal(e) => {
                 let mut out = format!("{}", e);
                 let mut source = e.source();
@@ -244,6 +342,38 @@ mod tests {
         let chain = e.chain();
         assert!(chain.contains("solo error"));
         assert!(!chain.contains("caused by"));
+    }
+
+    #[test]
+    fn json_document_shape() {
+        let v = CliError::Usage("bad input".into()).to_json();
+        assert_eq!(v["error"]["kind"], "usage");
+        assert_eq!(v["error"]["message"], "bad input");
+        assert_eq!(v["error"]["exit_code"], 2);
+        assert!(v["error"].get("details").is_none());
+
+        assert_eq!(CliError::Cancelled.to_json()["error"]["exit_code"], 130);
+        let ext = CliError::External("item not found".into()).to_json();
+        assert_eq!(ext["error"]["kind"], "external");
+        assert_eq!(ext["error"]["message"], "item not found");
+        assert_eq!(CliError::Rendered("x".into()).to_json()["error"]["kind"], "failed");
+    }
+
+    #[test]
+    fn json_internal_message_has_the_chain() {
+        let e = CliError::from_anyhow(anyhow::anyhow!("root cause").context("outer"));
+        let msg = e.to_json()["error"]["message"].as_str().unwrap().to_string();
+        assert!(msg.contains("outer") && msg.contains("root cause"), "{msg}");
+    }
+
+    #[test]
+    fn details_wrap_without_changing_the_error() {
+        let e = CliError::Usage("ambiguous".into())
+            .with_details(serde_json::json!({ "matches": [1, 2] }));
+        assert_eq!(e.to_string(), "ambiguous");
+        assert_eq!(e.kind(), "usage");
+        assert_eq!(e.exit_code(), ExitCode::from(2));
+        assert_eq!(e.to_json()["error"]["details"]["matches"][1], 2);
     }
 
     #[test]

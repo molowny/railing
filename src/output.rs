@@ -7,6 +7,8 @@
 //! - [`make_table`] builds [`comfy_table`] tables with a consistent style.
 //! - [`DiagnosticsOutput`] is used by `config show`.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use comfy_table::{Cell, ContentArrangement, Table, presets::UTF8_BORDERS_ONLY};
 
 // ---------------------------------------------------------------------------
@@ -21,6 +23,23 @@ pub enum OutputFormat {
     Pretty,
     /// Output as JSON
     Json,
+}
+
+/// The process's output format, for code that renders without a
+/// [`GlobalOpts`] at hand: an error reaching `main` ([`crate::CliError::render`])
+/// and a flow closing with [`crate::Flow::fail`].
+static JSON: AtomicBool = AtomicBool::new(false);
+
+/// Declare the process's output format. An app with a JSON mode calls this
+/// once, right after parsing its arguments, so errors come out as JSON too
+/// (see [`crate::error`]). Not calling it keeps every error styled text.
+pub fn set_format(format: OutputFormat) {
+    JSON.store(matches!(format, OutputFormat::Json), Ordering::SeqCst);
+}
+
+/// Whether [`set_format`] declared JSON.
+pub fn is_json() -> bool {
+    JSON.load(Ordering::SeqCst)
 }
 
 // ---------------------------------------------------------------------------

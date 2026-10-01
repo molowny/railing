@@ -59,13 +59,14 @@ pub enum Outcome {
 
 /// Close the innermost live group with its outcome.
 pub fn end(outcome: Outcome, message: &str) {
+    let closing = outro_text(message);
     let prev = DEPTH
         .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |d| Some(d.saturating_sub(1)))
         .unwrap_or(0);
     let _ = match (prev <= 1, outcome) {
-        (true, Outcome::Ok) => ui::outro_success(message),
-        (true, Outcome::Warn) => ui::outro_warning(message),
-        (true, Outcome::Fail) => ui::outro_error(message),
+        (true, Outcome::Ok) => ui::outro_success(&closing),
+        (true, Outcome::Warn) => ui::outro_warning(&closing),
+        (true, Outcome::Fail) => ui::outro_error(&closing),
         (false, Outcome::Ok) => ui::log::success(message),
         (false, Outcome::Warn) => ui::log::warning(message),
         (false, Outcome::Fail) => ui::log::error(message),
@@ -76,21 +77,39 @@ pub fn end(outcome: Outcome, message: &str) {
 /// every level with `└ ✖ message`; otherwise it is [`CliError::render`].
 /// The exit code is the error's own either way.
 pub fn render_error(err: &CliError) -> ExitCode {
-    if !is_open() {
+    let was_open = DEPTH.swap(0, Ordering::SeqCst) > 0;
+    if !was_open || crate::output::is_json() {
         return err.render();
     }
-    DEPTH.store(0, Ordering::SeqCst);
-    match err {
+    match err.inner() {
         CliError::Rendered(_) => {}
         CliError::Cancelled => {
             let _ = cliclack::outro_cancel("Aborted.");
         }
         other => {
             tracing::error!(error = %other, "command failed");
-            let _ = ui::outro_error(&other.to_string());
+            let _ = ui::outro_error(&outro_text(&other.to_string()));
         }
     }
     err.exit_code()
+}
+
+/// The closing `└` line is the last of the gutter, so a multi-line message
+/// keeps its continuation lines aligned under the first instead of letting
+/// them fall back to column 0.
+fn outro_text(message: &str) -> String {
+    let mut lines = message.lines();
+    let mut out = lines.next().unwrap_or_default().to_string();
+    for l in lines {
+        out.push_str("\n   ");
+        out.push_str(l);
+    }
+    out
+}
+
+/// Gutter log lines are not wrapped by cliclack; wrap them to the box width.
+fn wrapped(msg: &str) -> String {
+    ui::wrap_to(msg, note_width())
 }
 
 /// A table with optional lead lines, shown as a titled box in a live flow.
@@ -194,6 +213,7 @@ fn note_width() -> usize {
 
 /// One command's rendering. Live: a prompt group. Plain: data on stdout,
 /// chatter on stderr, no frame.
+#[derive(Debug)]
 #[must_use = "close the flow with done/warn_done/fail"]
 pub struct Flow {
     live: bool,
@@ -260,7 +280,7 @@ impl Flow {
     /// A completed step (`◇`).
     pub fn step(&self, msg: &str) {
         if self.live {
-            let _ = ui::log::step(msg);
+            let _ = ui::log::step(&wrapped(msg));
         } else {
             eprintln!("{msg}");
         }
@@ -269,7 +289,7 @@ impl Flow {
     /// An informational line (`●`).
     pub fn info(&self, msg: &str) {
         if self.live {
-            let _ = ui::log::info(msg);
+            let _ = ui::log::info(&wrapped(msg));
         } else {
             eprintln!("{msg}");
         }
@@ -278,7 +298,7 @@ impl Flow {
     /// A dim remark under the previous line (`│`).
     pub fn remark(&self, msg: &str) {
         if self.live {
-            let _ = ui::log::remark(&style(msg).dim().to_string());
+            let _ = ui::log::remark(&style(wrapped(msg)).dim().to_string());
         } else {
             eprintln!("{msg}");
         }
@@ -287,7 +307,7 @@ impl Flow {
     /// A non-fatal warning (`▲`).
     pub fn warn(&self, msg: &str) {
         if self.live {
-            let _ = ui::log::warning(msg);
+            let _ = ui::log::warning(&wrapped(msg));
         } else {
             eprintln!("{} {msg}", style("warning:").for_stderr().yellow());
         }
@@ -296,7 +316,7 @@ impl Flow {
     /// A non-fatal error inside the flow (`■`); the flow goes on.
     pub fn error(&self, msg: &str) {
         if self.live {
-            let _ = ui::log::error(msg);
+            let _ = ui::log::error(&wrapped(msg));
         } else {
             ui::error(msg);
         }
@@ -336,11 +356,13 @@ impl Flow {
         }
     }
 
-    /// Close as failed and hand back an error that `main` will not print again.
+    /// Close as failed and hand back an error that `main` will not print again
+    /// — except in JSON mode, where `main` prints it as the JSON document and
+    /// nothing is said here.
     pub fn fail(self, msg: &str) -> CliError {
         if self.live {
             end(Outcome::Fail, msg);
-        } else {
+        } else if !crate::output::is_json() {
             ui::error(msg);
         }
         CliError::Rendered(msg.to_string())
@@ -370,6 +392,12 @@ mod tests {
         assert_eq!(lines[0], "Branch: master");
         assert!(lines[1].starts_with("Agent"), "{s}");
         assert!(!s.contains("PROPERTY"));
+    }
+
+    #[test]
+    fn closing_lines_stay_aligned_under_the_first() {
+        assert_eq!(outro_text("one"), "one");
+        assert_eq!(outro_text("bad input\nrun --help"), "bad input\n   run --help");
     }
 
     #[test]
