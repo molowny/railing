@@ -65,6 +65,15 @@ pub fn input_optional_with_default(prompt: &str, default: &str) -> Result<String
         .map_err(map_prompt_err)
 }
 
+/// Prompt for optional multi-line text (Esc to review, Enter to submit).
+pub fn input_multiline(prompt: &str) -> Result<String, CliError> {
+    cliclack::input(prompt)
+        .required(false)
+        .multiline()
+        .interact()
+        .map_err(map_prompt_err)
+}
+
 // ---------------------------------------------------------------------------
 // Password / hidden input
 // ---------------------------------------------------------------------------
