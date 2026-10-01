@@ -25,9 +25,10 @@ cli-kit = { version = "0.1", features = ["picker"] }
 | Module | Description |
 |--------|-------------|
 | `flow` | One command as one clack prompt group (`┌ … ◇ … └ ✔`): `Flow` (live or plain), `Grid` tables boxed inside steps, checks, error close via `render_error` |
-| `error` | Categorized `CliError` enum (Usage, Cancelled, Auth, Config, External, Internal) with styled rendering and proper exit codes |
+| `args` | `args::parse::<Cli>()`: clap parsing whose errors follow the JSON error contract when the arguments ask for JSON |
+| `error` | Categorized `CliError` enum (Usage, Cancelled, Auth, Config, External, Internal) with styled rendering, proper exit codes, and a JSON form (`kind`, `to_json`, `with_details`) |
 | `logging` | Tracing subscriber bootstrap with `-v`/`-vv` verbosity levels |
-| `output` | `Renderable` trait for pretty/JSON dual rendering, table helpers, `GlobalOpts` |
+| `output` | `Renderable` trait for pretty/JSON dual rendering, table helpers, `GlobalOpts`, `set_format` (opt into JSON errors) |
 | `prompts` | Text input, password, and confirmation prompts with automatic cancellation handling |
 | `ui` | Colored alerts, spinners, intro/outro banners |
 
@@ -61,6 +62,35 @@ Runnable examples live in [`examples/`](examples/) — one per module.
 | `screen_canary` | `cargo run --example screen_canary --features tui` | `ScreenApp` on either surface; the probe used by `tools/altscreen-canary.sh` |
 | `outline` | `cargo run --example outline --features tui` | `OutlineBuilder`/`OutlineState` fold-aware tree: keyed fold state, `fold_right`, `expand_all` |
 | `text_area` | `cargo run --example text_area --features tui` | `TextArea` multi-line input: newline on `Enter`, wrapping, `desired_height`, line-scoped `Ctrl-u` |
+
+## JSON errors
+
+An app with a JSON mode opts in once, after parsing:
+
+```rust
+let cli: Cli = cli_kit::args::parse();     // clap errors honour --json too
+cli_kit::output::set_format(opts.format);   // errors reaching main follow it
+```
+
+From then on, in JSON mode, an error that reaches `main`
+(`flow::render_error` / `CliError::render`) is one document on **stdout**,
+where the client is already reading, and nothing is printed on stderr:
+
+```json
+{"error": {"kind": "usage", "message": "…", "exit_code": 2, "details": {}}}
+```
+
+- `kind`: `usage` · `cancelled` · `auth` · `config` · `external` ·
+  `internal` · `failed` (a flow already showed it: `Flow::fail`).
+- `message`: the bare message, without the text prefix (`API error: `);
+  for `internal`, the whole context chain.
+- `exit_code`: the process exit code (2 usage, 130 cancelled, 1 otherwise).
+- `details`: present only when the error carries data
+  (`CliError::with_details`), e.g. an ambiguous lookup's candidates.
+
+So in JSON mode stdout holds exactly one document whether the command
+succeeded or failed, and the exit code says which. Without `set_format`,
+errors stay styled text on stderr.
 
 ## TUI surfaces
 
