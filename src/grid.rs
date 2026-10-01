@@ -57,9 +57,11 @@ impl Tone {
         }
     }
 
-    /// `Dark*` are comfy-table's names for the base ANSI colours, the ones
-    /// `console` uses; its plain names are the bright variants.
-    fn apply(self, cell: Cell) -> Cell {
+    /// This tone on a comfy-table cell, for a table built by hand
+    /// ([`crate::make_table`]). `Dark*` are comfy-table's names for the base
+    /// ANSI colours, the ones `console` uses; its plain names are the bright
+    /// variants.
+    pub fn apply(self, cell: Cell) -> Cell {
         match self {
             Tone::Default => cell,
             Tone::Strong => cell.add_attribute(Attribute::Bold),
