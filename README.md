@@ -24,6 +24,7 @@ cli-kit = { version = "0.1", features = ["picker"] }
 
 | Module | Description |
 |--------|-------------|
+| `flow` | One command as one clack prompt group (`┌ … ◇ … └ ✔`): `Flow` (live or plain), `Grid` tables boxed inside steps, checks, error close via `render_error` |
 | `error` | Categorized `CliError` enum (Usage, Cancelled, Auth, Config, External, Internal) with styled rendering and proper exit codes |
 | `logging` | Tracing subscriber bootstrap with `-v`/`-vv` verbosity levels |
 | `output` | `Renderable` trait for pretty/JSON dual rendering, table helpers, `GlobalOpts` |
