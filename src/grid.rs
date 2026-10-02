@@ -381,10 +381,12 @@ mod tests {
         g.row(["a1", "github"]).row(["b22", "a much longer title"]);
         let s = boxed_note("Items", &g.boxed(80));
         assert!(!s.contains("\x1b[2m\x1b[1mID"), "body dimmed: {s:?}");
-        let widths: Vec<_> = s
-            .lines()
-            .take_while(|l| !l.contains('├'))
-            .map(console::measure_text_width)
+        // Every line but the trailing `│` lines up; `Emoji` glyphs fall back
+        // to ASCII off a unicode terminal (CI), so don't match on them.
+        let lines: Vec<_> = s.lines().collect();
+        let widths: Vec<_> = lines[..lines.len() - 1]
+            .iter()
+            .map(|l| console::measure_text_width(l))
             .collect();
         assert!(widths.windows(2).all(|w| w[0] == w[1]), "{widths:?}\n{s}");
     }
