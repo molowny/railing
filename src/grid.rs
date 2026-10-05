@@ -13,8 +13,10 @@ use console::{Emoji, Style, style};
 
 /// What a piece of table text means; the palette maps it to a style.
 ///
-/// Only the 16 ANSI colours are used, so the terminal's theme picks the
-/// actual shades for light and dark backgrounds alike.
+/// The colours are the 16 ANSI ones, so the terminal's theme picks their
+/// shades for light and dark backgrounds alike. Muted is the exception: it is
+/// [`crate::ui::DIM_256`], because SGR 2 "faint" is unreadable on some
+/// terminals and indistinguishable from normal text on others.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Tone {
     /// Plain text.
@@ -49,7 +51,7 @@ impl Tone {
         match self {
             Tone::Default => s,
             Tone::Strong => s.bold(),
-            Tone::Muted => s.dim(),
+            Tone::Muted => s.color256(crate::ui::DIM_256),
             Tone::Accent => s.cyan(),
             Tone::Success => s.green(),
             Tone::Warn => s.yellow(),
@@ -65,7 +67,7 @@ impl Tone {
         match self {
             Tone::Default => cell,
             Tone::Strong => cell.add_attribute(Attribute::Bold),
-            Tone::Muted => cell.add_attribute(Attribute::Dim),
+            Tone::Muted => cell.fg(Color::AnsiValue(crate::ui::DIM_256)),
             Tone::Accent => cell.fg(Color::DarkCyan),
             Tone::Success => cell.fg(Color::DarkGreen),
             Tone::Warn => cell.fg(Color::DarkYellow),
@@ -349,11 +351,11 @@ mod tests {
         let mut g = Grid::new(&["Id", "State"]).tones([Tone::Muted]);
         g.row(["a1".into(), Tone::Danger.cell("failed")]);
         let s = g.boxed(80);
-        assert!(s.contains("\x1b[2ma1"), "{s:?}");
+        assert!(s.contains("\x1b[38;5;246ma1"), "{s:?}");
         assert!(s.contains("\x1b[38;5;1m failed"), "base red: {s:?}");
         assert!(s.contains("\x1b[1mID"), "header bold: {s:?}");
         let p = g.plain();
-        assert!(p.contains("\x1b[2m a1"), "{p:?}");
+        assert!(p.contains("\x1b[38;5;246m a1"), "{p:?}");
     }
 
     #[test]
@@ -361,7 +363,7 @@ mod tests {
         let _c = colors(true);
         let mut g = Grid::new(&["Id"]).header_tone(Tone::Muted);
         g.row(["a1"]);
-        assert!(g.boxed(80).contains("\x1b[2mID"));
+        assert!(g.boxed(80).contains("\x1b[38;5;246mID"));
     }
 
     #[test]

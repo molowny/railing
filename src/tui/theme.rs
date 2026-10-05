@@ -24,7 +24,7 @@ pub const FG_SECONDARY: Color = Color::Gray;
 /// it too dark to read as text. Grayscale-ramp entries are the same everywhere,
 /// so dim text keeps one contrast across themes. Still clearly below
 /// [`FG_SECONDARY`].
-pub const FG_DIM: Color = Color::Indexed(246);
+pub const FG_DIM: Color = Color::Indexed(crate::ui::DIM_256);
 
 /// Lines that only mark where one pane ends and the next begins.
 ///

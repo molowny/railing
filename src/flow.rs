@@ -211,7 +211,7 @@ impl Flow {
     /// A dim remark under the previous line (`│`).
     pub fn remark(&self, msg: &str) {
         if self.live {
-            let _ = ui::log::remark(&style(wrapped(msg)).dim().to_string());
+            let _ = ui::log::remark(&ui::dim().apply_to(wrapped(msg)).to_string());
         } else {
             eprintln!("{msg}");
         }

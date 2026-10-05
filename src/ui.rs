@@ -267,6 +267,21 @@ pub fn init_colors() {
 // with `eval`/`source` of stdout. Color codes are gated by `console`'s
 // stderr-color global, which `init_colors` configures correctly at startup.
 
+/// 256-colour index of dim text, everywhere cli-kit draws it: CLI output,
+/// flows, grids, and the TUI's `theme::FG_DIM`.
+///
+/// A grayscale-ramp entry (`#949494`) rather than SGR 2 "faint", which
+/// terminals render anywhere from invisible to identical to normal text, or
+/// palette `DarkGray`, whose shade is up to the terminal theme. Readable on
+/// dark backgrounds and still clearly below normal text on light ones.
+pub const DIM_256: u8 = 246;
+
+/// Style for dim text: [`DIM_256`]. Add `.for_stderr()` for stderr-bound
+/// output, so colour follows that stream's flag.
+pub fn dim() -> console::Style {
+    console::Style::new().color256(DIM_256)
+}
+
 /// Emit a tagged status line to stderr: `{tag}: {body}`.
 ///
 /// The tag is dimmed (so the eye lands on the body). Use this for
@@ -274,7 +289,11 @@ pub fn init_colors() {
 /// reminders, "loading config" hints. Designed to be safe to call from
 /// shell hooks because output is stderr-only.
 pub fn notice(tag: &str, body: &str) {
-    eprintln!("{} {}", style(format!("{tag}:")).for_stderr().dim(), body);
+    eprintln!(
+        "{} {}",
+        dim().for_stderr().apply_to(format!("{tag}:")),
+        body
+    );
 }
 
 /// Render a `+name` token in green. Use when listing items that were
@@ -307,7 +326,10 @@ pub fn diff_removed(name: &str) -> String {
 ///
 /// Stderr-bound; see [`diff_added`] for color-flag rationale.
 pub fn dim_hint(detail: &str) -> String {
-    style(format!("({detail})")).for_stderr().dim().to_string()
+    dim()
+        .for_stderr()
+        .apply_to(format!("({detail})"))
+        .to_string()
 }
 
 /// Render a warning body in yellow. Use as the body of a [`notice_warn`]
@@ -330,7 +352,7 @@ pub fn warn_body(body: &str) -> String {
 pub fn notice_warn(tag: &str, body: &str) {
     eprintln!(
         "{} {}",
-        style(format!("{tag}:")).for_stderr().dim(),
+        dim().for_stderr().apply_to(format!("{tag}:")),
         warn_body(body)
     );
 }
