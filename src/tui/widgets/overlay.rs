@@ -7,7 +7,7 @@ use crate::tui::paint;
 /// Render a bordered panel with title and close hint.
 /// Returns the y position after the top border (where content can start).
 pub fn render_panel_top(area: Rect, buf: &mut Buffer, title: &str, close_hint: &str) -> u16 {
-    let dim = Style::default().fg(Color::DarkGray);
+    let dim = Style::default().fg(crate::tui::theme::FG_DIM);
 
     let mut y = area.y;
 
@@ -69,7 +69,7 @@ pub fn render_confirm(area: Rect, buf: &mut Buffer, message: &str) {
         return;
     }
 
-    let dim = Style::default().fg(Color::DarkGray);
+    let dim = Style::default().fg(crate::tui::theme::FG_DIM);
     let warn_style = Style::default().fg(Color::Red).add_modifier(Modifier::BOLD);
     let hint_style = Style::default().fg(Color::Gray);
 

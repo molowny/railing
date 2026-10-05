@@ -157,7 +157,7 @@ impl Component for HorizontalSplit<'_> {
 
         // Vertical separator
         let sep_x = left_area.x + left_area.width;
-        let sep_style = ratatui::style::Style::default().fg(ratatui::style::Color::DarkGray);
+        let sep_style = ratatui::style::Style::default().fg(crate::tui::theme::FG_DIM);
         for y in area.y..area.y + area.height {
             if let Some(cell) = buf.cell_mut(ratatui::layout::Position::new(sep_x, y)) {
                 cell.set_char('│');

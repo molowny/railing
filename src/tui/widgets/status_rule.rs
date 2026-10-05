@@ -8,7 +8,7 @@
 //! ` Vaults ▸ All ▸ GitHub ───────── /foo  3/12 `
 
 use ratatui::buffer::Buffer;
-use ratatui::style::{Color, Style};
+use ratatui::style::Style;
 use unicode_width::UnicodeWidthStr;
 
 use crate::tui::{paint, theme};
@@ -91,7 +91,7 @@ impl<'a> StatusRule<'a> {
             return;
         }
 
-        let hr_style = Style::default().fg(Color::DarkGray);
+        let hr_style = Style::default().fg(crate::tui::theme::FG_DIM);
         let pad_style = theme::dim();
 
         // Base rule fill.

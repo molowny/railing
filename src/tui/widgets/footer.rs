@@ -20,7 +20,7 @@ impl FooterProps {
             return;
         }
 
-        let style = Style::default().fg(Color::DarkGray);
+        let style = Style::default().fg(crate::tui::theme::FG_DIM);
         let key_style = Style::default().fg(Color::Gray);
 
         let available = width as usize;

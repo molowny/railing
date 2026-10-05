@@ -3,6 +3,14 @@ use ratatui::style::{Color, Modifier, Style};
 /// Background color for the selected/active item.
 pub const BG_SELECTED: Color = Color::DarkGray;
 
+/// Background for the cursor row of a pane that has lost focus.
+///
+/// Fainter than [`BG_SELECTED`], so it never competes with the focused pane's
+/// cursor, but still there: moving focus to a detail pane must not hide which
+/// row the detail belongs to. A grayscale-ramp entry (`#3a3a3a`), the same in
+/// every terminal theme.
+pub const BG_SELECTED_INACTIVE: Color = Color::Indexed(237);
+
 /// Primary text (titles, values).
 pub const FG_PRIMARY: Color = Color::White;
 
@@ -10,7 +18,19 @@ pub const FG_PRIMARY: Color = Color::White;
 pub const FG_SECONDARY: Color = Color::Gray;
 
 /// Dim text (borders, metadata, inactive hints).
-pub const FG_DIM: Color = Color::DarkGray;
+///
+/// A fixed 256-colour grey (`#949494`) rather than the palette's `DarkGray`
+/// (ANSI 8): what slot 8 looks like is up to the terminal theme, and many make
+/// it too dark to read as text. Grayscale-ramp entries are the same everywhere,
+/// so dim text keeps one contrast across themes. Still clearly below
+/// [`FG_SECONDARY`].
+pub const FG_DIM: Color = Color::Indexed(246);
+
+/// Lines that only mark where one pane ends and the next begins.
+///
+/// A grayscale-ramp entry (`#444444`) well below [`FG_DIM`]: a separator is
+/// structure, not text, and should be found rather than read.
+pub const FG_SEPARATOR: Color = Color::Indexed(238);
 
 /// Accent color for keycaps, group titles, and other call-to-action chrome.
 pub const ACCENT: Color = Color::Cyan;
@@ -41,10 +61,10 @@ pub fn dim() -> Style {
 
 /// Style for dim text on the selected background.
 ///
-/// Not `dim().bg(BG_SELECTED)`: [`FG_DIM`] and [`BG_SELECTED`] are the same
-/// color, so that spelling paints the text invisibly. Metadata on a selected
-/// row has to dim *relative to* that row, which means stepping the foreground
-/// down from [`FG_PRIMARY`] rather than all the way to [`FG_DIM`].
+/// Not `dim().bg(BG_SELECTED)`: [`FG_DIM`] sits too close to [`BG_SELECTED`]
+/// to read on it. Metadata on a selected row has to dim *relative to* that
+/// row, which means stepping the foreground down from [`FG_PRIMARY`] rather
+/// than all the way to [`FG_DIM`].
 pub fn dim_selected() -> Style {
     Style::default().fg(FG_SECONDARY).bg(BG_SELECTED)
 }
@@ -52,6 +72,11 @@ pub fn dim_selected() -> Style {
 /// Background style for selected area (spaces/fill).
 pub fn selected_bg() -> Style {
     Style::default().bg(BG_SELECTED)
+}
+
+/// Style for the cursor row of an unfocused pane, on [`BG_SELECTED_INACTIVE`].
+pub fn selected_inactive() -> Style {
+    Style::default().fg(FG_SECONDARY).bg(BG_SELECTED_INACTIVE)
 }
 
 /// Style for one row of a list or outline, given its selection state and
@@ -81,7 +106,6 @@ mod tests {
     use super::*;
 
     /// Text the same color as the cell behind it is not dim, it is gone.
-    /// `FG_DIM == BG_SELECTED` today, so any style pairing them is a bug.
     #[test]
     fn no_style_paints_text_in_its_own_background_color() {
         let cases = [
