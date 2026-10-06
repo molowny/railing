@@ -1,7 +1,19 @@
 use ratatui::style::{Color, Modifier, Style};
 
 /// Background color for the selected/active item.
-pub const BG_SELECTED: Color = Color::DarkGray;
+///
+/// A grayscale-ramp entry (`#585858`), not palette `DarkGray`: what that slot
+/// looks like is up to the terminal theme, which made the text drawn on it
+/// unpredictable. Fixed, it sits reliably above [`BG_SELECTED_INACTIVE`] and
+/// below [`FG_DIM_SELECTED`].
+pub const BG_SELECTED: Color = Color::Indexed(240);
+
+/// Dim text on [`BG_SELECTED`]: labels and metadata on the cursor row.
+///
+/// A fixed grey (`#a8a8a8`), because the palette's `Gray` ([`FG_SECONDARY`])
+/// renders as white in many themes and so stops reading as dimmer than the
+/// value beside it. Clearly below any terminal's white, clearly above the row.
+pub const FG_DIM_SELECTED: Color = Color::Indexed(248);
 
 /// Background for the cursor row of a pane that has lost focus.
 ///
@@ -64,9 +76,9 @@ pub fn dim() -> Style {
 /// Not `dim().bg(BG_SELECTED)`: [`FG_DIM`] sits too close to [`BG_SELECTED`]
 /// to read on it. Metadata on a selected row has to dim *relative to* that
 /// row, which means stepping the foreground down from [`FG_PRIMARY`] rather
-/// than all the way to [`FG_DIM`].
+/// than all the way to [`FG_DIM`] — to [`FG_DIM_SELECTED`].
 pub fn dim_selected() -> Style {
-    Style::default().fg(FG_SECONDARY).bg(BG_SELECTED)
+    Style::default().fg(FG_DIM_SELECTED).bg(BG_SELECTED)
 }
 
 /// Background style for selected area (spaces/fill).
@@ -130,5 +142,18 @@ mod tests {
         assert_eq!(s.bg, Some(BG_SELECTED), "must keep the selected row's fill");
         assert_ne!(s.fg, Some(FG_PRIMARY), "not dimmer than primary text");
         assert_ne!(s.fg, Some(BG_SELECTED), "invisible against its own row");
+    }
+
+    /// The greys a cursor row is built from are fixed ramp entries, ordered
+    /// dark to light, so their contrast doesn't depend on the terminal theme:
+    /// unfocused row < focused row < dim text < dim text on the focused row.
+    #[test]
+    fn the_selection_greys_are_fixed_and_ordered() {
+        let index = |c: Color| match c {
+            Color::Indexed(i) => i,
+            other => panic!("{other:?} is a palette colour, theme-dependent"),
+        };
+        let ladder = [BG_SELECTED_INACTIVE, BG_SELECTED, FG_DIM, FG_DIM_SELECTED].map(index);
+        assert!(ladder.windows(2).all(|w| w[0] < w[1]), "{ladder:?}");
     }
 }
