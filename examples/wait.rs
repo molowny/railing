@@ -14,7 +14,12 @@ fn main() -> Result<(), CliError> {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();
-    let names = ["code accepted", "symbols compared", "approval", "store pulled"];
+    let names = [
+        "code accepted",
+        "symbols compared",
+        "approval",
+        "store pulled",
+    ];
     let mut at = 1;
     let mut w = flow
         .wait()
