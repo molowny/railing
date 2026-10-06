@@ -7,6 +7,7 @@ pub mod output;
 pub mod paths;
 pub mod prompts;
 pub mod ui;
+pub mod wait;
 pub mod workspace;
 
 #[cfg(feature = "tui")]
@@ -21,3 +22,4 @@ pub use output::{
     CheckRow, CheckStatus, ChecksReport, DiagnosticsOutput, GlobalOpts, OutputFormat, Renderable,
     make_table, print_success,
 };
+pub use wait::{Mark, Tick, Wait, WaitView};
