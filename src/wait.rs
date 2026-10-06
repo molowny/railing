@@ -93,6 +93,14 @@ impl Wait {
         self
     }
 
+    /// Replaces the keys on offer, for a wait whose choices change as it goes.
+    pub fn offer(&mut self, keys: &[(char, &str)]) {
+        self.keys = keys
+            .iter()
+            .map(|(k, l)| (k.to_ascii_lowercase(), (*l).to_owned()))
+            .collect();
+    }
+
     /// Esc and Ctrl‑C end a tick with [`Tick::Detach`]; `label` says what that
     /// does. Without it Ctrl‑C interrupts as usual.
     pub fn detach(mut self, label: &str) -> Self {
