@@ -106,6 +106,32 @@ pub fn row(is_selected: bool, dim_pane: bool) -> Style {
     }
 }
 
+/// Colours for a countdown, by how much of it is left: green with time to
+/// spare, yellow from `warn_at` seconds, red from `urgent_at`. The thresholds
+/// are the app's to choose; what counts as "short" depends on what runs out.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Countdown {
+    pub warn_at: u64,
+    pub urgent_at: u64,
+}
+
+impl Countdown {
+    pub const fn new(warn_at: u64, urgent_at: u64) -> Self {
+        Self { warn_at, urgent_at }
+    }
+
+    /// The colour for `secs_left`.
+    pub fn color(self, secs_left: u64) -> Color {
+        if secs_left <= self.urgent_at {
+            Color::Red
+        } else if secs_left <= self.warn_at {
+            Color::Yellow
+        } else {
+            Color::Green
+        }
+    }
+}
+
 /// Highlight for in-place substring matches (e.g. detail pane search).
 pub fn match_hit() -> Style {
     Style::default()
@@ -142,6 +168,17 @@ mod tests {
         assert_eq!(s.bg, Some(BG_SELECTED), "must keep the selected row's fill");
         assert_ne!(s.fg, Some(FG_PRIMARY), "not dimmer than primary text");
         assert_ne!(s.fg, Some(BG_SELECTED), "invisible against its own row");
+    }
+
+    #[test]
+    fn a_countdown_goes_green_yellow_red() {
+        let c = Countdown::new(10, 5);
+        assert_eq!(c.color(30), Color::Green);
+        assert_eq!(c.color(11), Color::Green);
+        assert_eq!(c.color(10), Color::Yellow);
+        assert_eq!(c.color(6), Color::Yellow);
+        assert_eq!(c.color(5), Color::Red);
+        assert_eq!(c.color(0), Color::Red);
     }
 
     /// The greys a cursor row is built from are fixed ramp entries, ordered
