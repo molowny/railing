@@ -162,7 +162,7 @@ impl TextArea {
                 if start == self.cursor {
                     InputEvent::Ignored
                 } else {
-                    self.buf.replace_range(start..self.cursor, "");
+                    crate::tui::wipe::remove(&mut self.buf, start..self.cursor);
                     self.cursor = start;
                     InputEvent::Edited
                 }
@@ -285,7 +285,7 @@ impl TextArea {
     }
 
     fn insert_char(&mut self, c: char) {
-        self.buf.insert(self.cursor, c);
+        crate::tui::wipe::insert(&mut self.buf, self.cursor, c);
         self.cursor += c.len_utf8();
     }
 
@@ -294,7 +294,7 @@ impl TextArea {
             return false;
         }
         let i = prev_boundary(&self.buf, self.cursor);
-        self.buf.replace_range(i..self.cursor, "");
+        crate::tui::wipe::remove(&mut self.buf, i..self.cursor);
         self.cursor = i;
         true
     }
@@ -307,7 +307,7 @@ impl TextArea {
         while j < self.buf.len() && !self.buf.is_char_boundary(j) {
             j += 1;
         }
-        self.buf.replace_range(self.cursor..j, "");
+        crate::tui::wipe::remove(&mut self.buf, self.cursor..j);
         true
     }
 
@@ -335,7 +335,7 @@ impl TextArea {
         if i == self.cursor {
             return false;
         }
-        self.buf.replace_range(i..self.cursor, "");
+        crate::tui::wipe::remove(&mut self.buf, i..self.cursor);
         self.cursor = i;
         true
     }

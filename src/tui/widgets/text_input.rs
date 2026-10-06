@@ -190,7 +190,7 @@ impl TextInput {
     }
 
     fn insert_char(&mut self, c: char) {
-        self.buf.insert(self.cursor, c);
+        crate::tui::wipe::insert(&mut self.buf, self.cursor, c);
         self.cursor += c.len_utf8();
     }
 
@@ -202,7 +202,7 @@ impl TextInput {
         while i > 0 && !self.buf.is_char_boundary(i) {
             i -= 1;
         }
-        self.buf.replace_range(i..self.cursor, "");
+        crate::tui::wipe::remove(&mut self.buf, i..self.cursor);
         self.cursor = i;
         true
     }
@@ -215,7 +215,7 @@ impl TextInput {
         while j < self.buf.len() && !self.buf.is_char_boundary(j) {
             j += 1;
         }
-        self.buf.replace_range(self.cursor..j, "");
+        crate::tui::wipe::remove(&mut self.buf, self.cursor..j);
         true
     }
 
@@ -247,7 +247,7 @@ impl TextInput {
         if i == self.cursor {
             return false;
         }
-        self.buf.replace_range(i..self.cursor, "");
+        crate::tui::wipe::remove(&mut self.buf, i..self.cursor);
         self.cursor = i;
         true
     }
