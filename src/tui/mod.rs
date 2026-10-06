@@ -6,6 +6,7 @@ pub mod screen;
 pub mod text;
 pub mod theme;
 pub mod widgets;
+pub(crate) mod wipe;
 
 pub use chord::{
     ChordOutcome, ChordResolver, ChordScope, ChordSpec, chord_label, key_char, key_code, key_ctrl,
