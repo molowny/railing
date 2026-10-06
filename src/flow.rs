@@ -235,6 +235,12 @@ impl Flow {
         }
     }
 
+    /// A wait the person watches and can act on ([`crate::wait`]): drawn in
+    /// place with keys in an interactive live flow, plain lines otherwise.
+    pub fn wait(&self) -> crate::Wait {
+        crate::Wait::new(self.live)
+    }
+
     /// A spinner while something slow runs (live only).
     pub fn spinner(&self, msg: &str) -> Option<ui::Spinner> {
         self.live.then(|| ui::Spinner::start(msg))
