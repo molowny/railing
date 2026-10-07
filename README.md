@@ -25,6 +25,7 @@ cli-kit = { version = "0.1", features = ["picker"] }
 | Module | Description |
 |--------|-------------|
 | `flow` | One command as one clack prompt group (`┌ … ◇ … └ ✔`): `Flow` (live or plain), `Grid` tables boxed inside steps, checks, error close via `render_error` |
+| `completion` | Static shell completion scripts from the app's clap command tree |
 | `args` | `args::parse::<Cli>()`: clap parsing whose errors follow the JSON error contract when the arguments ask for JSON |
 | `error` | Categorized `CliError` enum (Usage, Cancelled, Auth, Config, External, Internal) with styled rendering, proper exit codes, and a JSON form (`kind`, `to_json`, `with_details`) |
 | `logging` | Tracing subscriber bootstrap with `-v`/`-vv` verbosity levels |
@@ -126,3 +127,78 @@ Contributions are welcome! Please open an issue or submit a pull request.
 ## License
 
 [MIT](LICENSE)
+
+## Shell completions
+
+`ksef`, `hackbox`, `plmt`, and `sealward` all provide:
+
+```sh
+ksef completions bash
+```
+
+Replace `ksef` with any of those apps. Supported shells are `bash`, `zsh`,
+`fish`, `powershell`, and `elvish`. The command writes only a shell script to
+stdout, including when JSON or quiet flags are set, and needs no configuration,
+credentials, or running services. These are static completions for the clap
+command tree (commands, flags, and declared choices), not live application data.
+Wright is not included yet.
+
+### Shell setup
+
+For Bash, add this to `~/.bashrc` (or run it in the current shell):
+
+```bash
+for app in ksef hackbox plmt sealward; do
+    if command -v "$app" >/dev/null 2>&1; then
+        source <("$app" completions bash)
+    fi
+done
+```
+
+For Zsh, generate completion files:
+
+```zsh
+mkdir -p ~/.zsh/completions
+for app in ksef hackbox plmt sealward; do
+    if command -v "$app" >/dev/null 2>&1; then
+        "$app" completions zsh > ~/.zsh/completions/_"$app"
+    fi
+done
+```
+
+Add `fpath=(~/.zsh/completions $fpath)` to `~/.zshrc` before your existing
+`compinit` call. If you do not already initialize completion, follow it with
+`autoload -Uz compinit; compinit`.
+
+For Fish, run this in Fish:
+
+```fish
+mkdir -p ~/.config/fish/completions
+for app in ksef hackbox plmt sealward
+    if command -q $app
+        $app completions fish > ~/.config/fish/completions/$app.fish
+    end
+end
+```
+
+For PowerShell, add `ksef completions powershell | Out-String | Invoke-Expression`
+to your `$PROFILE`, repeating for each app. For Elvish, add
+`eval (ksef completions elvish | slurp)` to your rc file for each app.
+
+Regenerate saved scripts after upgrading an app, then start a new shell.
+The Bash and PowerShell/Elvish startup snippets regenerate on each shell launch.
+
+### App integration
+
+Use `cli_kit::completion::Shell` as a clap `#[arg(value_enum)]` argument on a
+`Completions { shell }` subcommand. Immediately after parsing, before logging
+or configuration loading, handle it with:
+
+```rust,ignore
+if let Commands::Completions { shell } = &cli.command {
+    return cli_kit::completion::print::<Cli>(*shell);
+}
+```
+
+The helper derives the executable name and command structure from
+`Cli::command()` and reports stdout write failures as `CliError`.
