@@ -1,4 +1,5 @@
 pub mod args;
+pub mod completion;
 pub mod error;
 pub mod flow;
 pub mod grid;
