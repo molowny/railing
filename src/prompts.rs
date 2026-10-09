@@ -117,6 +117,20 @@ pub fn select<T: Clone + Eq>(prompt: &str, items: &[(T, &str, &str)]) -> Result<
     s.interact().map_err(map_prompt_err)
 }
 
+/// [`select`] for a list that may be long: typing narrows it, and at most
+/// `rows` entries show at once (the rest scroll).
+pub fn select_filtered<T: Clone + Eq>(
+    prompt: &str,
+    items: &[(T, &str, &str)],
+    rows: usize,
+) -> Result<T, CliError> {
+    let mut s = cliclack::select(prompt).filter_mode().max_rows(rows.max(1));
+    for (value, label, hint) in items {
+        s = s.item(value.clone(), label, hint);
+    }
+    s.interact().map_err(map_prompt_err)
+}
+
 // ---------------------------------------------------------------------------
 // Multi-select (multiple choices)
 // ---------------------------------------------------------------------------
