@@ -64,6 +64,28 @@ Runnable examples live in [`examples/`](examples/) — one per module.
 | `outline` | `cargo run --example outline --features tui` | `OutlineBuilder`/`OutlineState` fold-aware tree: keyed fold state, `fold_right`, `expand_all` |
 | `text_area` | `cargo run --example text_area --features tui` | `TextArea` multi-line input: newline on `Enter`, wrapping, `desired_height`, line-scoped `Ctrl-u` |
 
+## Asking for a left-out argument
+
+A command that needs something it can list (an item, a run, a profile) asks
+for it when it is left out — but only where asking cannot hang a script or
+end up in captured output:
+
+```rust
+let id = match id {
+    Some(id) => id,
+    None if flow.can_ask() => prompts::pick("Run", &rows)?, // rows: (value, label, hint)
+    None => return Err(CliError::needs("app status", "run", "`app ls` lists them")),
+};
+```
+
+- `Flow::can_ask()` — the frame is live (the app's own policy) and stdin is a
+  terminal.
+- `prompts::pick` — a filtered select over owned rows, `PICK_ROWS` at a time.
+- `CliError::needs(cmd, noun, how)` — the usage error (exit 2) off a terminal:
+  `` `app status` needs a run — `app ls` lists them ``.
+
+Pickers choose; they never skip a confirmation.
+
 ## JSON errors
 
 An app with a JSON mode opts in once, after parsing:
