@@ -131,18 +131,74 @@ pub fn select_filtered<T: Clone + Eq>(
     s.interact().map_err(map_prompt_err)
 }
 
-/// How many entries [`pick`] shows at once; typing narrows the rest.
-pub const PICK_ROWS: usize = 10;
+/// How many rows a [`Picker`] shows at once; typing narrows the rest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Rows {
+    /// About half the terminal (see [`Rows::for_height`]): past half a
+    /// screen, reading the list is slower than typing to narrow it.
+    #[default]
+    Auto,
+    /// Exactly this many (at least one).
+    Fixed(usize),
+}
+
+impl Rows {
+    /// The rows to show on a terminal `height` lines tall: half of it for
+    /// [`Rows::Auto`], kept between 5 and 25 so a tiny or a huge window still
+    /// gets a usable list.
+    pub fn for_height(self, height: u16) -> usize {
+        match self {
+            Rows::Fixed(n) => n.max(1),
+            Rows::Auto => (usize::from(height) / 2).clamp(5, 25),
+        }
+    }
+
+    fn resolve(self) -> usize {
+        let (height, _) = console::Term::stderr().size();
+        self.for_height(height)
+    }
+}
 
 /// The picker for a left-out argument: owned `(value, label, hint)` rows,
-/// filtered by typing, [`PICK_ROWS`] at a time. Callers build rows from
-/// whatever they list (items, runs, profiles), so this owns nothing of theirs.
+/// filtered by typing. [`pick`] is the default; build one to change how many
+/// rows it shows:
+///
+/// ```ignore
+/// let rev = Picker::new("Revision").rows(Rows::Fixed(5)).pick(&rows)?;
+/// ```
+#[derive(Debug, Clone)]
+pub struct Picker {
+    prompt: String,
+    rows: Rows,
+}
+
+impl Picker {
+    pub fn new(prompt: &str) -> Self {
+        Self {
+            prompt: prompt.to_string(),
+            rows: Rows::default(),
+        }
+    }
+
+    pub fn rows(mut self, rows: Rows) -> Self {
+        self.rows = rows;
+        self
+    }
+
+    /// Ask. Callers build rows from whatever they list (items, runs,
+    /// profiles), so this owns nothing of theirs.
+    pub fn pick<T: Clone + Eq>(&self, rows: &[(T, String, String)]) -> Result<T, CliError> {
+        let items: Vec<(T, &str, &str)> = rows
+            .iter()
+            .map(|(v, l, h)| (v.clone(), l.as_str(), h.as_str()))
+            .collect();
+        select_filtered(&self.prompt, &items, self.rows.resolve())
+    }
+}
+
+/// [`Picker`] with its defaults ([`Rows::Auto`]).
 pub fn pick<T: Clone + Eq>(prompt: &str, rows: &[(T, String, String)]) -> Result<T, CliError> {
-    let items: Vec<(T, &str, &str)> = rows
-        .iter()
-        .map(|(v, l, h)| (v.clone(), l.as_str(), h.as_str()))
-        .collect();
-    select_filtered(prompt, &items, PICK_ROWS)
+    Picker::new(prompt).pick(rows)
 }
 
 // ---------------------------------------------------------------------------
@@ -165,4 +221,23 @@ pub fn multiselect<T: Clone + Eq>(
         s = s.item(value.clone(), label, hint);
     }
     s.interact().map_err(map_prompt_err)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Rows;
+
+    #[test]
+    fn auto_rows_are_half_the_terminal_within_bounds() {
+        assert_eq!(Rows::Auto.for_height(40), 20);
+        assert_eq!(Rows::Auto.for_height(24), 12);
+        assert_eq!(Rows::Auto.for_height(6), 5, "a tiny window still gets 5");
+        assert_eq!(Rows::Auto.for_height(200), 25, "a huge one is capped");
+    }
+
+    #[test]
+    fn fixed_rows_are_taken_as_given_but_never_zero() {
+        assert_eq!(Rows::Fixed(7).for_height(40), 7);
+        assert_eq!(Rows::Fixed(0).for_height(40), 1);
+    }
 }
