@@ -84,6 +84,17 @@ impl CliError {
         CliError::Internal(e)
     }
 
+    /// The usage error for a left-out argument where no prompt can be shown
+    /// ([`crate::Flow::can_ask`]): `` `app cmd` needs an item — `app cmd <item>` ``.
+    /// `how` says how to supply it: the form to type, or where to list them.
+    pub fn needs(cmd: &str, noun: &str, how: &str) -> Self {
+        let a = match noun.chars().next() {
+            Some('a' | 'e' | 'i' | 'o' | 'u') => "an",
+            _ => "a",
+        };
+        CliError::Usage(format!("`{cmd}` needs {a} {noun} — {how}"))
+    }
+
     /// Attach structured data that JSON mode reports as `error.details`.
     pub fn with_details(self, details: serde_json::Value) -> Self {
         CliError::Detailed {
@@ -248,6 +259,21 @@ pub(crate) fn map_prompt_err(e: std::io::Error) -> CliError {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn needs_names_the_argument_and_how_to_give_it() {
+        let e = CliError::needs("app rm", "item", "`app rm <item>`");
+        assert_eq!(e.to_string(), "`app rm` needs an item — `app rm <item>`");
+        assert_eq!(e.code(), 2);
+        let e = CliError::needs("app use", "profile", "`app ls` lists them");
+        assert_eq!(e.to_string(), "`app use` needs a profile — `app ls` lists them");
+    }
+
+    /// A plain flow never asks, whatever stdin is.
+    #[test]
+    fn a_plain_flow_cannot_ask() {
+        assert!(!crate::Flow::plain().can_ask());
+    }
     use super::*;
     use std::process::ExitCode;
 

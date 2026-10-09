@@ -148,6 +148,14 @@ impl Flow {
         self.live
     }
 
+    /// Whether the command may ask (a picker, an input, a confirm): the frame
+    /// is drawn, so the prompt has a gutter and nobody is capturing it, and
+    /// stdin is a terminal, so the prompt cannot hang a script. A command that
+    /// cannot ask fails instead, naming what it needed ([`CliError::needs`]).
+    pub fn can_ask(&self) -> bool {
+        self.live && std::io::IsTerminal::is_terminal(&std::io::stdin())
+    }
+
     /// A table in its own titled box (live) or the bordered table on stdout
     /// (plain). Not a [`Flow::note`]: a note dims its body, a table keeps its
     /// [`crate::Tone`]s.

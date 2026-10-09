@@ -131,6 +131,20 @@ pub fn select_filtered<T: Clone + Eq>(
     s.interact().map_err(map_prompt_err)
 }
 
+/// How many entries [`pick`] shows at once; typing narrows the rest.
+pub const PICK_ROWS: usize = 10;
+
+/// The picker for a left-out argument: owned `(value, label, hint)` rows,
+/// filtered by typing, [`PICK_ROWS`] at a time. Callers build rows from
+/// whatever they list (items, runs, profiles), so this owns nothing of theirs.
+pub fn pick<T: Clone + Eq>(prompt: &str, rows: &[(T, String, String)]) -> Result<T, CliError> {
+    let items: Vec<(T, &str, &str)> = rows
+        .iter()
+        .map(|(v, l, h)| (v.clone(), l.as_str(), h.as_str()))
+        .collect();
+    select_filtered(prompt, &items, PICK_ROWS)
+}
+
 // ---------------------------------------------------------------------------
 // Multi-select (multiple choices)
 // ---------------------------------------------------------------------------
