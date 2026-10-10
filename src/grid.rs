@@ -243,7 +243,7 @@ impl Grid {
 
 /// The default cliclack theme, for its bar colour and step symbol — so the
 /// table box matches the notes and log lines around it.
-struct Clack;
+pub(crate) struct Clack;
 impl cliclack::Theme for Clack {}
 
 const S_BAR: Emoji = Emoji("│", "|");

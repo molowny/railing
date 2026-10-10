@@ -117,18 +117,24 @@ pub fn select<T: Clone + Eq>(prompt: &str, items: &[(T, &str, &str)]) -> Result<
     s.interact().map_err(map_prompt_err)
 }
 
-/// [`select`] for a list that may be long: typing narrows it, and at most
-/// `rows` entries show at once (the rest scroll).
-pub fn select_filtered<T: Clone + Eq>(
+/// [`select`] for a list that may be long: typing narrows it, at most `rows`
+/// entries show at once (the rest scroll), and the foot counts them —
+/// `1–8 of 120`, `5 of 120 match`. Every row shows its hint.
+pub fn select_filtered<T: Clone>(
     prompt: &str,
     items: &[(T, &str, &str)],
     rows: usize,
 ) -> Result<T, CliError> {
-    let mut s = cliclack::select(prompt).filter_mode().max_rows(rows.max(1));
-    for (value, label, hint) in items {
-        s = s.item(value.clone(), label, hint);
-    }
-    s.interact().map_err(map_prompt_err)
+    let list = crate::picker::List::new(
+        prompt,
+        items
+            .iter()
+            .map(|(_, label, hint)| (*label, *hint))
+            .collect(),
+        rows,
+    );
+    let chosen = crate::picker::run(list).map_err(map_prompt_err)?;
+    Ok(items[chosen].0.clone())
 }
 
 /// How many rows a [`Picker`] shows at once; typing narrows the rest.
@@ -160,7 +166,7 @@ impl Rows {
 }
 
 /// The picker for a left-out argument: owned `(value, label, hint)` rows,
-/// filtered by typing. [`pick`] is the default; build one to change how many
+/// filtered by typing, counted in the foot ([`select_filtered`]). [`pick`] is the default; build one to change how many
 /// rows it shows:
 ///
 /// ```ignore
@@ -187,7 +193,7 @@ impl Picker {
 
     /// Ask. Callers build rows from whatever they list (items, runs,
     /// profiles), so this owns nothing of theirs.
-    pub fn pick<T: Clone + Eq>(&self, rows: &[(T, String, String)]) -> Result<T, CliError> {
+    pub fn pick<T: Clone>(&self, rows: &[(T, String, String)]) -> Result<T, CliError> {
         let items: Vec<(T, &str, &str)> = rows
             .iter()
             .map(|(v, l, h)| (v.clone(), l.as_str(), h.as_str()))
@@ -197,7 +203,7 @@ impl Picker {
 }
 
 /// [`Picker`] with its defaults ([`Rows::Auto`]).
-pub fn pick<T: Clone + Eq>(prompt: &str, rows: &[(T, String, String)]) -> Result<T, CliError> {
+pub fn pick<T: Clone>(prompt: &str, rows: &[(T, String, String)]) -> Result<T, CliError> {
     Picker::new(prompt).pick(rows)
 }
 

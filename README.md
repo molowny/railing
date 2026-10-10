@@ -15,7 +15,7 @@ To enable optional features:
 
 ```toml
 [dependencies]
-cli-kit = { version = "0.1", features = ["picker"] }
+cli-kit = { version = "0.1", features = ["tui"] }
 ```
 
 ## Modules
@@ -30,7 +30,8 @@ cli-kit = { version = "0.1", features = ["picker"] }
 | `error` | Categorized `CliError` enum (Usage, Cancelled, Auth, Config, External, Internal) with styled rendering, proper exit codes, and a JSON form (`kind`, `to_json`, `with_details`) |
 | `logging` | Tracing subscriber bootstrap with `-v`/`-vv` verbosity levels |
 | `output` | `Renderable` trait for pretty/JSON dual rendering, table helpers, `GlobalOpts`, `set_format` (opt into JSON errors) |
-| `prompts` | Text input, password, and confirmation prompts with automatic cancellation handling |
+| `prompts` | Text input, password, confirmation, select, and the filtered picker (`pick`), with automatic cancellation handling |
+| `fuzzy` | `Fuzzy`: the `nucleo-matcher` scorer shared by the picker and the TUIs |
 | `ui` | Colored alerts, spinners, intro/outro banners |
 
 ### Optional
@@ -38,14 +39,12 @@ cli-kit = { version = "0.1", features = ["picker"] }
 | Module | Feature flag | Description |
 |--------|-------------|-------------|
 | `tui` | `tui` | Ratatui-based component model with flex layout, paint utilities, theme constants, widgets, and the [`screen`](#tui-surfaces) app runner |
-| `picker` | `picker` | Inline fuzzy picker with match highlighting, adaptive sizing, and score-based sorting |
 
 ## Feature flags
 
 | Flag | Enables | Extra dependencies |
 |------|---------|-------------------|
-| `tui` | TUI components and layout system | `ratatui`, `unicode-width` |
-| `picker` | Interactive fuzzy picker (implies `tui`) | `nucleo-matcher`, `crossterm` |
+| `tui` | TUI components and layout system | `ratatui`, `crossterm`, `unicode-width` |
 
 ## Examples
 
@@ -56,9 +55,9 @@ Runnable examples live in [`examples/`](examples/) — one per module.
 | `errors` | `cargo run --example errors` | Every `CliError` variant, `chain()`, and `render()` exit codes |
 | `logging` | `cargo run --example logging -- -vv` | `logging::init` verbosity levels, stderr-only output |
 | `output` | `cargo run --example output -- json` | `Renderable` trait, `make_table`, `DiagnosticsOutput`, pretty vs JSON |
-| `prompts` | `cargo run --example prompts` | `input`, `password`, `confirm`, `select`, `select_filtered`, `pick`/`Picker`, `multiselect`, cancellation |
+| `prompts` | `cargo run --example prompts` | `input`, `password`, `confirm`, `select`, `multiselect`, cancellation |
 | `ui` | `cargo run --example ui` | Alerts (`success`/`warning`/`info`/`error`), `Spinner`, intro/outro banners |
-| `picker` | `cargo run --example picker --features picker` | Inline fuzzy picker with badges and footer hints |
+| `pick` | `cargo run --example pick` | `prompts::pick` over 60 rows: filtering, scrolling, the count in the foot |
 | `tui` | `cargo run --example tui --features tui` | `FlexRenderable` component model + `top_bar`/`footer`/`prompt` widgets |
 | `screen_canary` | `cargo run --example screen_canary --features tui` | `ScreenApp` on either surface; the probe used by `tools/altscreen-canary.sh` |
 | `outline` | `cargo run --example outline --features tui` | `OutlineBuilder`/`OutlineState` fold-aware tree: keyed fold state, `fold_right`, `expand_all` |
@@ -82,7 +81,18 @@ let id = match id {
   terminal.
 - `prompts::pick` — a filtered select over owned rows. It shows `Rows::Auto` rows at a
   time — half the terminal, between 5 and 25; `Picker::new(prompt).rows(Rows::Fixed(n))`
-  sets another number for one call.
+  sets another number for one call. The foot counts the rows (`1–12 of 60`, `6 of 60
+  match`), every row shows its hint in a column, and typing filters the labels with
+  `Fuzzy` — a space separates words. Esc clears what was typed, then cancels.
+
+```
+◆  Item
+│  home 1
+│  ● Homelab/service-10  ssh key
+│  ○ Homelab/service-13  note
+│  ○ Homelab/service-16  login
+└  6 of 60 match
+```
 - `CliError::needs(cmd, noun, how)` — the usage error (exit 2) off a terminal:
   `` `app status` needs a run — `app ls` lists them ``.
 

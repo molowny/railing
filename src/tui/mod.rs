@@ -1,6 +1,6 @@
 pub mod chord;
 pub mod component;
-pub mod fuzzy;
+pub use crate::fuzzy;
 pub mod paint;
 pub mod screen;
 pub mod text;
