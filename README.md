@@ -98,6 +98,11 @@ let id = match id {
 
 Pickers choose; they never skip a confirmation.
 
+Ctrl-C at any prompt is a cancel, not a kill: the prompt closes with
+`Operation cancelled.`, the cursor comes back, and the call returns
+`CliError::Cancelled` (exit 130). SIGINT is ignored only while a prompt reads
+keys; the app's own handler, if any, is put back after.
+
 ## JSON errors
 
 An app with a JSON mode opts in once, after parsing:
