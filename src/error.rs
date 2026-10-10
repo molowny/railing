@@ -266,7 +266,10 @@ mod tests {
         assert_eq!(e.to_string(), "`app rm` needs an item — `app rm <item>`");
         assert_eq!(e.code(), 2);
         let e = CliError::needs("app use", "profile", "`app ls` lists them");
-        assert_eq!(e.to_string(), "`app use` needs a profile — `app ls` lists them");
+        assert_eq!(
+            e.to_string(),
+            "`app use` needs a profile — `app ls` lists them"
+        );
     }
 
     /// A plain flow never asks, whatever stdin is.
