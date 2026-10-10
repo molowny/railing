@@ -14,7 +14,31 @@
 //! if prompts::confirm("Are you sure?", false)? { … }
 //! ```
 
+use std::io;
+
 use crate::error::{CliError, map_prompt_err};
+
+/// Run one prompt with SIGINT ignored. console's key reader answers Ctrl-C by
+/// raising SIGINT at the process, which kills it mid-frame with the cursor
+/// still hidden; ignored, the read fails as interrupted instead, the prompt
+/// draws itself cancelled, and the caller gets [`CliError::Cancelled`]
+/// (exit 130). Whatever handler was there before is put back.
+fn quiet_ctrl_c<T>(prompt: impl FnOnce() -> io::Result<T>) -> Result<T, CliError> {
+    #[cfg(unix)]
+    let previous = unsafe {
+        let mut ignore: libc::sigaction = std::mem::zeroed();
+        ignore.sa_sigaction = libc::SIG_IGN;
+        let mut previous: libc::sigaction = std::mem::zeroed();
+        libc::sigaction(libc::SIGINT, &ignore, &mut previous);
+        previous
+    };
+    let result = prompt();
+    #[cfg(unix)]
+    unsafe {
+        libc::sigaction(libc::SIGINT, &previous, std::ptr::null_mut());
+    }
+    result.map_err(map_prompt_err)
+}
 
 // ---------------------------------------------------------------------------
 // Text input
@@ -30,17 +54,14 @@ pub fn input(prompt: &str, placeholder: &str) -> Result<String, CliError> {
     if !placeholder.is_empty() {
         p = p.placeholder(placeholder);
     }
-    p.interact().map_err(map_prompt_err)
+    quiet_ctrl_c(|| p.interact())
 }
 
 /// Prompt for a single line of text, pre-filling a default value.
 ///
 /// If the user presses Enter without typing, `default` is returned.
 pub fn input_with_default(prompt: &str, default: &str) -> Result<String, CliError> {
-    cliclack::input(prompt)
-        .default_input(default)
-        .interact()
-        .map_err(map_prompt_err)
+    quiet_ctrl_c(|| cliclack::input(prompt).default_input(default).interact())
 }
 
 /// Prompt for a single line of text that is allowed to be empty.
@@ -51,27 +72,29 @@ pub fn input_optional(prompt: &str, placeholder: &str) -> Result<String, CliErro
     if !placeholder.is_empty() {
         p = p.placeholder(placeholder);
     }
-    p.interact().map_err(map_prompt_err)
+    quiet_ctrl_c(|| p.interact())
 }
 
 /// Prompt for optional text, pre-filling an existing value.
 ///
 /// If the user clears the field and presses Enter the existing value is kept.
 pub fn input_optional_with_default(prompt: &str, default: &str) -> Result<String, CliError> {
-    cliclack::input(prompt)
-        .required(false)
-        .default_input(default)
-        .interact()
-        .map_err(map_prompt_err)
+    quiet_ctrl_c(|| {
+        cliclack::input(prompt)
+            .required(false)
+            .default_input(default)
+            .interact()
+    })
 }
 
 /// Prompt for optional multi-line text (Esc to review, Enter to submit).
 pub fn input_multiline(prompt: &str) -> Result<String, CliError> {
-    cliclack::input(prompt)
-        .required(false)
-        .multiline()
-        .interact()
-        .map_err(map_prompt_err)
+    quiet_ctrl_c(|| {
+        cliclack::input(prompt)
+            .required(false)
+            .multiline()
+            .interact()
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -80,9 +103,7 @@ pub fn input_multiline(prompt: &str) -> Result<String, CliError> {
 
 /// Prompt for a passphrase or password (input is hidden).
 pub fn password(prompt: &str) -> Result<String, CliError> {
-    cliclack::password(prompt)
-        .interact()
-        .map_err(map_prompt_err)
+    quiet_ctrl_c(|| cliclack::password(prompt).interact())
 }
 
 // ---------------------------------------------------------------------------
@@ -95,10 +116,7 @@ pub fn password(prompt: &str) -> Result<String, CliError> {
 /// for destructive or skippable steps ("Delete everything?").
 /// Returns `Err(CliError::Cancelled)` if the user cancels.
 pub fn confirm(prompt: &str, default: bool) -> Result<bool, CliError> {
-    cliclack::confirm(prompt)
-        .initial_value(default)
-        .interact()
-        .map_err(map_prompt_err)
+    quiet_ctrl_c(|| cliclack::confirm(prompt).initial_value(default).interact())
 }
 
 // ---------------------------------------------------------------------------
@@ -114,7 +132,7 @@ pub fn select<T: Clone + Eq>(prompt: &str, items: &[(T, &str, &str)]) -> Result<
     for (value, label, hint) in items {
         s = s.item(value.clone(), label, hint);
     }
-    s.interact().map_err(map_prompt_err)
+    quiet_ctrl_c(|| s.interact())
 }
 
 /// [`select`] for a list that may be long: typing narrows it, at most `rows`
@@ -133,7 +151,7 @@ pub fn select_filtered<T: Clone>(
             .collect(),
         rows,
     );
-    let chosen = crate::picker::run(list).map_err(map_prompt_err)?;
+    let chosen = quiet_ctrl_c(|| crate::picker::run(list))?;
     Ok(items[chosen].0.clone())
 }
 
@@ -226,12 +244,32 @@ pub fn multiselect<T: Clone + Eq>(
     for (value, label, hint) in items {
         s = s.item(value.clone(), label, hint);
     }
-    s.interact().map_err(map_prompt_err)
+    quiet_ctrl_c(|| s.interact())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::Rows;
+    use super::{Rows, quiet_ctrl_c};
+
+    #[cfg(unix)]
+    fn sigint_handler() -> libc::sighandler_t {
+        unsafe {
+            let mut now: libc::sigaction = std::mem::zeroed();
+            libc::sigaction(libc::SIGINT, std::ptr::null(), &mut now);
+            now.sa_sigaction
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ctrl_c_is_ignored_only_while_asking() {
+        let before = sigint_handler();
+        let during = quiet_ctrl_c(|| Ok(sigint_handler())).unwrap();
+        assert_eq!(during, libc::SIG_IGN);
+        assert_eq!(sigint_handler(), before, "the old handler is back");
+        let err = quiet_ctrl_c::<()>(|| Err(std::io::ErrorKind::Interrupted.into()));
+        assert!(matches!(err, Err(crate::CliError::Cancelled)));
+    }
 
     #[test]
     fn auto_rows_are_half_the_terminal_within_bounds() {
