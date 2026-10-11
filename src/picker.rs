@@ -395,7 +395,9 @@ mod tests {
         let lines: Vec<&str> = frame.lines().collect();
         // header, query, 10 rows, footer
         assert_eq!(lines.len(), 13, "{frame}");
-        assert_eq!(lines[2].trim_end(), "│  ○ item-00", "{frame}");
+        // The radio symbol is `○` on a terminal and a space when captured.
+        assert!(lines[2].trim_end().ends_with(" item-00"), "{frame}");
+        assert!(!lines[2].contains("login"), "{frame}");
         assert!(lines[3].ends_with("item-01  note"), "{frame}");
         assert!(lines[12].contains("1–10 of 40"), "{frame}");
 
