@@ -24,7 +24,7 @@ cli-kit = { version = "0.1", features = ["tui"] }
 
 | Module | Description |
 |--------|-------------|
-| `flow` | One command as one clack prompt group (`┌ … ◇ … └ ✔`): `Flow` (live or plain), `Grid` tables boxed inside steps, checks, error close via `render_error` |
+| `flow` | One command as one clack prompt group (`┌ … ◇ … └ ✔`): `Flow` (live or plain), `Grid` tables boxed inside steps (`table_box` for an app with its own gutter), checks, error close via `render_error` |
 | `completion` | Static shell completion scripts from the app's clap command tree |
 | `args` | `args::parse::<Cli>()`: clap parsing whose errors follow the JSON error contract when the arguments ask for JSON |
 | `error` | Categorized `CliError` enum (Usage, Cancelled, Auth, Config, External, Internal) with styled rendering, proper exit codes, and a JSON form (`kind`, `to_json`, `with_details`) |

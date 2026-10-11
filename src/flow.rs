@@ -139,6 +139,13 @@ fn wrapped(msg: &str) -> String {
     ui::wrap_to(msg, note_width())
 }
 
+/// A grid in its own titled box (`◇ Title ───╮ … ├──╯`), fitted to this
+/// terminal, ready to write to stderr. What [`Flow::table`] draws live; for
+/// an app that keeps its own gutter but wants the same table box.
+pub fn table_box(title: &str, grid: &Grid) -> String {
+    boxed_note(title, &grid.boxed(note_width()))
+}
+
 /// Width available inside a note box on this terminal.
 fn note_width() -> usize {
     let cols = console::Term::stderr().size().1 as usize;
@@ -185,8 +192,7 @@ impl Flow {
     /// [`crate::Tone`]s.
     pub fn table(&self, title: &str, grid: &Grid) {
         if self.live {
-            let _ =
-                console::Term::stderr().write_str(&boxed_note(title, &grid.boxed(note_width())));
+            let _ = console::Term::stderr().write_str(&table_box(title, grid));
         } else {
             println!("{}", grid.plain());
         }
