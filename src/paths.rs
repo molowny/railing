@@ -271,19 +271,26 @@ pub mod fs {
         Ok(true)
     }
 
+    /// The warning for `path` when its permissions are broader than private
+    /// (`0700` for a directory, `0600` for a file), with the `chmod` that
+    /// fixes it; `None` when they are private or cannot be read. For an app
+    /// that shows it in its own frame.
+    pub fn broad_permissions_warning(path: &Path) -> Option<String> {
+        if check_private_permissions(path).ok()? {
+            return None;
+        }
+        let mode = if path.is_dir() { "700" } else { "600" };
+        Some(format!(
+            "'{}' has overly broad permissions. Run: chmod {mode} \"{}\"",
+            path.display(),
+            path.display()
+        ))
+    }
+
     /// Emit a warning to stderr if `path` has overly broad permissions.
     pub fn warn_if_permissions_broad(path: &Path) {
-        match check_private_permissions(path) {
-            Ok(true) => {}
-            Ok(false) => {
-                eprintln!(
-                    "warning: '{}' has overly broad permissions. \
-                     Run: chmod 600 \"{}\"",
-                    path.display(),
-                    path.display()
-                );
-            }
-            Err(_) => {}
+        if let Some(w) = broad_permissions_warning(path) {
+            eprintln!("warning: {w}");
         }
     }
 
