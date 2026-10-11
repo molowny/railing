@@ -82,15 +82,15 @@ let id = match id {
 - `prompts::pick` — a filtered select over owned rows. It shows `Rows::Auto` rows at a
   time — half the terminal, between 5 and 25; `Picker::new(prompt).rows(Rows::Fixed(n))`
   sets another number for one call. The foot counts the rows (`1–12 of 60`, `6 of 60
-  match`), every row shows its hint in a column, and typing filters the labels with
+  match`), the highlighted row shows its hint in its own colour, and typing filters the labels with
   `Fuzzy` — a space separates words. Esc clears what was typed, then cancels.
 
 ```
 ◆  Item
 │  home 1
 │  ● Homelab/service-10  ssh key
-│  ○ Homelab/service-13  note
-│  ○ Homelab/service-16  login
+│  ○ Homelab/service-13
+│  ○ Homelab/service-16
 └  6 of 60 match
 ```
 - `CliError::needs(cmd, noun, how)` — the usage error (exit 2) off a terminal:

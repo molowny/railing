@@ -1,7 +1,7 @@
 //! The list behind [`crate::prompts::Picker`]. It keeps cliclack's look —
 //! its theme draws the bar, symbols and colours — and shows what cliclack's
 //! select cannot: how many rows there are and which of them are on screen,
-//! and every row's hint, not only the highlighted one's. Typing filters with
+//! and the highlighted row's hint in a colour of its own. Typing filters with
 //! [`Fuzzy`], the matcher the TUIs use, so a space separates words instead of
 //! being dropped.
 
@@ -186,29 +186,22 @@ impl<'a> List<'a> {
         };
         out += &format!("{bar}  {query}{}\n", style(" ").reverse().for_stderr());
 
-        // `│  ○ ` before the label; labels share a column so hints line up.
+        // `│  ○ ` before the label; only the highlighted row shows its hint,
+        // in its own colour, so the list stays a list of names.
         let room = fit.saturating_sub(5);
         let visible = &self.shown[self.start..(self.start + self.height).min(self.shown.len())];
-        let label_col = visible
-            .iter()
-            .map(|s| measure_text_width(self.rows[s.index].0))
-            .max()
-            .unwrap_or(0)
-            .min(room);
         for (offset, row) in visible.iter().enumerate() {
             let selected = self.start + offset == self.cursor;
             let (label, hint) = self.rows[row.index];
-            let label = cut(label, label_col);
-            let pad = " ".repeat(label_col - measure_text_width(&label));
-            let hint_room = room.saturating_sub(label_col + 2);
-            let hint = if hint.is_empty() || hint_room < 4 {
+            let label = cut(label, room);
+            let hint_room = room.saturating_sub(measure_text_width(&label) + 2);
+            let hint = if !selected || hint.is_empty() || hint_room < 4 {
                 String::new()
             } else {
-                let hint = cut(hint, hint_room);
-                format!("  {}", style(hint).dim().for_stderr())
+                format!("  {}", style(cut(hint, hint_room)).yellow().for_stderr())
             };
             out += &format!(
-                "{bar}  {} {}{pad}{hint}\n",
+                "{bar}  {} {}{hint}\n",
                 Clack.radio_symbol(&state, selected),
                 paint_label(&label, &row.hits, selected),
             );
@@ -395,14 +388,15 @@ mod tests {
     }
 
     #[test]
-    fn every_row_shows_its_hint_and_the_frame_fits() {
-        let l = list(40, 10);
+    fn only_the_highlighted_row_shows_its_hint_and_the_frame_fits() {
+        let mut l = list(40, 10);
+        l.on(Key::ArrowDown);
         let frame = plain(&l, &Step::Active);
         let lines: Vec<&str> = frame.lines().collect();
         // header, query, 10 rows, footer
         assert_eq!(lines.len(), 13, "{frame}");
-        assert!(lines[2].contains("item-00  login"), "{frame}");
-        assert!(lines[3].contains("item-01  note"), "{frame}");
+        assert_eq!(lines[2].trim_end(), "│  ○ item-00", "{frame}");
+        assert!(lines[3].ends_with("item-01  note"), "{frame}");
         assert!(lines[12].contains("1–10 of 40"), "{frame}");
 
         let narrow = console::strip_ansi_codes(&l.render(&Step::Active, 20)).into_owned();
