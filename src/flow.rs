@@ -22,7 +22,7 @@
 //! error propagated out of with [`render_error`].
 
 use std::process::ExitCode;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use console::style;
 
@@ -35,6 +35,25 @@ use crate::ui;
 /// Nesting depth of open live groups.
 static DEPTH: AtomicUsize = AtomicUsize::new(0);
 
+/// A cancelled prompt drew the gutter's last line (`└ Operation cancelled.`)
+/// itself, so whatever was open is closed already.
+static CLOSED_BY_PROMPT: AtomicBool = AtomicBool::new(false);
+
+/// Whether a cancelled prompt has closed the gutter since the last top-level
+/// group began. A closing line drawn after it would be a second `└`, so an
+/// app's own group (one that does not go through [`begin`]) checks this
+/// before closing on [`CliError::Cancelled`].
+pub fn closed_by_prompt() -> bool {
+    CLOSED_BY_PROMPT.load(Ordering::SeqCst)
+}
+
+/// A prompt was cancelled and drew its own closing line: every open group is
+/// over.
+pub(crate) fn prompt_cancelled() {
+    DEPTH.store(0, Ordering::SeqCst);
+    CLOSED_BY_PROMPT.store(true, Ordering::SeqCst);
+}
+
 /// Whether a live group is open.
 pub fn is_open() -> bool {
     DEPTH.load(Ordering::SeqCst) > 0
@@ -44,6 +63,7 @@ pub fn is_open() -> bool {
 pub fn begin(title: &str) {
     let title = style(title).bold().to_string();
     let _ = if DEPTH.fetch_add(1, Ordering::SeqCst) == 0 {
+        CLOSED_BY_PROMPT.store(false, Ordering::SeqCst);
         ui::intro(&format!(" {title} "))
     } else {
         ui::log::step(&title)
@@ -58,7 +78,8 @@ pub enum Outcome {
     Fail,
 }
 
-/// Close the innermost live group with its outcome.
+/// Close the innermost live group with its outcome. Nothing is drawn once a
+/// cancelled prompt has closed the gutter itself.
 pub fn end(outcome: Outcome, message: &str) {
     let closing = outro_text(message);
     let prev = DEPTH
@@ -66,6 +87,9 @@ pub fn end(outcome: Outcome, message: &str) {
             Some(d.saturating_sub(1))
         })
         .unwrap_or(0);
+    if closed_by_prompt() {
+        return;
+    }
     let _ = match (prev <= 1, outcome) {
         (true, Outcome::Ok) => ui::outro_success(&closing),
         (true, Outcome::Warn) => ui::outro_warning(&closing),

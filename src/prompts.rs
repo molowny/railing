@@ -22,7 +22,9 @@ use crate::error::{CliError, map_prompt_err};
 /// raising SIGINT at the process, which kills it mid-frame with the cursor
 /// still hidden; ignored, the read fails as interrupted instead, the prompt
 /// draws itself cancelled, and the caller gets [`CliError::Cancelled`]
-/// (exit 130). Whatever handler was there before is put back.
+/// (exit 130). Whatever handler was there before is put back. A cancelled
+/// prompt's footer ends the gutter, so the open groups are marked closed
+/// ([`crate::flow::closed_by_prompt`]) and nothing draws a second `└`.
 fn quiet_ctrl_c<T>(prompt: impl FnOnce() -> io::Result<T>) -> Result<T, CliError> {
     #[cfg(unix)]
     let previous = unsafe {
@@ -37,7 +39,11 @@ fn quiet_ctrl_c<T>(prompt: impl FnOnce() -> io::Result<T>) -> Result<T, CliError
     unsafe {
         libc::sigaction(libc::SIGINT, &previous, std::ptr::null_mut());
     }
-    result.map_err(map_prompt_err)
+    let result = result.map_err(map_prompt_err);
+    if matches!(result, Err(CliError::Cancelled)) {
+        crate::flow::prompt_cancelled();
+    }
+    result
 }
 
 // ---------------------------------------------------------------------------
@@ -269,6 +275,10 @@ mod tests {
         assert_eq!(sigint_handler(), before, "the old handler is back");
         let err = quiet_ctrl_c::<()>(|| Err(std::io::ErrorKind::Interrupted.into()));
         assert!(matches!(err, Err(crate::CliError::Cancelled)));
+        assert!(
+            crate::flow::closed_by_prompt(),
+            "the prompt's footer closed the gutter"
+        );
     }
 
     #[test]
