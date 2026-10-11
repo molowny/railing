@@ -146,6 +146,23 @@ pub fn table_box(title: &str, grid: &Grid) -> String {
     boxed_note(title, &grid.boxed(note_width()))
 }
 
+/// Pre-styled text (a status panel) in its own titled box, its styling kept
+/// -- a [`Flow::note`] dims its body.
+pub fn text_box(title: &str, body: &str) -> String {
+    boxed_note(title, body)
+}
+
+/// The gutter's `│` in the group's bar colour, for an app that draws its own
+/// lines inside the group (a live panel).
+pub fn bar() -> String {
+    crate::grid::gutter_bar()
+}
+
+/// Columns available inside a box on this terminal.
+pub fn box_width() -> usize {
+    note_width()
+}
+
 /// Width available inside a note box on this terminal.
 fn note_width() -> usize {
     let cols = console::Term::stderr().size().1 as usize;

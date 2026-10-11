@@ -252,6 +252,16 @@ const S_CORNER_TOP_RIGHT: Emoji = Emoji("╮", "+");
 const S_CONNECT_LEFT: Emoji = Emoji("├", "+");
 const S_CORNER_BOTTOM_RIGHT: Emoji = Emoji("╯", "+");
 
+/// The bare `│`, coloured like the box frames.
+pub(crate) fn gutter_bar() -> String {
+    use cliclack::{Theme, ThemeState};
+    Clack
+        .bar_color(&ThemeState::Submit)
+        .for_stderr()
+        .apply_to(S_BAR)
+        .to_string()
+}
+
 /// `◇  title ───╮`, the body undimmed between `│` bars, `├───╯`: cliclack's
 /// note frame, with the body's own styling left alone.
 pub(crate) fn boxed_note(title: &str, body: &str) -> String {
