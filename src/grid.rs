@@ -186,6 +186,8 @@ pub struct Grid {
     right: Vec<usize>,
     rows: Vec<Vec<GridCell>>,
     no_header: bool,
+    /// `(column, width)`: cut to `width` with `…` when drawn as a table.
+    clip: Vec<(usize, usize)>,
 }
 
 impl Grid {
@@ -231,6 +233,23 @@ impl Grid {
     pub fn right(mut self, columns: &[usize]) -> Self {
         self.right = columns.to_vec();
         self
+    }
+
+    /// Cut `column` to `width` columns with `…` in the printed table. The cell
+    /// keeps its whole text, so a browsed grid filters on all of it and fits
+    /// the column to the screen itself.
+    pub fn clip(mut self, column: usize, width: usize) -> Self {
+        self.clip.retain(|&(c, _)| c != column);
+        self.clip.push((column, width));
+        self
+    }
+
+    /// `text` as drawn in `column` of the printed table.
+    fn drawn<'t>(&self, column: usize, text: &'t str) -> std::borrow::Cow<'t, str> {
+        match self.clip.iter().find(|&&(c, _)| c == column) {
+            Some(&(_, width)) => console::truncate_str(text, width, "…"),
+            None => text.into(),
+        }
     }
 
     /// A line above the table, inside the box (`Branch: master`).
@@ -316,7 +335,7 @@ impl Grid {
             t.add_row(
                 r.iter()
                     .enumerate()
-                    .map(|(i, c)| self.tone_of(i, c).apply(Cell::new(&c.text))),
+                    .map(|(i, c)| self.tone_of(i, c).apply(Cell::new(self.drawn(i, &c.text)))),
             );
         }
         for &i in &self.right {
@@ -522,6 +541,18 @@ mod tests {
         );
         let c = Tone::Muted.cell("1.2 GB").key(SortKey::Num(1_200));
         assert_eq!(c.sort_key(), SortKey::Num(1_200));
+    }
+
+    #[test]
+    fn clip_cuts_the_drawn_table_and_keeps_the_text() {
+        let _c = colors(false);
+        let mut g = Grid::new(&["Name"]).no_header(true).clip(0, 8);
+        g.row(["a rather long name"]);
+        assert_eq!(g.boxed(80).trim(), "a rathe…");
+        assert!(g.plain().contains("a rathe…"));
+        assert_eq!(g.rows()[0][0].text(), "a rather long name");
+        // A clip survives `pick`, so the view printed after browsing matches.
+        assert_eq!(g.pick(&[0]).boxed(80).trim(), "a rathe…");
     }
 
     #[test]
