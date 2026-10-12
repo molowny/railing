@@ -121,7 +121,10 @@ pub fn note(title: &str, body: &str) -> Result<(), CliError> {
 
 /// Word-wrap every line of `text` to `width` visible columns (ANSI styling is
 /// not counted). Existing line breaks are kept; leading indentation of a
-/// wrapped line is carried onto its continuations.
+/// wrapped line is carried onto its continuations. A word longer than the
+/// line (one-line XML, a long path) is broken mid-word, so nothing drawn in a
+/// box runs past it; a styled word is left whole rather than cut through its
+/// escape codes.
 pub fn wrap_to(text: &str, width: usize) -> String {
     let mut out = Vec::new();
     for line in text.lines() {
@@ -132,7 +135,21 @@ pub fn wrap_to(text: &str, width: usize) -> String {
         let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
         let mut cur = indent.clone();
         let mut cur_w = console::measure_text_width(&cur);
-        for word in line.split_whitespace() {
+        let room = width.saturating_sub(indent.len()).max(1);
+        let words = line.split_whitespace().flat_map(|word| {
+            let plain = !word.contains('\x1b');
+            if plain && console::measure_text_width(word) > room {
+                let chars: Vec<char> = word.chars().collect();
+                chars
+                    .chunks(room)
+                    .map(|c| c.iter().collect::<String>())
+                    .collect::<Vec<_>>()
+            } else {
+                vec![word.to_string()]
+            }
+        });
+        for word in words {
+            let word = word.as_str();
             let w = console::measure_text_width(word);
             if cur_w > indent.len() && cur_w + 1 + w > width {
                 out.push(std::mem::replace(&mut cur, indent.clone()));
@@ -590,6 +607,16 @@ pub(crate) mod tests {
 #[cfg(test)]
 mod wrap_tests {
     use super::wrap_to;
+
+    #[test]
+    fn breaks_a_word_longer_than_the_line() {
+        let w = wrap_to("<a><b>0123456789012345678901234</b></a> tail", 10);
+        assert!(w.lines().all(|l| l.chars().count() <= 10), "{w}");
+        assert_eq!(
+            w.replace('\n', ""),
+            "<a><b>0123456789012345678901234</b></a>tail"
+        );
+    }
 
     #[test]
     fn wraps_long_lines_and_keeps_short_ones() {
