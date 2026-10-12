@@ -133,11 +133,12 @@ pub fn run<A: ScreenApp>(mut app: A) -> io::Result<Option<A::Output>> {
     };
 
     install_panic_hook();
-    terminal::enable_raw_mode()?;
-    term.hide_cursor()?;
-
     let mut alt_screen = matches!(surface, Surface::AltScreen);
-    let result = event_loop(&mut term, &mut app, &tty, size, &mut alt_screen);
+    // A failure from here on still goes through the teardown below: returning
+    // early would leave the shell on the alternate screen or in raw mode.
+    let result = terminal::enable_raw_mode()
+        .and_then(|()| term.hide_cursor())
+        .and_then(|()| event_loop(&mut term, &mut app, &tty, size, &mut alt_screen));
 
     if alt_screen {
         // Wipe the frame *before* handing the screen back. On a terminal where
@@ -179,9 +180,18 @@ fn enter_alt_screen(tty: &File) -> io::Result<Terminal<CrosstermBackend<File>>> 
     let mut backend = CrosstermBackend::new(tty.try_clone()?);
     crossterm::execute!(backend, crossterm::terminal::EnterAlternateScreen)?;
     IN_ALT_SCREEN.store(true, Ordering::SeqCst);
-    let mut term = Terminal::new(backend)?;
-    term.clear()?;
-    Ok(term)
+    let built = Terminal::new(backend).and_then(|mut term| {
+        term.clear()?;
+        Ok(term)
+    });
+    if built.is_err() {
+        // No terminal to tear down later: hand the screen back now.
+        if let Ok(mut out) = tty.try_clone() {
+            let _ = crossterm::execute!(out, crossterm::terminal::LeaveAlternateScreen);
+        }
+        IN_ALT_SCREEN.store(false, Ordering::SeqCst);
+    }
+    built
 }
 
 /// Leave an inline viewport behind and take over the alternate screen.
@@ -201,8 +211,14 @@ fn enter_alt_screen(tty: &File) -> io::Result<Terminal<CrosstermBackend<File>>> 
 /// exactly as it was. The primary screen is deliberately left untouched here —
 /// the last inline frame stays sitting there like any other command's output,
 /// which is also why an inline app must never have rendered a secret.
-fn go_fullscreen(term: &mut Terminal<CrosstermBackend<File>>, tty: &File) -> io::Result<()> {
+fn go_fullscreen(
+    term: &mut Terminal<CrosstermBackend<File>>,
+    tty: &File,
+    alt_screen: &mut bool,
+) -> io::Result<()> {
     *term = enter_alt_screen(tty)?;
+    // Before anything else can fail, so the teardown leaves this screen.
+    *alt_screen = true;
     term.hide_cursor()?;
     Ok(())
 }
@@ -247,8 +263,7 @@ fn event_loop<A: ScreenApp>(
             let size = terminal::size().unwrap_or(last_size);
             if size != last_size {
                 last_size = size;
-                go_fullscreen(term, tty)?;
-                *alt_screen = true;
+                go_fullscreen(term, tty, alt_screen)?;
             }
         }
 

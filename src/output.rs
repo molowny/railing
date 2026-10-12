@@ -53,6 +53,9 @@ pub struct GlobalOpts {
     pub quiet: bool,
     pub yes: bool,
     pub no_header: bool,
+    /// Print long lists as their table instead of opening the grid
+    /// (`--no-pager`, `docs/cli.md` §8.1.1).
+    pub no_pager: bool,
 }
 
 // ---------------------------------------------------------------------------

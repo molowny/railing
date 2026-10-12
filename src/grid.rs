@@ -42,6 +42,7 @@ impl Tone {
         GridCell {
             text: text.into(),
             tone: Some(self),
+            key: None,
         }
     }
 
@@ -76,25 +77,96 @@ impl Tone {
     }
 }
 
+/// What a cell sorts by when a person sorts its column in a browsed grid.
+///
+/// Set it with [`GridCell::key`] wherever the text does not sort the way the
+/// value does: numbers, sizes, money (in minor units) and timestamps. A cell
+/// without one sorts by its text, case-insensitively; alignment never implies
+/// a numeric sort.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SortKey {
+    Num(i64),
+    Text(String),
+    /// No value (`—`). Sorts last whichever way the column is sorted.
+    Missing,
+}
+
+impl SortKey {
+    /// Order two present keys. Numbers come before text, so a column that
+    /// mixes them (it should not) still sorts the same way every time.
+    #[cfg_attr(not(feature = "tui"), allow(dead_code))]
+    fn cmp_present(&self, other: &Self) -> std::cmp::Ordering {
+        use std::cmp::Ordering::*;
+        match (self, other) {
+            (SortKey::Num(a), SortKey::Num(b)) => a.cmp(b),
+            (SortKey::Text(a), SortKey::Text(b)) => a.cmp(b),
+            (SortKey::Num(_), SortKey::Text(_)) => Less,
+            (SortKey::Text(_), SortKey::Num(_)) => Greater,
+            _ => Equal,
+        }
+    }
+
+    /// Order for a column sorted ascending (`desc` false) or descending.
+    /// Missing keys are last either way.
+    #[cfg_attr(not(feature = "tui"), allow(dead_code))]
+    pub(crate) fn cmp_sorted(&self, other: &Self, desc: bool) -> std::cmp::Ordering {
+        use std::cmp::Ordering::*;
+        match (self, other) {
+            (SortKey::Missing, SortKey::Missing) => Equal,
+            (SortKey::Missing, _) => Greater,
+            (_, SortKey::Missing) => Less,
+            _ if desc => other.cmp_present(self),
+            _ => self.cmp_present(other),
+        }
+    }
+}
+
 /// One grid cell: its text and, when it differs from its column's, a tone.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct GridCell {
     text: String,
     tone: Option<Tone>,
+    key: Option<SortKey>,
+}
+
+impl GridCell {
+    /// Sort this cell by `key` instead of its text ([`SortKey`]).
+    pub fn key(mut self, key: SortKey) -> Self {
+        self.key = Some(key);
+        self
+    }
+
+    #[cfg_attr(not(feature = "tui"), allow(dead_code))]
+    pub(crate) fn text(&self) -> &str {
+        &self.text
+    }
+
+    /// The cell's sort key: its own, or its text (empty and `—` are missing).
+    #[cfg_attr(not(feature = "tui"), allow(dead_code))]
+    pub(crate) fn sort_key(&self) -> SortKey {
+        if let Some(k) = &self.key {
+            return k.clone();
+        }
+        match self.text.trim() {
+            "" | "—" => SortKey::Missing,
+            t => SortKey::Text(t.to_lowercase()),
+        }
+    }
 }
 
 impl From<&str> for GridCell {
     fn from(text: &str) -> Self {
-        Self {
-            text: text.into(),
-            tone: None,
-        }
+        text.to_string().into()
     }
 }
 
 impl From<String> for GridCell {
     fn from(text: String) -> Self {
-        Self { text, tone: None }
+        Self {
+            text,
+            tone: None,
+            key: None,
+        }
     }
 }
 
@@ -182,6 +254,49 @@ impl Grid {
         self.rows.is_empty()
     }
 
+    /// Number of rows.
+    pub fn len(&self) -> usize {
+        self.rows.len()
+    }
+
+    /// The same grid with only `rows`, in that order — the view a browsed
+    /// grid ended on.
+    pub fn pick(&self, rows: &[usize]) -> Grid {
+        Grid {
+            rows: rows
+                .iter()
+                .filter_map(|&i| self.rows.get(i).cloned())
+                .collect(),
+            ..self.clone()
+        }
+    }
+
+    #[cfg_attr(not(feature = "tui"), allow(dead_code))]
+    pub(crate) fn headers(&self) -> &[String] {
+        &self.headers
+    }
+
+    #[cfg_attr(not(feature = "tui"), allow(dead_code))]
+    pub(crate) fn lead_lines(&self) -> &[String] {
+        &self.lead
+    }
+
+    #[cfg_attr(not(feature = "tui"), allow(dead_code))]
+    pub(crate) fn rows(&self) -> &[Vec<GridCell>] {
+        &self.rows
+    }
+
+    #[cfg_attr(not(feature = "tui"), allow(dead_code))]
+    pub(crate) fn is_right(&self, column: usize) -> bool {
+        self.right.contains(&column)
+    }
+
+    /// The tone `cell` in `column` is drawn with.
+    pub(crate) fn tone_of(&self, column: usize, cell: &GridCell) -> Tone {
+        cell.tone
+            .unwrap_or_else(|| self.tones.get(column).copied().unwrap_or_default())
+    }
+
     /// The comfy table with tones applied, or none when `color` is off.
     fn table(&self, headers: Vec<String>, color: bool) -> Table {
         let mut t = Table::new();
@@ -198,12 +313,11 @@ impl Grid {
             );
         }
         for r in &self.rows {
-            t.add_row(r.iter().enumerate().map(|(i, c)| {
-                let tone = c
-                    .tone
-                    .unwrap_or_else(|| self.tones.get(i).copied().unwrap_or_default());
-                tone.apply(Cell::new(&c.text))
-            }));
+            t.add_row(
+                r.iter()
+                    .enumerate()
+                    .map(|(i, c)| self.tone_of(i, c).apply(Cell::new(&c.text))),
+            );
         }
         for &i in &self.right {
             if let Some(col) = t.column_mut(i) {
@@ -384,6 +498,42 @@ mod tests {
         let s = g.boxed(80);
         let ends: Vec<_> = s.lines().skip(1).map(|l| l.len()).collect();
         assert_eq!(ends[0], ends[1], "{s}");
+    }
+
+    #[test]
+    fn missing_sorts_last_both_ways_and_numbers_by_value() {
+        use std::cmp::Ordering::*;
+        let n = |v| SortKey::Num(v);
+        assert_eq!(n(9).cmp_sorted(&n(10), false), Less);
+        assert_eq!(n(9).cmp_sorted(&n(10), true), Greater);
+        for desc in [false, true] {
+            assert_eq!(SortKey::Missing.cmp_sorted(&n(1), desc), Greater);
+            assert_eq!(n(1).cmp_sorted(&SortKey::Missing, desc), Less);
+        }
+    }
+
+    #[test]
+    fn a_cell_sorts_by_its_key_else_its_text() {
+        assert_eq!(GridCell::from("—").sort_key(), SortKey::Missing);
+        assert_eq!(GridCell::from("  ").sort_key(), SortKey::Missing);
+        assert_eq!(
+            GridCell::from("GitHub").sort_key(),
+            SortKey::Text("github".into())
+        );
+        let c = Tone::Muted.cell("1.2 GB").key(SortKey::Num(1_200));
+        assert_eq!(c.sort_key(), SortKey::Num(1_200));
+    }
+
+    #[test]
+    fn pick_keeps_the_shape_and_takes_rows_in_order() {
+        let _c = colors(false);
+        let mut g = Grid::new(&["Id"]).no_header(true);
+        g.row(["a"]).row(["b"]).row(["c"]);
+        let p = g.pick(&[2, 0, 9]);
+        assert_eq!(p.len(), 2);
+        let s = p.boxed(80);
+        let lines: Vec<_> = s.lines().map(str::trim).collect();
+        assert_eq!(lines, ["c", "a"]);
     }
 
     #[test]

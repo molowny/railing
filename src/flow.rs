@@ -169,12 +169,84 @@ fn note_width() -> usize {
     cols.saturating_sub(8).clamp(40, 160)
 }
 
+/// When [`Flow::browse_table`] opens the interactive grid instead of printing
+/// the table: the app's policy, set once with [`Flow::browse`]. Whatever the
+/// policy, the grid opens only where a prompt could ([`Flow::can_ask`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Browse {
+    /// When the table would not fit the terminal.
+    #[default]
+    Auto,
+    /// Whenever the flow can ask.
+    Always,
+    /// Never (`--no-pager`).
+    Never,
+}
+
+/// Lines of frame around a table box in a one-table command: `┌ title`, the
+/// blank bar under it, and the closing `└` with the bar above it.
+#[cfg(feature = "tui")]
+const FRAME_LINES: usize = 4;
+
+/// Whether a table box drawn as `rendered` fits a terminal `rows` high along
+/// with the frame around it.
+#[cfg(feature = "tui")]
+fn fits(rendered: &str, rows: usize) -> bool {
+    rendered.lines().count() + FRAME_LINES <= rows
+}
+
+/// The [`Browse`] decision, given the gate and the fit.
+#[cfg(feature = "tui")]
+fn opens_grid(policy: Browse, can_ask: bool, fits: impl FnOnce() -> bool) -> bool {
+    can_ask
+        && match policy {
+            Browse::Never => false,
+            Browse::Always => true,
+            Browse::Auto => !fits(),
+        }
+}
+
+/// What [`Flow::browse_table`] showed: the rows the person ended on, or every
+/// row when the table was printed without the grid.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Browsed {
+    /// Indices into the grid's rows, in the order shown.
+    pub rows: Vec<usize>,
+    /// The grid's row count.
+    pub total: usize,
+    /// The filter, when one was applied.
+    pub query: Option<String>,
+    /// `(column, descending)`, when the person sorted.
+    pub sort: Option<(usize, bool)>,
+    /// Whether the grid was opened.
+    pub browsed: bool,
+}
+
+impl Browsed {
+    #[cfg(feature = "tui")]
+    fn all(total: usize) -> Self {
+        Self {
+            rows: (0..total).collect(),
+            total,
+            query: None,
+            sort: None,
+            browsed: false,
+        }
+    }
+
+    /// Whether every row is shown.
+    pub fn is_all(&self) -> bool {
+        self.rows.len() == self.total
+    }
+}
+
 /// One command's rendering. Live: a prompt group. Plain: data on stdout,
 /// chatter on stderr, no frame.
 #[derive(Debug)]
 #[must_use = "close the flow with done/warn_done/fail"]
 pub struct Flow {
     live: bool,
+    browse: Browse,
 }
 
 #[allow(clippy::print_stdout, clippy::print_stderr)]
@@ -184,12 +256,24 @@ impl Flow {
         if live {
             begin(title);
         }
-        Self { live }
+        Self {
+            live,
+            browse: Browse::default(),
+        }
     }
 
     /// A flow that never draws a frame.
     pub fn plain() -> Self {
-        Self { live: false }
+        Self {
+            live: false,
+            browse: Browse::default(),
+        }
+    }
+
+    /// Set when [`Flow::browse_table`] opens the grid — the app's policy.
+    pub fn browse(mut self, policy: Browse) -> Self {
+        self.browse = policy;
+        self
     }
 
     pub fn is_live(&self) -> bool {
@@ -213,6 +297,60 @@ impl Flow {
         } else {
             println!("{}", grid.plain());
         }
+    }
+
+    /// A list's table, or — at a terminal, when the [`Browse`] policy says so
+    /// — the interactive grid over it (`docs/cli.md` §8.1.1). When the person
+    /// finishes, the view they ended on is printed as the table (after a step
+    /// line naming the filter and sort, if any); Ctrl-C is
+    /// [`CliError::Cancelled`] and prints nothing. If the grid cannot start,
+    /// the table is printed as if it had never been asked for.
+    #[cfg(feature = "tui")]
+    pub fn browse_table(&self, title: &str, grid: &Grid) -> Result<Browsed, CliError> {
+        let rows = || console::Term::stderr().size().0 as usize;
+        if grid.is_empty()
+            || !opens_grid(self.browse, self.can_ask(), || {
+                fits(&table_box(title, grid), rows())
+            })
+        {
+            self.table(title, grid);
+            return Ok(Browsed::all(grid.len()));
+        }
+        use crate::tui::widgets::data_grid::DataGrid;
+        let view = match crate::tui::run(DataGrid::new(title, grid)) {
+            Ok(Some(view)) => view,
+            Ok(None) => return Err(CliError::Cancelled),
+            Err(error) => {
+                tracing::warn!(%error, "cannot open the data grid; printing the table");
+                self.table(title, grid);
+                return Ok(Browsed::all(grid.len()));
+            }
+        };
+        let mut said = Vec::new();
+        if let Some(q) = &view.query {
+            said.push(format!("filtered by '{q}'"));
+        }
+        if let Some((col, desc)) = view.sort {
+            let name = grid.headers().get(col).map(|h| h.to_lowercase());
+            let dir = if desc { "descending" } else { "ascending" };
+            said.push(format!("sorted by {} {dir}", name.unwrap_or_default()));
+        }
+        if !said.is_empty() {
+            let line = said.join(", ");
+            let mut chars = line.chars();
+            let first = chars.next().map(|c| c.to_uppercase().collect::<String>());
+            self.step(&format!("{}{}", first.unwrap_or_default(), chars.as_str()));
+        }
+        if !view.rows.is_empty() {
+            self.table(title, &grid.pick(&view.rows));
+        }
+        Ok(Browsed {
+            rows: view.rows,
+            total: grid.len(),
+            query: view.query,
+            sort: view.sort,
+            browsed: true,
+        })
     }
 
     /// Health checks as `✔ name  detail` rows in a titled box (live), or the
@@ -346,6 +484,51 @@ impl Flow {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(feature = "tui")]
+    #[test]
+    fn the_grid_never_opens_where_a_prompt_could_not() {
+        for policy in [Browse::Auto, Browse::Always, Browse::Never] {
+            assert!(!opens_grid(policy, false, || false), "{policy:?}");
+        }
+    }
+
+    #[cfg(feature = "tui")]
+    #[test]
+    fn auto_opens_only_when_the_table_does_not_fit() {
+        assert!(opens_grid(Browse::Auto, true, || false));
+        assert!(!opens_grid(Browse::Auto, true, || true));
+        assert!(opens_grid(Browse::Always, true, || true));
+        assert!(!opens_grid(Browse::Never, true, || false));
+    }
+
+    #[cfg(feature = "tui")]
+    #[test]
+    fn fit_counts_the_rendered_box_and_the_frame() {
+        let _c = crate::ui::tests::lock();
+        let mut g = Grid::new(&["Id", "Title"]);
+        for i in 0..10 {
+            g.row([format!("{i}"), "x".into()]);
+        }
+        let boxed = boxed_note("Items", &g.boxed(80));
+        let h = boxed.lines().count();
+        // title, blank, header, 10 rows, blank, bottom rule, trailing bar.
+        assert_eq!(h, 16, "{boxed}");
+        assert!(fits(&boxed, h + FRAME_LINES));
+        assert!(!fits(&boxed, h + FRAME_LINES - 1));
+        // A cell that wraps takes the lines it wraps to.
+        let mut wide = Grid::new(&["Id", "Title"]);
+        wide.row(["1".into(), "word ".repeat(40)]);
+        assert!(boxed_note("Items", &wide.boxed(40)).lines().count() > 6);
+    }
+
+    #[cfg(feature = "tui")]
+    #[test]
+    fn browsed_all_is_every_row_in_order() {
+        let b = Browsed::all(3);
+        assert_eq!(b.rows, [0, 1, 2]);
+        assert!(b.is_all() && !b.browsed);
+    }
 
     #[test]
     fn closing_lines_stay_aligned_under_the_first() {
