@@ -270,10 +270,30 @@ pub enum Gutter {
     Error,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum To {
     Out,
     Err,
+}
+
+/// What a line of plain output is, for [`shows`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Kind {
+    /// Data, narration, warnings, the closing line.
+    Text,
+    /// What went wrong: a failed close, a non-fatal error.
+    Failure,
+}
+
+/// Whether plain output of `kind` bound for `to` is written. `quiet` (`-q`,
+/// `--json`) drops text on stderr, but never a failure: `-q` is "data and
+/// errors only". Under `--json` a failure is not written here either — `main`
+/// prints it as the one JSON document (`docs/cli.md` §6.1).
+fn shows(kind: Kind, to: To, quiet: bool, json: bool) -> bool {
+    match kind {
+        Kind::Failure => !json,
+        Kind::Text => !(quiet && to == To::Err),
+    }
 }
 
 /// One command's rendering. Live: a prompt group. Plain: no frame; where the
@@ -332,12 +352,25 @@ impl Flow {
         }
     }
 
-    #[allow(clippy::print_stdout, clippy::print_stderr)]
     fn write(&self, to: To, text: &str) {
+        self.write_as(Kind::Text, to, text);
+    }
+
+    #[allow(clippy::print_stdout, clippy::print_stderr)]
+    fn write_as(&self, kind: Kind, to: To, text: &str) {
+        if !shows(kind, to, self.quiet, crate::output::is_json()) {
+            return;
+        }
         match to {
             To::Out => print!("{text}"),
-            To::Err if self.quiet => {}
             To::Err => eprint!("{text}"),
+        }
+    }
+
+    /// `✖ msg` on stderr, the way `CliError::render` says it.
+    fn write_failure(&self, msg: &str) {
+        if shows(Kind::Failure, To::Err, self.quiet, crate::output::is_json()) {
+            ui::error(msg);
         }
     }
 
@@ -528,8 +561,8 @@ impl Flow {
     pub fn error(&self, msg: &str) {
         if self.live {
             let _ = ui::log::error(&wrapped(msg));
-        } else if !self.quiet {
-            ui::error(msg);
+        } else {
+            self.write_failure(msg);
         }
     }
 
@@ -592,7 +625,12 @@ impl Flow {
                 } else {
                     To::Err
                 };
-                self.write(to, &format!("{msg}\n"));
+                let kind = if outcome == Outcome::Fail {
+                    Kind::Failure
+                } else {
+                    Kind::Text
+                };
+                self.write_as(kind, to, &format!("{msg}\n"));
             }
             return;
         }
@@ -603,8 +641,7 @@ impl Flow {
                 let tag = style("warning:").for_stderr().yellow();
                 self.write(To::Err, &format!("{tag} {msg}\n"));
             }
-            Outcome::Fail if !self.quiet => ui::error(msg),
-            Outcome::Fail => {}
+            Outcome::Fail => self.write_failure(msg),
         }
     }
 
@@ -619,10 +656,11 @@ impl Flow {
     /// Close as failed and hand back an error that `main` will not print again
     /// — except in JSON mode, where `main` prints it as the JSON document and
     /// nothing is said here.
+    ///
+    /// The message is said even under `-q` ([`Flow::quiet`]): a `Rendered`
+    /// error is never printed again, so dropping it here would fail silently.
     pub fn fail(self, msg: &str) -> CliError {
-        if self.live || !crate::output::is_json() {
-            self.close(Outcome::Fail, msg);
-        }
+        self.close(Outcome::Fail, msg);
         CliError::Rendered(msg.to_string())
     }
 }
@@ -702,6 +740,20 @@ mod tests {
             plain_block("Filenames  all clean", ""),
             "Filenames  all clean\n\n"
         );
+    }
+
+    #[test]
+    fn quiet_drops_stderr_text_but_never_a_failure() {
+        // -q: narration on stderr goes, data on stdout stays.
+        assert!(!shows(Kind::Text, To::Err, true, false));
+        assert!(shows(Kind::Text, To::Out, true, false));
+        // A failure is said under -q, wherever it is bound…
+        assert!(shows(Kind::Failure, To::Err, true, false));
+        assert!(shows(Kind::Failure, To::Out, true, false));
+        // …and not under --json, where main's error document says it.
+        assert!(!shows(Kind::Failure, To::Err, true, true));
+        // Without quiet nothing is dropped.
+        assert!(shows(Kind::Text, To::Err, false, false));
     }
 
     #[test]
