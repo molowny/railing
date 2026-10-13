@@ -185,18 +185,15 @@ pub enum Browse {
 
 /// Lines of frame around a table box in a one-table command: `┌ title`, the
 /// blank bar under it, and the closing `└` with the bar above it.
-#[cfg(feature = "tui")]
 const FRAME_LINES: usize = 4;
 
 /// Whether a table box drawn as `rendered` fits a terminal `rows` high along
 /// with the frame around it.
-#[cfg(feature = "tui")]
 fn fits(rendered: &str, rows: usize) -> bool {
     rendered.lines().count() + FRAME_LINES <= rows
 }
 
 /// The [`Browse`] decision, given the gate and the fit.
-#[cfg(feature = "tui")]
 fn opens_grid(policy: Browse, can_ask: bool, fits: impl FnOnce() -> bool) -> bool {
     can_ask
         && match policy {
@@ -223,7 +220,6 @@ pub struct Browsed {
 }
 
 impl Browsed {
-    #[cfg(feature = "tui")]
     fn all(total: usize) -> Self {
         Self {
             rows: (0..total).collect(),
@@ -437,12 +433,12 @@ impl Flow {
     }
 
     /// A list's table, or — at a terminal, when the [`Browse`] policy says so
-    /// — the interactive grid over it (`docs/cli.md` §8.1.1). When the person
-    /// finishes, the view they ended on is printed as the table (after a step
-    /// line naming the filter and sort, if any); Ctrl-C is
-    /// [`CliError::Cancelled`] and prints nothing. If the grid cannot start,
-    /// the table is printed as if it had never been asked for.
-    #[cfg(feature = "tui")]
+    /// — the interactive grid over it, inline in the flow (`docs/cli.md`
+    /// §8.1.1). When the person finishes, the grid stays where it is, frozen
+    /// on the view they ended on, its filter and sort in its title; nothing
+    /// else is printed. Ctrl-C clears it and is [`CliError::Cancelled`]. If
+    /// the grid cannot start, the table is printed as if it had never been
+    /// asked for.
     pub fn browse_table(&self, title: &str, grid: &Grid) -> Result<Browsed, CliError> {
         let rows = || console::Term::stderr().size().0 as usize;
         if grid.is_empty()
@@ -453,8 +449,7 @@ impl Flow {
             self.table(title, grid);
             return Ok(Browsed::all(grid.len()));
         }
-        use crate::tui::widgets::data_grid::DataGrid;
-        let view = match crate::tui::run(DataGrid::new(title, grid)) {
+        let view = match crate::browse::run(crate::browse::Browser::new(title, grid)) {
             Ok(Some(view)) => view,
             Ok(None) => return Err(CliError::Cancelled),
             Err(error) => {
@@ -463,24 +458,6 @@ impl Flow {
                 return Ok(Browsed::all(grid.len()));
             }
         };
-        let mut said = Vec::new();
-        if let Some(q) = &view.query {
-            said.push(format!("filtered by '{q}'"));
-        }
-        if let Some((col, desc)) = view.sort {
-            let name = grid.headers().get(col).map(|h| h.to_lowercase());
-            let dir = if desc { "descending" } else { "ascending" };
-            said.push(format!("sorted by {} {dir}", name.unwrap_or_default()));
-        }
-        if !said.is_empty() {
-            let line = said.join(", ");
-            let mut chars = line.chars();
-            let first = chars.next().map(|c| c.to_uppercase().collect::<String>());
-            self.step(&format!("{}{}", first.unwrap_or_default(), chars.as_str()));
-        }
-        if !view.rows.is_empty() {
-            self.table(title, &grid.pick(&view.rows));
-        }
         Ok(Browsed {
             rows: view.rows,
             total: grid.len(),
@@ -776,7 +753,6 @@ mod tests {
         f.done("nor this");
     }
 
-    #[cfg(feature = "tui")]
     #[test]
     fn the_grid_never_opens_where_a_prompt_could_not() {
         for policy in [Browse::Auto, Browse::Always, Browse::Never] {
@@ -784,7 +760,6 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "tui")]
     #[test]
     fn auto_opens_only_when_the_table_does_not_fit() {
         assert!(opens_grid(Browse::Auto, true, || false));
@@ -793,7 +768,6 @@ mod tests {
         assert!(!opens_grid(Browse::Never, true, || false));
     }
 
-    #[cfg(feature = "tui")]
     #[test]
     fn fit_counts_the_rendered_box_and_the_frame() {
         let _c = crate::ui::tests::lock();
@@ -813,7 +787,6 @@ mod tests {
         assert!(boxed_note("Items", &wide.boxed(40)).lines().count() > 6);
     }
 
-    #[cfg(feature = "tui")]
     #[test]
     fn browsed_all_is_every_row_in_order() {
         let b = Browsed::all(3);

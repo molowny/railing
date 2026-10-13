@@ -26,6 +26,17 @@ use crate::error::{CliError, map_prompt_err};
 /// prompt's footer ends the gutter, so the open groups are marked closed
 /// ([`crate::flow::closed_by_prompt`]) and nothing draws a second `└`.
 fn quiet_ctrl_c<T>(prompt: impl FnOnce() -> io::Result<T>) -> Result<T, CliError> {
+    let result = without_sigint(prompt).map_err(map_prompt_err);
+    if matches!(result, Err(CliError::Cancelled)) {
+        crate::flow::prompt_cancelled();
+    }
+    result
+}
+
+/// Run `f` with SIGINT ignored, putting back whatever handler was there: a
+/// key reader then sees Ctrl-C as a key or an interrupted read instead of the
+/// process dying mid-frame.
+pub(crate) fn without_sigint<T>(f: impl FnOnce() -> T) -> T {
     #[cfg(unix)]
     let previous = unsafe {
         let mut ignore: libc::sigaction = std::mem::zeroed();
@@ -34,14 +45,10 @@ fn quiet_ctrl_c<T>(prompt: impl FnOnce() -> io::Result<T>) -> Result<T, CliError
         libc::sigaction(libc::SIGINT, &ignore, &mut previous);
         previous
     };
-    let result = prompt();
+    let result = f();
     #[cfg(unix)]
     unsafe {
         libc::sigaction(libc::SIGINT, &previous, std::ptr::null_mut());
-    }
-    let result = result.map_err(map_prompt_err);
-    if matches!(result, Err(CliError::Cancelled)) {
-        crate::flow::prompt_cancelled();
     }
     result
 }

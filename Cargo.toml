@@ -59,7 +59,3 @@ required-features = ["tui"]
 [[example]]
 name = "wait"
 required-features = ["tui"]
-
-[[example]]
-name = "data_grid"
-required-features = ["tui"]

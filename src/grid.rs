@@ -94,7 +94,6 @@ pub enum SortKey {
 impl SortKey {
     /// Order two present keys. Numbers come before text, so a column that
     /// mixes them (it should not) still sorts the same way every time.
-    #[cfg_attr(not(feature = "tui"), allow(dead_code))]
     fn cmp_present(&self, other: &Self) -> std::cmp::Ordering {
         use std::cmp::Ordering::*;
         match (self, other) {
@@ -108,7 +107,6 @@ impl SortKey {
 
     /// Order for a column sorted ascending (`desc` false) or descending.
     /// Missing keys are last either way.
-    #[cfg_attr(not(feature = "tui"), allow(dead_code))]
     pub(crate) fn cmp_sorted(&self, other: &Self, desc: bool) -> std::cmp::Ordering {
         use std::cmp::Ordering::*;
         match (self, other) {
@@ -136,13 +134,11 @@ impl GridCell {
         self
     }
 
-    #[cfg_attr(not(feature = "tui"), allow(dead_code))]
     pub(crate) fn text(&self) -> &str {
         &self.text
     }
 
     /// The cell's sort key: its own, or its text (empty and `—` are missing).
-    #[cfg_attr(not(feature = "tui"), allow(dead_code))]
     pub(crate) fn sort_key(&self) -> SortKey {
         if let Some(k) = &self.key {
             return k.clone();
@@ -290,22 +286,18 @@ impl Grid {
         }
     }
 
-    #[cfg_attr(not(feature = "tui"), allow(dead_code))]
     pub(crate) fn headers(&self) -> &[String] {
         &self.headers
     }
 
-    #[cfg_attr(not(feature = "tui"), allow(dead_code))]
     pub(crate) fn lead_lines(&self) -> &[String] {
         &self.lead
     }
 
-    #[cfg_attr(not(feature = "tui"), allow(dead_code))]
     pub(crate) fn rows(&self) -> &[Vec<GridCell>] {
         &self.rows
     }
 
-    #[cfg_attr(not(feature = "tui"), allow(dead_code))]
     pub(crate) fn is_right(&self, column: usize) -> bool {
         self.right.contains(&column)
     }
