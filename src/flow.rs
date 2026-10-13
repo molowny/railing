@@ -240,13 +240,53 @@ impl Browsed {
     }
 }
 
-/// One command's rendering. Live: a prompt group. Plain: data on stdout,
-/// chatter on stderr, no frame.
+/// Where a plain (unframed) flow writes. The app picks it per command with
+/// [`Flow::plain_to`]; a live flow draws everything on stderr regardless.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Plain {
+    /// Data (tables, notes, blocks) on stdout; narration and the closing
+    /// line on stderr. `app ls | cut …` gets the table and nothing else.
+    #[default]
+    Split,
+    /// The command's output *is* its report: tables, blocks and the closing
+    /// line all on stdout, so `app plan | less` reads like the terminal does.
+    /// One-line narration ([`Flow::step`], [`Flow::warn`], …) stays on stderr.
+    Stdout,
+    /// Everything on stderr: stdout is kept for the one value the command
+    /// prints itself (`id=$(app submit …)`).
+    Stderr,
+}
+
+/// The gutter mark a [`Flow::block`] gets when live.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Gutter {
+    /// `◇` something settled.
+    Step,
+    /// `●` context worth reading.
+    Info,
+    /// `▲` does not stop anything, but should be read.
+    Warn,
+    /// `■` what blocks the command.
+    Error,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum To {
+    Out,
+    Err,
+}
+
+/// One command's rendering. Live: a prompt group. Plain: no frame; where the
+/// text goes is [`Plain`].
 #[derive(Debug)]
 #[must_use = "close the flow with done/warn_done/fail"]
 pub struct Flow {
     live: bool,
     browse: Browse,
+    plain: Plain,
+    /// Plain output bound for stderr is dropped (`-q`, `--json`).
+    quiet: bool,
+    closed: std::cell::Cell<bool>,
 }
 
 #[allow(clippy::print_stdout, clippy::print_stderr)]
@@ -259,14 +299,45 @@ impl Flow {
         Self {
             live,
             browse: Browse::default(),
+            plain: Plain::default(),
+            quiet: false,
+            closed: Default::default(),
         }
     }
 
     /// A flow that never draws a frame.
     pub fn plain() -> Self {
-        Self {
-            live: false,
-            browse: Browse::default(),
+        Self::begin("", false)
+    }
+
+    /// Where this flow writes when it is not live — the app's choice for the
+    /// command ([`Plain`]).
+    pub fn plain_to(mut self, plain: Plain) -> Self {
+        self.plain = plain;
+        self
+    }
+
+    /// Drop the plain output that would go to stderr: `-q` and `--json`
+    /// promise no narration (`docs/cli.md` §2). Errors still reach `main`.
+    pub fn quiet(mut self, yes: bool) -> Self {
+        self.quiet = yes;
+        self
+    }
+
+    /// Where plain data (tables, notes, blocks) goes.
+    fn data_to(&self) -> To {
+        match self.plain {
+            Plain::Split | Plain::Stdout => To::Out,
+            Plain::Stderr => To::Err,
+        }
+    }
+
+    #[allow(clippy::print_stdout, clippy::print_stderr)]
+    fn write(&self, to: To, text: &str) {
+        match to {
+            To::Out => print!("{text}"),
+            To::Err if self.quiet => {}
+            To::Err => eprint!("{text}"),
         }
     }
 
@@ -291,12 +362,45 @@ impl Flow {
     /// A table in its own titled box (live) or the bordered table on stdout
     /// (plain). Not a [`Flow::note`]: a note dims its body, a table keeps its
     /// [`crate::Tone`]s.
+    ///
+    /// Plain, a [`Plain::Split`] table is the bare data; in a report
+    /// ([`Plain::Stdout`], [`Plain::Stderr`]) it is a titled block like the
+    /// rest of the report.
     pub fn table(&self, title: &str, grid: &Grid) {
         if self.live {
             let _ = console::Term::stderr().write_str(&table_box(title, grid));
+        } else if self.plain == Plain::Split {
+            self.write(To::Out, &format!("{}\n", grid.plain()));
         } else {
-            println!("{}", grid.plain());
+            self.block(Gutter::Step, title, &grid.plain());
         }
+    }
+
+    /// A titled block: `body` may span lines (a list, a log). Live it is one
+    /// gutter entry with `mark`, every line kept inside the bar; plain it is
+    /// the title, the body indented under it, and a blank line.
+    pub fn block(&self, mark: Gutter, title: &str, body: &str) {
+        if self.live {
+            let title = match mark {
+                Gutter::Warn => style(title).for_stderr().yellow().bold(),
+                Gutter::Error => style(title).for_stderr().red().bold(),
+                _ => style(title).for_stderr().bold(),
+            };
+            let text = if body.is_empty() {
+                title.to_string()
+            } else {
+                let body = ui::wrap_to(body.trim_end_matches('\n'), gutter_width());
+                format!("{title}\n{body}")
+            };
+            let _ = match mark {
+                Gutter::Step => ui::log::step(&text),
+                Gutter::Info => ui::log::info(&text),
+                Gutter::Warn => ui::log::warning(&text),
+                Gutter::Error => ui::log::error(&text),
+            };
+            return;
+        }
+        self.write(self.data_to(), &plain_block(title, body));
     }
 
     /// A list's table, or — at a terminal, when the [`Browse`] policy says so
@@ -379,7 +483,7 @@ impl Flow {
         if self.live {
             let _ = ui::note(&style(title).bold().to_string(), body);
         } else {
-            println!("{body}");
+            self.write(self.data_to(), &format!("{body}\n"));
         }
     }
 
@@ -388,7 +492,7 @@ impl Flow {
         if self.live {
             let _ = ui::log::step(&wrapped(msg));
         } else {
-            eprintln!("{msg}");
+            self.write(To::Err, &format!("{msg}\n"));
         }
     }
 
@@ -397,7 +501,7 @@ impl Flow {
         if self.live {
             let _ = ui::log::info(&wrapped(msg));
         } else {
-            eprintln!("{msg}");
+            self.write(To::Err, &format!("{msg}\n"));
         }
     }
 
@@ -406,7 +510,7 @@ impl Flow {
         if self.live {
             let _ = ui::log::remark(&ui::dim().apply_to(wrapped(msg)).to_string());
         } else {
-            eprintln!("{msg}");
+            self.write(To::Err, &format!("{msg}\n"));
         }
     }
 
@@ -415,7 +519,8 @@ impl Flow {
         if self.live {
             let _ = ui::log::warning(&wrapped(msg));
         } else {
-            eprintln!("{} {msg}", style("warning:").for_stderr().yellow());
+            let tag = style("warning:").for_stderr().yellow();
+            self.write(To::Err, &format!("{tag} {msg}\n"));
         }
     }
 
@@ -423,8 +528,18 @@ impl Flow {
     pub fn error(&self, msg: &str) {
         if self.live {
             let _ = ui::log::error(&wrapped(msg));
-        } else {
+        } else if !self.quiet {
             ui::error(msg);
+        }
+    }
+
+    /// Slow work with a spinner (live) that ends as a `◇` line
+    /// ([`Task::done`]) or leaves nothing ([`Task::clear`], or dropping it on
+    /// an error). Plain, only the done line is written, as narration.
+    pub fn task(&self, running: &str) -> Task<'_> {
+        Task {
+            flow: self,
+            spinner: self.live.then(|| ui::Spinner::start(running)),
         }
     }
 
@@ -441,49 +556,173 @@ impl Flow {
 
     /// Close with success: `└ ✔ msg` (live) or `msg` on stderr (plain).
     pub fn done(self, msg: &str) {
-        if self.live {
-            end(Outcome::Ok, msg);
-        } else if !msg.is_empty() {
-            eprintln!("{msg}");
-        }
+        self.close(Outcome::Ok, msg);
     }
 
     /// Close with a warning outcome.
     pub fn warn_done(self, msg: &str) {
-        if self.live {
-            end(Outcome::Warn, msg);
-        } else {
-            eprintln!("{} {msg}", style("warning:").for_stderr().yellow());
-        }
+        self.close(Outcome::Warn, msg);
     }
 
     /// Close with an explicit outcome. Unlike [`Flow::fail`] this is not an
     /// error: a report that found problems still ran successfully.
     pub fn end(self, outcome: Outcome, msg: &str) {
-        match outcome {
-            Outcome::Ok => self.done(msg),
-            Outcome::Warn => self.warn_done(msg),
-            Outcome::Fail if self.live => end(Outcome::Fail, msg),
-            Outcome::Fail => ui::error(msg),
+        self.close(outcome, msg);
+    }
+
+    /// Close from code that only borrows the flow — a helper that owns the
+    /// closing line, a watch that ends on its summary. The first close wins;
+    /// later ones (the command's own `done`) do nothing.
+    ///
+    /// Plain, a [`Plain::Split`] flow says it on stderr (`warning:` for a
+    /// warning, `✖` for a failure); a report writes the line as is where the
+    /// report goes.
+    pub fn close(&self, outcome: Outcome, msg: &str) {
+        if self.closed.replace(true) {
+            return;
         }
+        if self.live {
+            end(outcome, msg);
+            return;
+        }
+        if self.plain != Plain::Split {
+            if !msg.is_empty() {
+                let to = if self.plain == Plain::Stdout {
+                    To::Out
+                } else {
+                    To::Err
+                };
+                self.write(to, &format!("{msg}\n"));
+            }
+            return;
+        }
+        match outcome {
+            Outcome::Ok if !msg.is_empty() => self.write(To::Err, &format!("{msg}\n")),
+            Outcome::Ok => {}
+            Outcome::Warn => {
+                let tag = style("warning:").for_stderr().yellow();
+                self.write(To::Err, &format!("{tag} {msg}\n"));
+            }
+            Outcome::Fail if !self.quiet => ui::error(msg),
+            Outcome::Fail => {}
+        }
+    }
+
+    /// The person declined a confirmation: close saying what did not happen
+    /// (`aborted; nothing was submitted`) and hand back
+    /// [`CliError::Cancelled`] (exit 130), which `main` prints nothing more for.
+    pub fn abort(&self, what: &str) -> CliError {
+        self.close(Outcome::Warn, &format!("aborted; {what}"));
+        CliError::Cancelled
     }
 
     /// Close as failed and hand back an error that `main` will not print again
     /// — except in JSON mode, where `main` prints it as the JSON document and
     /// nothing is said here.
     pub fn fail(self, msg: &str) -> CliError {
-        if self.live {
-            end(Outcome::Fail, msg);
-        } else if !crate::output::is_json() {
-            ui::error(msg);
+        if self.live || !crate::output::is_json() {
+            self.close(Outcome::Fail, msg);
         }
         CliError::Rendered(msg.to_string())
     }
 }
 
+/// A [`Flow::task`]: the spinner while it runs.
+#[must_use = "finish the task with done or clear"]
+pub struct Task<'a> {
+    flow: &'a Flow,
+    spinner: Option<ui::Spinner>,
+}
+
+impl Task<'_> {
+    /// Change what the spinner says.
+    pub fn update(&self, msg: &str) {
+        if let Some(s) = &self.spinner {
+            s.update(msg);
+        }
+    }
+
+    /// It finished: a `◇ msg` line (plain: `msg` as narration).
+    pub fn done(mut self, msg: &str) {
+        match self.spinner.take() {
+            Some(s) => s.stop(msg),
+            None => self.flow.write(To::Err, &format!("{msg}\n")),
+        }
+    }
+
+    /// It finished and needs no line of its own.
+    pub fn clear(mut self) {
+        if let Some(s) = self.spinner.take() {
+            s.clear();
+        }
+    }
+}
+
+impl Drop for Task<'_> {
+    fn drop(&mut self) {
+        if let Some(s) = self.spinner.take() {
+            s.clear();
+        }
+    }
+}
+
+/// A [`Flow::block`] without a frame: the title, the body indented two
+/// columns under it (blank lines kept blank), and a blank line after.
+fn plain_block(title: &str, body: &str) -> String {
+    let mut s = format!("{title}\n");
+    for line in body.trim_end_matches('\n').lines() {
+        if line.is_empty() {
+            s.push('\n');
+        } else {
+            s.push_str(&format!("  {line}\n"));
+        }
+    }
+    s.push('\n');
+    s
+}
+
+/// The columns beside the 3-column gutter on stderr, where a live block
+/// draws. A terminal that reports no width gets 100.
+fn gutter_width() -> usize {
+    let cols = console::Term::stderr()
+        .size_checked()
+        .map_or(0, |(_, c)| usize::from(c));
+    let cols = if cols == 0 { 100 } else { cols };
+    cols.saturating_sub(3).max(40)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_plain_block_is_title_indented_body_and_a_blank_line() {
+        assert_eq!(plain_block("Log", "a\n\nb\n"), "Log\n  a\n\n  b\n\n");
+        assert_eq!(
+            plain_block("Filenames  all clean", ""),
+            "Filenames  all clean\n\n"
+        );
+    }
+
+    #[test]
+    fn plain_data_follows_the_mode() {
+        let to = |p| Flow::plain().plain_to(p).data_to();
+        assert!(to(Plain::Split) == To::Out);
+        assert!(to(Plain::Stdout) == To::Out);
+        assert!(to(Plain::Stderr) == To::Err);
+    }
+
+    #[test]
+    fn the_first_close_wins_and_abort_is_cancelled() {
+        let f = Flow::plain().plain_to(Plain::Stderr).quiet(true);
+        assert!(matches!(
+            f.abort("nothing was submitted"),
+            CliError::Cancelled
+        ));
+        assert!(f.closed.get());
+        f.close(Outcome::Ok, "never printed");
+        f.done("nor this");
+    }
 
     #[cfg(feature = "tui")]
     #[test]

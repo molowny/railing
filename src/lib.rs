@@ -19,7 +19,7 @@ pub mod tui;
 pub use comfy_table::Table;
 pub use console::style;
 pub use error::CliError;
-pub use flow::{Browse, Browsed, Flow};
+pub use flow::{Browse, Browsed, Flow, Gutter, Plain, Task};
 pub use grid::{Grid, GridCell, SortKey, Tone};
 pub use output::{
     CheckRow, CheckStatus, ChecksReport, DiagnosticsOutput, GlobalOpts, OutputFormat, Renderable,
