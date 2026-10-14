@@ -57,7 +57,7 @@ Runnable examples live in [`examples/`](examples/) — one per module.
 | `output` | `cargo run --example output -- json` | `Renderable` trait, `make_table`, `DiagnosticsOutput`, pretty vs JSON |
 | `prompts` | `cargo run --example prompts` | `input`, `password`, `confirm`, `select`, `multiselect`, cancellation |
 | `ui` | `cargo run --example ui` | Alerts (`success`/`warning`/`info`/`error`), `Spinner`, intro/outro banners |
-| `pick` | `cargo run --example pick` | `prompts::pick` over 60 rows: filtering, scrolling, the count in the foot |
+| `pick` | `cargo run --example pick` | `prompts::pick` over 60 rows: filtering, scrolling, the count and filter in the box title |
 | `tui` | `cargo run --example tui --features tui` | `FlexRenderable` component model + `top_bar`/`footer`/`prompt` widgets |
 | `screen_canary` | `cargo run --example screen_canary --features tui` | `ScreenApp` on either surface; the probe used by `tools/altscreen-canary.sh` |
 | `outline` | `cargo run --example outline --features tui` | `OutlineBuilder`/`OutlineState` fold-aware tree: keyed fold state, `fold_right`, `expand_all` |
@@ -82,17 +82,22 @@ let id = match id {
   terminal.
 - `prompts::pick` — a filtered select over owned rows. It shows `Rows::Auto` rows at a
   time — half the terminal, between 5 and 25; `Picker::new(prompt).rows(Rows::Fixed(n))`
-  sets another number for one call. The foot counts the rows (`1–12 of 60`, `6 of 60
-  match`), the highlighted row shows its hint in its own colour, and typing filters the labels with
-  `Fuzzy` — a space separates words. Esc clears what was typed, then cancels.
+  sets another number for one call. It draws in the browsed grid's box: the filter is a chip
+  on the title, the count is at its right (`1–12 of 60`, `6 of 60 match · 1–6`), every row
+  shows its hint, and the controls are their own `◇` line. Typing filters the labels with
+  `Fuzzy` — a space separates words; matches rank best first. Esc clears what was typed,
+  then cancels. Once chosen, the box collapses to the prompt and its answer.
 
 ```
-◆  Item
-│  home 1
-│  ● Homelab/service-10  ssh key
-│  ○ Homelab/service-13
-│  ○ Homelab/service-16
-└  6 of 60 match
+◆  Item ▸ /home 1  ───────── 6 of 60 match · 1–6 ─╮
+│                                               │
+│ › Homelab/service-10  ssh key                 │
+│   Homelab/service-13  note                    │
+│   Homelab/service-16  login                   │
+│   …                                           │
+├───────────────────────────────────────────────╯
+│
+◇  ↑↓ move · enter pick · esc clear
 ```
 - `CliError::needs(cmd, noun, how)` — the usage error (exit 2) off a terminal:
   `` `app status` needs a run — `app ls` lists them ``.
