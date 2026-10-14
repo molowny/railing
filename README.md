@@ -24,7 +24,7 @@ cli-kit = { version = "0.1", features = ["tui"] }
 
 | Module | Description |
 |--------|-------------|
-| `flow` | One command as one clack prompt group (`┌ … ◇ … └ ✔`): `Flow` (live or plain), `Grid` tables boxed inside steps (`table_box` for an app with its own gutter), checks, error close via `render_error`; with `tui`, `browse_table` opens a long list as an interactive grid under the app's `Browse` policy (`docs/cli.md` §8.1.1) |
+| `flow` | One command as one clack prompt group (`┌ … ◇ … └ ✔`): `Flow` (live or plain), `Grid` tables boxed inside steps (`table_box` for an app with its own gutter), checks, error close via `render_error`; `browse_table` opens a long list as an interactive grid inline in the flow under the app's `Browse` policy (`docs/cli.md` §8.1.1) |
 | `completion` | Static shell completion scripts from the app's clap command tree |
 | `args` | `args::parse::<Cli>()`: clap parsing whose errors follow the JSON error contract when the arguments ask for JSON |
 | `error` | Categorized `CliError` enum (Usage, Cancelled, Auth, Config, External, Internal) with styled rendering, proper exit codes, and a JSON form (`kind`, `to_json`, `with_details`) |
@@ -61,7 +61,7 @@ Runnable examples live in [`examples/`](examples/) — one per module.
 | `tui` | `cargo run --example tui --features tui` | `FlexRenderable` component model + `top_bar`/`footer`/`prompt` widgets |
 | `screen_canary` | `cargo run --example screen_canary --features tui` | `ScreenApp` on either surface; the probe used by `tools/altscreen-canary.sh` |
 | `outline` | `cargo run --example outline --features tui` | `OutlineBuilder`/`OutlineState` fold-aware tree: keyed fold state, `fold_right`, `expand_all` |
-| `data_grid` | `cargo run --example data_grid --features tui` | `Flow::browse_table` over 200 rows: filter, sort, the view printed on `q`; `-- 5` fits, `-- 200 never` is `--no-pager` |
+| `data_grid` | `cargo run --example data_grid` | `Flow::browse_table` over 200 rows, inline: scroll, filter, sort, frozen on `q`; `-- 5` fits, `-- 200 never` is `--no-pager` |
 | `text_area` | `cargo run --example text_area --features tui` | `TextArea` multi-line input: newline on `Enter`, wrapping, `desired_height`, line-scoped `Ctrl-u` |
 
 ## Asking for a left-out argument

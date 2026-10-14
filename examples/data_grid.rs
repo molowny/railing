@@ -1,10 +1,11 @@
-//! A long list through `Flow::browse_table` (`docs/cli.md` §8.1.1).
+//! A long list through `Flow::browse_table` (`docs/cli.md` §8.1.1): the grid
+//! opens inline in the flow and freezes on the view the person ends on.
 //!
 //! Run with:
-//!   cargo run -p cli-kit --features tui --example data_grid          # grid when 200 rows do not fit
-//!   cargo run -p cli-kit --features tui --example data_grid -- 5     # fits: the table, no grid
-//!   cargo run -p cli-kit --features tui --example data_grid -- 200 never   # `--no-pager`
-//!   cargo run -p cli-kit --features tui --example data_grid | cat    # plain: the table on stdout
+//!   cargo run -p cli-kit --example data_grid               # grid when 200 rows do not fit
+//!   cargo run -p cli-kit --example data_grid -- 5          # fits: the table, no grid
+//!   cargo run -p cli-kit --example data_grid -- 200 never  # `--no-pager`
+//!   cargo run -p cli-kit --example data_grid | cat         # plain: the table on stdout
 
 use cli_kit::{Browse, CliError, Flow, Grid, GridCell, SortKey, Tone};
 
