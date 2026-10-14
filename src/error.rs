@@ -33,7 +33,6 @@
 
 use std::process::ExitCode;
 
-use console::style;
 use thiserror::Error;
 use tracing::error;
 
@@ -189,31 +188,17 @@ impl CliError {
             }
             CliError::Rendered(_) => ExitCode::FAILURE,
             CliError::Usage(msg) => {
-                eprintln!(
-                    "{} {}",
-                    style("✖").for_stderr().red(),
-                    style(msg).for_stderr().red()
-                );
+                crate::ui::error(msg);
                 ExitCode::from(2) // conventional usage-error code
             }
             CliError::Auth(msg) => {
                 error!(error = %self, "command failed");
-                eprintln!(
-                    "{} {}",
-                    style("✖").for_stderr().red(),
-                    style(format!("Authentication error: {msg}"))
-                        .for_stderr()
-                        .red()
-                );
+                crate::ui::error(&format!("Authentication error: {msg}"));
                 ExitCode::FAILURE
             }
             other => {
                 error!(error = %other, "command failed");
-                eprintln!(
-                    "{} {}",
-                    style("✖").for_stderr().red(),
-                    style(other).for_stderr().red()
-                );
+                crate::ui::error(&other.to_string());
                 ExitCode::FAILURE
             }
         }

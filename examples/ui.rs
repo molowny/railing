@@ -1,4 +1,5 @@
-//! Demonstrates alerts, spinner, and intro/outro banners.
+//! Demonstrates the spinner and intro/outro banners. Messages inside a
+//! command go through `cli_kit::Flow` (see the `grid` example).
 //!
 //! Run with: `cargo run --example ui`
 
@@ -10,10 +11,8 @@ use cli_kit::{CliError, ui};
 fn run() -> Result<(), CliError> {
     ui::intro(" cli-kit ui demo ")?;
 
-    ui::success("operation complete");
-    ui::info("3 items loaded");
-    ui::warning("cache is stale");
-    ui::error("(this one goes to stderr)");
+    ui::log::info("3 items loaded")?;
+    ui::log::warning("cache is stale")?;
 
     let sp = ui::Spinner::start("fetching data…");
     sleep(Duration::from_millis(400));

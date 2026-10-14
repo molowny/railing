@@ -1,4 +1,4 @@
-//! High-level UI primitives: alerts, spinners, intro/outro.
+//! High-level UI primitives: the failure line, spinners, intro/outro.
 //!
 //! Wraps `cliclack` so downstream crates never import it directly.
 
@@ -7,25 +7,13 @@ use console::style;
 use crate::error::CliError;
 
 // ---------------------------------------------------------------------------
-// Colored alerts
+// The failure line
 // ---------------------------------------------------------------------------
 
-/// Print a success message in green.
-pub fn success(msg: &str) {
-    println!("{} {}", style("→").green(), style(msg).green());
-}
-
-/// Print a warning message in yellow.
-pub fn warning(msg: &str) {
-    println!("{} {}", style("⚠").yellow(), style(msg).yellow());
-}
-
-/// Print an info message in blue.
-pub fn info(msg: &str) {
-    println!("{} {}", style("ℹ").blue(), style(msg).blue());
-}
-
-/// Print an error message in red.
+/// `✖ msg` in red on stderr: how a command fails when no frame is open
+/// (plain output, or before the flow began). Inside a frame the failure is
+/// the flow's closing line instead ([`crate::flow::render_error`]). Everything
+/// else a command says goes through [`crate::Flow`], in the gutter.
 pub fn error(msg: &str) {
     eprintln!(
         "{} {}",
@@ -591,14 +579,10 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn alert_helpers_do_not_panic_in_either_color_state() {
+    fn the_failure_line_does_not_panic_in_either_color_state() {
         let _g = lock();
         for &on in &[true, false] {
-            console::set_colors_enabled(on);
             console::set_colors_enabled_stderr(on);
-            success("ok");
-            warning("careful");
-            info("note");
             error("fail");
         }
     }

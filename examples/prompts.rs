@@ -34,7 +34,7 @@ fn run() -> Result<(), CliError> {
     )?;
 
     if !prompts::confirm("Send telemetry?", false)? {
-        ui::info("telemetry disabled");
+        ui::log::info("telemetry disabled")?;
     }
 
     if !prompts::confirm("Save profile?", true)? {

@@ -56,7 +56,7 @@ Runnable examples live in [`examples/`](examples/) — one per module.
 | `logging` | `cargo run --example logging -- -vv` | `logging::init` verbosity levels, stderr-only output |
 | `output` | `cargo run --example output -- json` | `Renderable` trait, `make_table`, `DiagnosticsOutput`, pretty vs JSON |
 | `prompts` | `cargo run --example prompts` | `input`, `password`, `confirm`, `select`, `multiselect`, cancellation |
-| `ui` | `cargo run --example ui` | Alerts (`success`/`warning`/`info`/`error`), `Spinner`, intro/outro banners |
+| `ui` | `cargo run --example ui` | Gutter log lines (`ui::log`), `Spinner`, intro/outro banners |
 | `pick` | `cargo run --example pick` | `prompts::pick` over 60 rows: filtering, scrolling, the count and filter in the box title |
 | `tui` | `cargo run --example tui --features tui` | `FlexRenderable` component model + `top_bar`/`footer`/`prompt` widgets |
 | `screen_canary` | `cargo run --example screen_canary --features tui` | `ScreenApp` on either surface; the probe used by `tools/altscreen-canary.sh` |

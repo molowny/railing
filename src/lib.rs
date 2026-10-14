@@ -25,6 +25,6 @@ pub use flow::{Browse, Browsed, Flow, Gutter, Plain, Task};
 pub use grid::{Grid, GridCell, SortKey, Tone};
 pub use output::{
     CheckRow, CheckStatus, ChecksReport, DiagnosticsOutput, GlobalOpts, OutputFormat, Renderable,
-    make_table, print_success,
+    make_table,
 };
 pub use wait::{Mark, Tick, Wait, WaitView};
