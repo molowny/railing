@@ -26,14 +26,14 @@
 //! re-ranked by relevance the way a picker's are. The keys and what they mean
 //! are `docs/cli.md` §8.1.1.
 
-use std::borrow::Cow;
 use std::io;
 
-use cliclack::{Theme, ThemeState};
+use cliclack::ThemeState;
 use console::{Key, Term, measure_text_width, style};
 
+use crate::frame::{self, CHIP_ROOM, Filter, Frame, align, cut, dim, paint_hits};
 use crate::fuzzy::Fuzzy;
-use crate::grid::{Clack, Grid, SortKey, Tone};
+use crate::grid::{Grid, SortKey, Tone};
 
 /// Columns between two table columns.
 const GAP: usize = 2;
@@ -46,8 +46,6 @@ const CHROME: usize = 6;
 const ABOVE: usize = 6;
 /// The tallest window, however tall the terminal.
 const MAX_ROWS: usize = 40;
-/// Room kept beside the title for a short filter chip (` ▸ [/]query`).
-const CHIP_ROOM: usize = 14;
 const HINTS: &str = "↑↓ scroll · pgup/pgdn page · / filter · 1-9 sort · r reverse · q done";
 const EDIT_HINTS: &str = "enter keep · esc clear · ^c cancel";
 
@@ -352,7 +350,7 @@ impl<'a> Browser<'a> {
         // one column spare so nothing wraps. The box is sized for the longest
         // status it can show, so it keeps its width while the person filters
         // and sorts.
-        let max_inner = cols.saturating_sub(7).max(20);
+        let max_inner = frame::max_inner(cols);
         let widths = self.fitted(max_inner);
         let table = widths.iter().sum::<usize>() + GAP * widths.len().saturating_sub(1);
         let n = self.keys.len();
@@ -368,58 +366,27 @@ impl<'a> Browser<'a> {
             .max(lead_w.max().unwrap_or(0))
             .min(max_inner);
 
-        let state = if finished {
-            ThemeState::Submit
-        } else {
-            ThemeState::Active
-        };
-        let frame = Clack.bar_color(&state).for_stderr();
-        let bar = frame.apply_to("│").to_string();
-        let dim = |s: &str| {
-            style(s)
-                .color256(crate::ui::DIM_256)
-                .for_stderr()
-                .to_string()
-        };
-        let line = |content: &str| -> String {
-            let pad = inner.saturating_sub(measure_text_width(content));
-            format!("{bar}   {content}{} {bar}\n", " ".repeat(pad))
-        };
+        let frame = Frame::new(
+            inner,
+            if finished {
+                ThemeState::Submit
+            } else {
+                ThemeState::Active
+            },
+        );
+        let line = |content: &str| frame.line(content);
 
         // ◆  Items ▸ /git ─── 3 of 200 match · title ▲ ─╮
-        // The filter is a chip on the title in the search colour, as in
-        // sealward browse's breadcrumb: `/query` while typed, `[/]query` once
-        // applied.
-        let status = self.status(finished);
-        let status = cut(
-            &status,
-            inner.saturating_sub(measure_text_width(self.title) + 3),
-        );
-        let used = measure_text_width(self.title) + measure_text_width(&status);
-        let chip_room = inner.saturating_sub(used + 2 + 3 + 1 + 1);
-        let search = |s: &str| style(s).yellow().bold().for_stderr().to_string();
-        let chip = if self.editing && !finished {
-            let q = cut_start(&self.query, chip_room.saturating_sub(2));
-            format!(
-                " {} {}{}",
-                dim("▸"),
-                search(&format!("/{q}")),
-                style(" ").reverse().for_stderr()
-            )
-        } else if !self.query.trim().is_empty() {
-            let q = cut(&self.query, chip_room.saturating_sub(3));
-            format!(" {} {}", dim("▸"), search(&format!("[/]{q}")))
+        let filter = if self.editing && !finished {
+            Filter::Typing
         } else {
-            String::new()
+            Filter::Applied
         };
-        let rule = inner.saturating_sub(used + 2 + measure_text_width(&chip));
-        let mut out = format!(
-            "{}  {}{chip} {} {} {}\n",
-            Clack.state_symbol(&state),
-            style(self.title).bold().for_stderr(),
-            frame.apply_to("─".repeat(rule.max(1))),
-            dim(&status),
-            frame.apply_to("─╮"),
+        let mut out = frame.head(
+            self.title,
+            self.query.trim(),
+            filter,
+            &self.status(finished),
         );
         out += &line("");
         for l in lead {
@@ -463,20 +430,12 @@ impl<'a> Browser<'a> {
             });
         }
 
-        // The box closes like a table box; the controls are a step of their
-        // own below it, not part of the table, and go once the person is done.
-        out += &format!(
-            "{}\n",
-            frame.apply_to(format!("├{}╯", "─".repeat(inner + 4)))
-        );
-        out += &format!("{bar}\n");
+        // The controls are a step of their own below the box, and go once
+        // the person is done.
+        out += &frame.close();
         if !finished {
             let hints = if self.editing { EDIT_HINTS } else { HINTS };
-            out += &format!(
-                "{}  {}\n",
-                frame.apply_to("◇"),
-                dim(&cut(hints, cols.saturating_sub(4)))
-            );
+            out += &frame.controls(hints, cols);
         }
         out
     }
@@ -494,30 +453,8 @@ impl<'a> Browser<'a> {
                 .get(row)
                 .and_then(|r| r.get(c))
                 .map_or(Tone::Default, |g| self.grid.tone_of(c, g))
-                .style()
-                .for_stderr();
-            let start = self.starts[row][c];
-            // Runs of matched and unmatched chars, each styled once.
-            let mut painted = String::new();
-            let mut run = String::new();
-            let mut in_hit = false;
-            let flush = |run: &mut String, hit: bool, out: &mut String| {
-                if run.is_empty() {
-                    return;
-                }
-                let s = tone.apply_to(run.as_str());
-                *out += &if hit { s.cyan().underlined() } else { s }.to_string();
-                run.clear();
-            };
-            for (k, ch) in raw.chars().enumerate() {
-                let hit = hits.contains(&(start + k as u32));
-                if hit != in_hit {
-                    flush(&mut run, in_hit, &mut painted);
-                    in_hit = hit;
-                }
-                run.push(ch);
-            }
-            flush(&mut run, in_hit, &mut painted);
+                .style();
+            let painted = paint_hits(&raw, self.starts[row][c], hits, &tone);
             let pad = " ".repeat(w.saturating_sub(measure_text_width(&raw)));
             if self.grid.is_right(c) {
                 text += &pad;
@@ -548,41 +485,6 @@ fn one_line(text: &str) -> String {
     } else {
         text.to_string()
     }
-}
-
-fn align(s: &str, w: usize, right: bool) -> String {
-    let pad = " ".repeat(w.saturating_sub(measure_text_width(s)));
-    if right {
-        format!("{pad}{s}")
-    } else {
-        format!("{s}{pad}")
-    }
-}
-
-/// `s` if it fits in `width` columns, else as much as fits followed by `…`.
-fn cut(s: &str, width: usize) -> Cow<'_, str> {
-    if measure_text_width(s) <= width {
-        return s.into();
-    }
-    console::truncate_str(s, width, "…")
-}
-
-/// The end of `s` when it does not fit: a query being typed shows its tail.
-fn cut_start(s: &str, width: usize) -> String {
-    if measure_text_width(s) <= width {
-        return s.to_string();
-    }
-    let mut tail: Vec<char> = Vec::new();
-    let mut used = 1;
-    for c in s.chars().rev() {
-        let w = measure_text_width(c.encode_utf8(&mut [0; 4]));
-        if used + w > width {
-            break;
-        }
-        used += w;
-        tail.push(c);
-    }
-    std::iter::once('…').chain(tail.into_iter().rev()).collect()
 }
 
 /// Draw `browser` on stderr until the person finishes (`Some`, the frame
@@ -900,11 +802,5 @@ mod tests {
         let l = lines(&frame);
         assert!(l[2].contains("First 1 of 9 loaded"), "{frame}");
         assert!(l[4].contains("one two"), "{frame}");
-    }
-
-    #[test]
-    fn cut_start_keeps_the_tail() {
-        assert_eq!(cut_start("abcdef", 4), "…def");
-        assert_eq!(cut_start("abc", 4), "abc");
     }
 }
