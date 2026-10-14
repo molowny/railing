@@ -9,7 +9,7 @@
 
 use comfy_table::presets::{NOTHING, UTF8_BORDERS_ONLY};
 use comfy_table::{Attribute, Cell, CellAlignment, Color, ContentArrangement, Table};
-use console::{Emoji, Style, style};
+use console::{Emoji, Style};
 
 /// What a piece of table text means; the palette maps it to a style.
 ///
@@ -372,10 +372,6 @@ pub(crate) struct Clack;
 impl cliclack::Theme for Clack {}
 
 const S_BAR: Emoji = Emoji("│", "|");
-const S_BAR_H: Emoji = Emoji("─", "-");
-const S_CORNER_TOP_RIGHT: Emoji = Emoji("╮", "+");
-const S_CONNECT_LEFT: Emoji = Emoji("├", "+");
-const S_CORNER_BOTTOM_RIGHT: Emoji = Emoji("╯", "+");
 
 /// The bare `│`, coloured like the box frames.
 pub(crate) fn gutter_bar() -> String {
@@ -387,45 +383,10 @@ pub(crate) fn gutter_bar() -> String {
         .to_string()
 }
 
-/// `◇  title ───╮`, the body undimmed between `│` bars, `├───╯`: cliclack's
-/// note frame, with the body's own styling left alone.
+/// `◇  title ───╮`, the body undimmed between `│` bars, `├───╯`: the box
+/// every interactive list draws in too ([`crate::frame`]).
 pub(crate) fn boxed_note(title: &str, body: &str) -> String {
-    use cliclack::{Theme, ThemeState};
-    let width = |s: &str| console::measure_text_width(s);
-    let title = style(title).bold().to_string();
-    let lines: Vec<&str> = std::iter::once("")
-        .chain(body.lines())
-        .chain(std::iter::once(""))
-        .collect();
-    let inner = 2 + lines
-        .iter()
-        .map(|l| width(l))
-        .max()
-        .unwrap_or(0)
-        .max(width(&title));
-    let bar = Clack.bar_color(&ThemeState::Submit).for_stderr();
-    let mut out = format!(
-        "{symbol}  {title} {rule}{corner}\n",
-        symbol = Clack.state_symbol(&ThemeState::Submit),
-        rule = bar.apply_to(S_BAR_H.to_string().repeat(inner - width(&title))),
-        corner = bar.apply_to(S_CORNER_TOP_RIGHT),
-    );
-    for l in lines {
-        out.push_str(&format!(
-            "{b}  {l}{pad}{b}\n",
-            b = bar.apply_to(S_BAR),
-            pad = " ".repeat(inner - width(l) + 1),
-        ));
-    }
-    out.push_str(&format!(
-        "{}\n{}\n",
-        bar.apply_to(format!(
-            "{S_CONNECT_LEFT}{}{S_CORNER_BOTTOM_RIGHT}",
-            S_BAR_H.to_string().repeat(inner + 3)
-        )),
-        bar.apply_to(S_BAR),
-    ));
-    out
+    crate::frame::Frame::boxed(title, body)
 }
 
 #[cfg(test)]

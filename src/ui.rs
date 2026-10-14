@@ -99,12 +99,20 @@ fn io_err(e: std::io::Error) -> CliError {
     CliError::Internal(anyhow::anyhow!(e))
 }
 
-/// A titled, boxed block of text inside the prompt group (`┌ title ─┐ … └─┘`).
-/// Lines longer than the terminal are word-wrapped so the box always fits.
+/// A titled box of prose inside the prompt group (`◇ title ─╮ … ├─╯`), its
+/// body dimmed — the same frame as every table and list. Lines longer than
+/// the terminal are word-wrapped so the box always fits.
 pub fn note(title: &str, body: &str) -> Result<(), CliError> {
-    let cols = console::Term::stdout().size().1 as usize;
+    let cols = console::Term::stderr().size().1 as usize;
     let width = cols.saturating_sub(8).clamp(40, 120);
-    cliclack::note(title, wrap_to(body, width)).map_err(io_err)
+    let body = wrap_to(body, width)
+        .lines()
+        .map(|l| dim().for_stderr().apply_to(l).to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
+    console::Term::stderr()
+        .write_str(&crate::frame::Frame::boxed(title, &body))
+        .map_err(io_err)
 }
 
 /// Word-wrap every line of `text` to `width` visible columns (ANSI styling is

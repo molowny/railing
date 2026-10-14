@@ -70,7 +70,11 @@ impl Frame {
     /// chip even while empty (`▸ /▌`), so the person sees where keys go; an
     /// applied one only when there is a query.
     pub(crate) fn head(&self, title: &str, query: &str, filter: Filter, status: &str) -> String {
-        let title = cut(title, self.inner.saturating_sub(4));
+        let title = if status.is_empty() {
+            cut(title, self.inner)
+        } else {
+            cut(title, self.inner.saturating_sub(4))
+        };
         // The chip comes before the status: at least ` ▸ /…▌` (` ▸ [/]…`)
         // stays, and the status gives way first.
         let chip_min = match filter {
@@ -99,17 +103,45 @@ impl Frame {
                 search(&format!("[/]{}", cut(query, room.saturating_sub(6))))
             ),
         };
+        let symbol = Clack.state_symbol(&self.state);
+        let title = style(title).bold().for_stderr();
+        if status.is_empty() {
+            // `◇  title ─────╮`: the rule runs to the corner.
+            let rule = (self.inner + 1)
+                .saturating_sub(measure_text_width(&title.to_string()) + measure_text_width(&chip));
+            return format!(
+                "{symbol}  {title}{chip} {}\n",
+                self.paint(&format!("{}╮", "─".repeat(rule.max(1))))
+            );
+        }
         let rule = self
             .inner
             .saturating_sub(used + 2 + measure_text_width(&chip));
         format!(
-            "{}  {}{chip} {} {} {}\n",
-            Clack.state_symbol(&self.state),
-            style(title).bold().for_stderr(),
+            "{symbol}  {title}{chip} {} {} {}\n",
             self.paint(&"─".repeat(rule.max(1))),
             dim(&status),
             self.paint("─╮"),
         )
+    }
+
+    /// A titled box around `body`, as a step of the flow: every table, text
+    /// panel and note a command prints. Lines keep their own styling and are
+    /// not cut; the box is as wide as the widest of them and the title.
+    pub(crate) fn boxed(title: &str, body: &str) -> String {
+        let inner = body
+            .lines()
+            .map(measure_text_width)
+            .chain(std::iter::once(measure_text_width(title)))
+            .max()
+            .unwrap_or(0);
+        let frame = Frame::new(inner, ThemeState::Submit);
+        let mut out = frame.head(title, "", Filter::Applied, "");
+        out += &frame.line("");
+        for l in body.lines() {
+            out += &frame.line(l);
+        }
+        out + &frame.close()
     }
 
     /// `│   content │`, padded to the box.
@@ -280,6 +312,29 @@ mod tests {
             "1–1 of 1",
         );
         assert!(long.contains("/…") && long.contains("xyz"), "{long}");
+    }
+
+    #[test]
+    fn a_box_is_the_same_frame_as_the_grid() {
+        let _c = plain();
+        let s = Frame::boxed("Items", "ID  TITLE\na1  github");
+        let l: Vec<&str> = s.lines().collect();
+        assert_eq!(l[0], "◇  Items ──────╮", "{s}");
+        assert_eq!(l[1], "│              │", "{s}");
+        assert_eq!(l[2], "│   ID  TITLE  │", "{s}");
+        assert_eq!(l[3], "│   a1  github │", "{s}");
+        assert!(l[4].starts_with("├") && l[4].ends_with("╯"), "{s}");
+        assert_eq!(l[5], "│");
+        let w = measure_text_width(l[0]);
+        assert!(l[..5].iter().all(|x| measure_text_width(x) == w), "{s}");
+        // A title wider than the body widens the box.
+        let wide = Frame::boxed("A much longer title", "x");
+        let w = measure_text_width(wide.lines().next().unwrap());
+        assert_eq!(
+            measure_text_width(wide.lines().nth(2).unwrap()),
+            w,
+            "{wide}"
+        );
     }
 
     #[test]

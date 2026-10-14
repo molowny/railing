@@ -491,7 +491,7 @@ impl Flow {
     /// A block of text in a titled box (live) or on stdout (plain).
     pub fn note(&self, title: &str, body: &str) {
         if self.live {
-            let _ = ui::note(&style(title).bold().to_string(), body);
+            let _ = ui::note(title, body);
         } else {
             self.write(self.data_to(), &format!("{body}\n"));
         }
@@ -777,8 +777,8 @@ mod tests {
         }
         let boxed = boxed_note("Items", &g.boxed(80));
         let h = boxed.lines().count();
-        // title, blank, header, 10 rows, blank, bottom rule, trailing bar.
-        assert_eq!(h, 16, "{boxed}");
+        // title, blank, header, 10 rows, bottom rule, trailing bar.
+        assert_eq!(h, 15, "{boxed}");
         assert!(fits(&boxed, h + FRAME_LINES));
         assert!(!fits(&boxed, h + FRAME_LINES - 1));
         // A cell that wraps takes the lines it wraps to.
