@@ -149,8 +149,8 @@ pub fn select<T: Clone + Eq>(prompt: &str, items: &[(T, &str, &str)]) -> Result<
 }
 
 /// [`select`] for a list that may be long: typing narrows it, at most `rows`
-/// entries show at once (the rest scroll), and the foot counts them —
-/// `1–8 of 120`, `5 of 120 match`. The highlighted row shows its hint.
+/// entries show at once (the rest scroll), in the browsed grid's box: the
+/// filter and the count on its title — `1–8 of 120`, `5 of 120 match · 1–5`.
 pub fn select_filtered<T: Clone>(
     prompt: &str,
     items: &[(T, &str, &str)],
@@ -197,7 +197,7 @@ impl Rows {
 }
 
 /// The picker for a left-out argument: owned `(value, label, hint)` rows,
-/// filtered by typing, counted in the foot ([`select_filtered`]). [`pick`] is the default; build one to change how many
+/// filtered by typing, counted on the box title ([`select_filtered`]). [`pick`] is the default; build one to change how many
 /// rows it shows:
 ///
 /// ```ignore

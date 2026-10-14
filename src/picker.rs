@@ -1,19 +1,35 @@
-//! The list behind [`crate::prompts::Picker`]. It keeps cliclack's look —
-//! its theme draws the bar, symbols and colours — and shows what cliclack's
-//! select cannot: how many rows there are and which of them are on screen,
-//! and the highlighted row's hint in a colour of its own. Typing filters with
-//! [`Fuzzy`], the matcher the TUIs use, so a space separates words instead of
-//! being dropped.
+//! The list behind [`crate::prompts::Picker`], drawn in the same box as the
+//! browsed grid ([`crate::frame`]):
+//!
+//! ```text
+//! ◆  Item ▸ /serv▌ ─────────────────── 13 of 60 match · 1–10 ─╮
+//! │                                                            │
+//! │ › Private/service-00                                login   │
+//! │   Homelab/service-01                                note    │
+//! ├────────────────────────────────────────────────────────────╯
+//! │
+//! ◇  type to filter · ↑↓ move · enter pick · esc cancel
+//! ```
+//!
+//! A picker chooses, so — unlike the grid — it has a cursor, and typing
+//! filters straight away (there are no letter shortcuts to protect). The
+//! filter is [`Fuzzy`], the matcher the TUIs use, so a space separates words;
+//! matches are ranked by relevance, best first. Once chosen, the box collapses
+//! to the prompt and its answer, like any clack prompt.
 
 use std::io;
 
 use cliclack::{Theme, ThemeState};
-use std::borrow::Cow;
-
 use console::{Key, Term, measure_text_width, style};
 
+use crate::frame::{self, CHIP_ROOM, Filter, Frame, cut, dim, paint_hits};
 use crate::fuzzy::Fuzzy;
 use crate::grid::Clack;
+
+/// Columns between the label and the hint.
+const GAP: usize = 2;
+const HINTS: &str = "type to filter · ↑↓ move · enter pick · esc cancel";
+const QUERY_HINTS: &str = "↑↓ move · enter pick · esc clear";
 
 /// What a key did to the list.
 #[derive(Debug, PartialEq, Eq)]
@@ -129,6 +145,10 @@ impl<'a> List<'a> {
                 self.query.truncate(kept);
                 self.filter();
             }
+            // Typing already filters; a leading `/` — the grid's filter key,
+            // pressed from habit — is not part of the query. Later ones are
+            // (`Private/aws`).
+            Key::Char('/') if self.query.is_empty() => {}
             Key::Char(c) if !c.is_control() => {
                 self.query.push(c);
                 self.filter();
@@ -138,127 +158,115 @@ impl<'a> List<'a> {
         Step::Active
     }
 
-    /// `12 of 120 match · 1–8`, `1–25 of 120`, `7 items`.
+    /// Rows in the window: the list's height, or fewer when the list is
+    /// shorter. It stays put while the person filters, so the box does not
+    /// jump.
+    fn window(&self) -> usize {
+        self.height.min(self.rows.len()).max(1)
+    }
+
+    /// `1–10 of 120`, `13 of 120 match · 1–10`, `no match of 120` — the
+    /// same words as the browsed grid's.
     pub(crate) fn status(&self) -> String {
         let total = self.rows.len();
         let n = self.shown.len();
-        let window = (n > self.height).then(|| {
-            let end = (self.start + self.height).min(n);
-            format!("{}–{end}", self.start + 1)
-        });
-        match (self.query.is_empty(), window) {
-            (true, Some(w)) => format!("{w} of {total}"),
-            (true, None) if total == 1 => "1 item".into(),
-            (true, None) => format!("{total} items"),
-            (false, _) if n == 0 => format!("no match of {total}"),
-            (false, Some(w)) => format!("{n} of {total} match · {w}"),
-            (false, None) => format!("{n} of {total} match"),
+        let end = (self.start + self.window()).min(n);
+        let window = format!("{}–{end}", self.start + 1);
+        if self.query.trim().is_empty() {
+            format!("{window} of {total}")
+        } else if n == 0 {
+            format!("no match of {total}")
+        } else {
+            format!("{n} of {total} match · {window}")
         }
     }
 
     /// The frame for `step` on a terminal `width` columns wide; every line is
     /// cut to fit, so the frame is exactly as many lines as it has `\n`s.
     pub(crate) fn render(&self, step: &Step, width: usize) -> String {
-        let fit = width.saturating_sub(1).max(10);
-        let state = match (step, &self.error) {
-            (Step::Submit(_), _) => ThemeState::Submit,
-            (Step::Cancel, _) => ThemeState::Cancel,
-            (Step::Active, Some(e)) => ThemeState::Error(e.clone()),
-            (Step::Active, None) => ThemeState::Active,
-        };
-        let bar = Clack.bar_color(&state).for_stderr().apply_to("│");
-        let mut out = Clack.format_header(&state, self.prompt);
         match step {
+            // Chosen: the prompt and its answer, as a submitted clack prompt.
             Step::Submit(i) => {
-                let label = cut(self.rows[*i].0, fit.saturating_sub(3));
-                out += &format!("{bar}  {}\n", style(label).dim().for_stderr());
-                out += &format!("{bar}\n");
-                return out;
+                let state = ThemeState::Submit;
+                let bar = Clack.bar_color(&state).for_stderr().apply_to("│");
+                let label = cut(self.rows[*i].0, width.saturating_sub(4));
+                return Clack.format_header(&state, self.prompt)
+                    + &format!("{bar}  {}\n", style(label).dim().for_stderr())
+                    + &format!("{bar}\n");
             }
-            Step::Cancel => return out + &Clack.format_footer(&state),
+            Step::Cancel => {
+                return Clack.format_header(&ThemeState::Cancel, self.prompt)
+                    + &Clack.format_footer(&ThemeState::Cancel);
+            }
             Step::Active => {}
         }
 
-        let query = if self.query.is_empty() {
-            style("type to filter").dim().for_stderr().to_string()
-        } else {
-            cut(&self.query, fit.saturating_sub(4)).into_owned()
-        };
-        out += &format!("{bar}  {query}{}\n", style(" ").reverse().for_stderr());
+        // Sized for every row and the longest status, so the box keeps its
+        // width while the person types; the label gives way last.
+        let max_inner = frame::max_inner(width);
+        let label_w = self.rows.iter().map(|(l, _)| measure_text_width(l)).max();
+        let hint_w = self.rows.iter().map(|(_, h)| measure_text_width(h)).max();
+        let (label_w, hint_w) = (label_w.unwrap_or(0), hint_w.unwrap_or(0));
+        let table = label_w + if hint_w > 0 { GAP + hint_w } else { 0 };
+        let n = self.rows.len();
+        let worst = format!("{n} of {n} match · {n}–{n}");
+        let chrome = measure_text_width(self.prompt) + measure_text_width(&worst) + 3;
+        let inner = table.max(chrome + CHIP_ROOM).min(max_inner);
+        let label_w = label_w.min(inner);
+        // A hint narrower than this is noise; drop the column instead.
+        let hint_w = hint_w.min(inner.saturating_sub(label_w + GAP));
+        let hint_w = if hint_w < 4 { 0 } else { hint_w };
 
-        // `│  ○ ` before the label; only the highlighted row shows its hint,
-        // in its own colour, so the list stays a list of names.
-        let room = fit.saturating_sub(5);
-        let visible = &self.shown[self.start..(self.start + self.height).min(self.shown.len())];
-        for (offset, row) in visible.iter().enumerate() {
+        let frame = Frame::new(inner, ThemeState::Active);
+        let mut out = frame.head(self.prompt, &self.query, Filter::Typing, &self.status());
+        out += &frame.line("");
+
+        let window = self.window();
+        let end = (self.start + window).min(self.shown.len());
+        for (offset, row) in self.shown[self.start..end].iter().enumerate() {
             let selected = self.start + offset == self.cursor;
             let (label, hint) = self.rows[row.index];
-            let label = cut(label, room);
-            let hint_room = room.saturating_sub(measure_text_width(&label) + 2);
-            let hint = if !selected || hint.is_empty() || hint_room < 4 {
+            let label = cut(label, label_w);
+            let base = if selected {
+                console::Style::new().bold()
+            } else {
+                console::Style::new()
+            };
+            let mut text = paint_hits(&label, 0, &row.hits, &base);
+            if hint_w > 0 && !hint.is_empty() {
+                let pad = " ".repeat(label_w - measure_text_width(&label) + GAP);
+                let hint = cut(hint, hint_w);
+                text += &pad;
+                text += &if selected {
+                    style(hint).yellow().for_stderr().to_string()
+                } else {
+                    dim(&hint)
+                };
+            }
+            let marker = if selected {
+                style("›").cyan().for_stderr().to_string()
+            } else {
+                " ".to_string()
+            };
+            out += &frame.marked(&marker, &text);
+        }
+        // Padded to the window, so the box keeps its height while filtering.
+        for k in end - self.start..window {
+            let empty = self.shown.is_empty() && k == 0;
+            out += &frame.line(&if empty {
+                dim(&format!("nothing matches '{}'", self.query))
+            } else {
                 String::new()
-            } else {
-                format!("  {}", style(cut(hint, hint_room)).yellow().for_stderr())
-            };
-            out += &format!(
-                "{bar}  {} {}{hint}\n",
-                Clack.radio_symbol(&state, selected),
-                paint_label(&label, &row.hits, selected),
-            );
+            });
         }
 
-        out + &match &state {
-            ThemeState::Error(_) => Clack.format_footer(&state),
-            _ => format!(
-                "{}  {}\n",
-                Clack.bar_color(&state).for_stderr().apply_to("└"),
-                style(cut(&self.status(), fit.saturating_sub(3)))
-                    .dim()
-                    .for_stderr()
-            ),
+        out += &frame.close();
+        out + &match &self.error {
+            Some(e) => frame.warning(e, width),
+            None if self.query.is_empty() => frame.controls(HINTS, width),
+            None => frame.controls(QUERY_HINTS, width),
         }
     }
-}
-
-/// The label, dim unless it is the highlighted row, with matched chars in
-/// cyan — cliclack's active colour.
-fn paint_label(label: &str, hits: &[u32], selected: bool) -> String {
-    label
-        .chars()
-        .enumerate()
-        .map(|(i, c)| {
-            let s = style(c).for_stderr();
-            let s = if hits.contains(&(i as u32)) {
-                s.cyan()
-            } else if selected {
-                s
-            } else {
-                s.dim()
-            };
-            s.to_string()
-        })
-        .collect()
-}
-
-/// `s` if it fits in `width` columns, else as much as fits followed by `…`.
-fn cut(s: &str, width: usize) -> Cow<'_, str> {
-    if measure_text_width(s) <= width {
-        return Cow::Borrowed(s);
-    }
-    let mut out = String::new();
-    let mut used = 0;
-    for c in s.chars() {
-        let w = console::measure_text_width(c.encode_utf8(&mut [0; 4]));
-        if used + w + 1 > width {
-            break;
-        }
-        used += w;
-        out.push(c);
-    }
-    if width > 0 {
-        out.push('…');
-    }
-    Cow::Owned(out)
 }
 
 /// Draw `list` on stderr until a row is chosen (its index) or the person
@@ -329,8 +337,7 @@ mod tests {
         assert_eq!(l.status(), "1–10 of 40");
         l.on(Key::End);
         assert_eq!(l.status(), "31–40 of 40");
-        assert_eq!(list(3, 10).status(), "3 items");
-        assert_eq!(list(1, 10).status(), "1 item");
+        assert_eq!(list(3, 10).status(), "1–3 of 3");
     }
 
     #[test]
@@ -339,12 +346,13 @@ mod tests {
         typed(&mut l, "item-1");
         assert_eq!(l.status(), "13 of 40 match · 1–5");
         typed(&mut l, "7");
-        assert_eq!(l.status(), "1 of 40 match");
+        assert_eq!(l.status(), "1 of 40 match · 1–1");
         assert_eq!(l.on(Key::Enter), Step::Submit(17));
         typed(&mut l, "zz");
         assert_eq!(l.status(), "no match of 40");
         assert_eq!(l.on(Key::Enter), Step::Active, "no match is not a choice");
-        assert!(plain(&l, &Step::Active).contains("nothing matches"));
+        let frame = plain(&l, &Step::Active);
+        assert!(frame.contains("▲  nothing matches"), "{frame}");
     }
 
     #[test]
@@ -359,8 +367,17 @@ mod tests {
             10,
         );
         typed(&mut l, "priv aws");
-        assert_eq!(l.status(), "1 of 3 match");
+        assert_eq!(l.status(), "1 of 3 match · 1–1");
         assert_eq!(l.on(Key::Enter), Step::Submit(0));
+    }
+
+    #[test]
+    fn the_filter_is_open_from_the_start_and_a_leading_slash_is_dropped() {
+        let mut l = List::new("Item", vec![("Private/aws", ""), ("Work/aws", "")], 10);
+        assert!(plain(&l, &Step::Active).contains("Item ▸ /"));
+        typed(&mut l, "/priv/a");
+        assert_eq!(l.query, "priv/a");
+        assert_eq!(l.status(), "1 of 2 match · 1–1");
     }
 
     #[test]
@@ -368,7 +385,7 @@ mod tests {
         let mut l = list(5, 10);
         typed(&mut l, "item-3");
         assert_eq!(l.on(Key::Escape), Step::Active);
-        assert_eq!(l.status(), "5 items");
+        assert_eq!(l.status(), "1–5 of 5");
         assert_eq!(l.on(Key::Escape), Step::Cancel);
     }
 
@@ -388,18 +405,35 @@ mod tests {
     }
 
     #[test]
-    fn only_the_highlighted_row_shows_its_hint_and_the_frame_fits() {
+    fn the_box_has_the_count_the_cursor_and_the_controls() {
         let mut l = list(40, 10);
         l.on(Key::ArrowDown);
         let frame = plain(&l, &Step::Active);
         let lines: Vec<&str> = frame.lines().collect();
-        // header, query, 10 rows, footer
-        assert_eq!(lines.len(), 13, "{frame}");
-        // The radio symbol is `○` on a terminal and a space when captured.
-        assert!(lines[2].trim_end().ends_with(" item-00"), "{frame}");
-        assert!(!lines[2].contains("login"), "{frame}");
-        assert!(lines[3].ends_with("item-01  note"), "{frame}");
-        assert!(lines[12].contains("1–10 of 40"), "{frame}");
+        // head, blank, 10 rows, bottom rule, bar, controls
+        assert_eq!(lines.len(), 15, "{frame}");
+        assert!(
+            lines[0].starts_with("◆  Item ") && lines[0].ends_with(" 1–10 of 40 ─╮"),
+            "{frame}"
+        );
+        assert!(
+            lines[2].starts_with("│   item-00  ") && lines[2].contains("login"),
+            "{frame}"
+        );
+        assert!(
+            lines[3].starts_with("│ › item-01  ") && lines[3].contains("note"),
+            "{frame}"
+        );
+        assert!(
+            lines[12].starts_with("├") && lines[12].ends_with("╯"),
+            "{frame}"
+        );
+        assert!(lines[14].starts_with("◇  type to filter"), "{frame}");
+        let w = measure_text_width(lines[0]);
+        assert!(
+            lines[..13].iter().all(|x| measure_text_width(x) == w),
+            "{frame}"
+        );
 
         let narrow = console::strip_ansi_codes(&l.render(&Step::Active, 20)).into_owned();
         assert!(
@@ -409,18 +443,21 @@ mod tests {
     }
 
     #[test]
+    fn typing_shows_the_chip_and_the_box_keeps_its_height() {
+        let mut l = list(40, 10);
+        let open = plain(&l, &Step::Active);
+        typed(&mut l, "item-17");
+        let frame = plain(&l, &Step::Active);
+        assert!(frame.contains("Item ▸ /item-17"), "{frame}");
+        assert!(frame.contains("esc clear"), "{frame}");
+        assert_eq!(frame.lines().count(), open.lines().count());
+    }
+
+    #[test]
     fn a_choice_leaves_only_its_label() {
         let l = list(3, 10);
         let frame = plain(&l, &Step::Submit(1));
         assert!(frame.contains("item-01"), "{frame}");
         assert!(!frame.contains("item-00"), "{frame}");
-    }
-
-    #[test]
-    fn cut_keeps_what_fits_whole() {
-        assert_eq!(cut("abc", 3), "abc");
-        assert_eq!(cut("abcd", 3), "ab…");
-        assert_eq!(cut("abcd", 1), "…");
-        assert_eq!(cut("abcd", 0), "");
     }
 }
