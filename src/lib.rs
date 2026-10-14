@@ -3,6 +3,7 @@ mod browse;
 pub mod completion;
 pub mod error;
 pub mod flow;
+mod frame;
 pub mod fuzzy;
 pub mod grid;
 pub mod logging;
