@@ -11,6 +11,7 @@ pub mod output;
 pub mod paths;
 mod picker;
 pub mod prompts;
+mod spin;
 pub mod ui;
 pub mod wait;
 pub mod workspace;
