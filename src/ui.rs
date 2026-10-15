@@ -26,32 +26,92 @@ pub fn error(msg: &str) {
 // Spinner
 // ---------------------------------------------------------------------------
 
-/// A spinner that wraps `cliclack::spinner`.
+struct SpinnerState {
+    msg: std::sync::Mutex<String>,
+    done: std::sync::atomic::AtomicBool,
+}
+
+/// A spinner on its own line while something slow runs: [`crate::spin`]'s
+/// turning star and glow across the message. [`Spinner::stop`] leaves `◇ msg` in
+/// its place, [`Spinner::clear`] (or dropping it) leaves nothing. Off a
+/// terminal nothing animates.
 pub struct Spinner {
-    inner: cliclack::ProgressBar,
+    state: std::sync::Arc<SpinnerState>,
+    animator: Option<std::thread::JoinHandle<()>>,
 }
 
 impl Spinner {
     /// Create and start a spinner with the given message.
     pub fn start(msg: &str) -> Self {
-        let s = cliclack::spinner();
-        s.start(msg);
-        Self { inner: s }
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let state = Arc::new(SpinnerState {
+            msg: std::sync::Mutex::new(msg.to_owned()),
+            done: AtomicBool::new(false),
+        });
+        let term = console::Term::stderr();
+        let animator = term.is_term().then(|| {
+            let state = Arc::clone(&state);
+            std::thread::spawn(move || {
+                let _ = term.hide_cursor();
+                let mut spin = crate::spin::Spin::new();
+                while !state.done.load(Ordering::SeqCst) {
+                    let msg = state.msg.lock().map(|m| m.clone()).unwrap_or_default();
+                    let cols = usize::from(term.size().1);
+                    let _ = term.write_str(&format!("\r\x1b[2K{}", spin.line(&msg, cols)));
+                    spin.advance();
+                    std::thread::sleep(crate::spin::PACE);
+                }
+                let _ = term.write_str("\r\x1b[2K");
+                let _ = term.show_cursor();
+            })
+        });
+        Self { state, animator }
     }
 
     /// Update the spinner message.
     pub fn update(&self, msg: &str) {
-        self.inner.start(msg);
+        if let Ok(mut m) = self.state.msg.lock() {
+            *m = msg.to_owned();
+        }
     }
 
-    /// Stop the spinner and show a success message.
-    pub fn stop(self, msg: &str) {
-        self.inner.stop(msg);
+    /// Stop the spinner and leave `◇ msg` (and the gutter's bar) in its place.
+    pub fn stop(mut self, msg: &str) {
+        use cliclack::{Theme, ThemeState};
+        self.halt();
+        let theme = crate::grid::Clack;
+        let bar = theme
+            .bar_color(&ThemeState::Submit)
+            .for_stderr()
+            .apply_to("│");
+        let _ = console::Term::stderr().write_str(&format!(
+            "{}  {msg}\n{bar}\n",
+            theme.state_symbol(&ThemeState::Submit)
+        ));
     }
 
     /// Clear the spinner without leaving any output.
-    pub fn clear(self) {
-        self.inner.clear();
+    pub fn clear(mut self) {
+        self.halt();
+    }
+
+    /// Stop animating and erase the line; waits for the last frame so
+    /// nothing is drawn after it.
+    fn halt(&mut self) {
+        self.state
+            .done
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        if let Some(h) = self.animator.take() {
+            let _ = h.join();
+        }
+    }
+}
+
+impl Drop for Spinner {
+    fn drop(&mut self) {
+        self.halt();
     }
 }
 

@@ -82,7 +82,8 @@ pub struct Wait {
     detach: Option<String>,
     /// Plain: the last line printed.
     said: String,
-    frame: usize,
+    /// The active step's spinner.
+    spin: crate::spin::Spin,
     /// Interactive: lines drawn by the last tick, to redraw over.
     drawn: usize,
     /// The box's content width so far: it only grows, so the box does not
@@ -98,7 +99,8 @@ impl Wait {
             keys: Vec::new(),
             detach: None,
             said: String::new(),
-            frame: 0,
+            // `·` marks a pending step here, so the star skips its dot.
+            spin: crate::spin::Spin::new().without_dot(),
             drawn: 0,
             inner: 0,
         }
@@ -188,9 +190,7 @@ impl Wait {
         use crate::frame::{Filter, Frame, dim, max_inner};
         use cliclack::ThemeState;
 
-        const SPIN: [&str; 4] = ["◒", "◐", "◓", "◑"];
-        let spin = SPIN[self.frame % SPIN.len()];
-        self.frame += 1;
+        self.spin.advance();
 
         let title = if view.title.is_empty() {
             "Waiting"
@@ -206,8 +206,12 @@ impl Wait {
         // Each row's icon and text; the one spinner is the active step's, or
         // the status line's when there are no steps.
         let body: Vec<(String, String)> = if view.steps.is_empty() {
-            let icon = if frozen { "·" } else { spin };
-            vec![(style(icon).cyan().to_string(), view.status.clone())]
+            let icon = if frozen {
+                dim("·")
+            } else {
+                self.spin.symbol()
+            };
+            vec![(icon, view.status.clone())]
         } else {
             view.steps
                 .iter()
@@ -215,7 +219,7 @@ impl Wait {
                     let icon = match mark {
                         Mark::Done => style("✓").green().to_string(),
                         Mark::Active if frozen => dim("·"),
-                        Mark::Active => style(spin).cyan().to_string(),
+                        Mark::Active => self.spin.symbol(),
                         Mark::Pending => dim("·"),
                         Mark::Failed => style("✖").red().to_string(),
                     };
@@ -247,8 +251,10 @@ impl Wait {
                 .chain(std::iter::repeat((Mark::Active, ""))),
         ) {
             let text = fit(text, inner.saturating_sub(2));
+            // What is in progress glows, as every spinner's message does.
             let text = match mark {
                 Mark::Pending => dim(&text),
+                Mark::Active if !frozen => self.spin.glow(&text),
                 _ => text,
             };
             out += &frame.line(&format!("{icon} {text}"));
@@ -268,30 +274,39 @@ impl Wait {
 
     #[cfg(feature = "tui")]
     fn tick_interactive(&mut self, view: &WaitView, timeout: Duration) -> Result<Tick, CliError> {
-        let cols = interactive::columns();
-        let rows = self.rows(view, cols, false);
         let io = |e: std::io::Error| CliError::Internal(anyhow::anyhow!(e));
-        interactive::draw(self.drawn, &rows).map_err(io)?;
-        self.drawn = rows.len();
-        let key = interactive::read_key(timeout).map_err(io)?;
-        Ok(match key {
-            Some(interactive::Key::Detach | interactive::Key::Interrupt)
-                if self.detach.is_some() =>
-            {
-                Tick::Detach
+        // Redrawn at the spinner's pace whatever the caller's tick, so the
+        // star turns and the glow moves as fast as every other spinner's.
+        let end = std::time::Instant::now() + timeout;
+        loop {
+            let rows = self.rows(view, interactive::columns(), false);
+            interactive::draw(self.drawn, &rows).map_err(io)?;
+            self.drawn = rows.len();
+            let left = end.saturating_duration_since(std::time::Instant::now());
+            let slice = left.min(crate::spin::PACE);
+            match interactive::read_key(slice).map_err(io)? {
+                Some(interactive::Key::Detach | interactive::Key::Interrupt)
+                    if self.detach.is_some() =>
+                {
+                    return Ok(Tick::Detach);
+                }
+                Some(interactive::Key::Interrupt) => {
+                    // No detach offered: Ctrl‑C interrupts, as it would outside raw mode.
+                    self.clear();
+                    return Err(CliError::Cancelled);
+                }
+                Some(interactive::Key::Char(c)) => {
+                    let c = c.to_ascii_lowercase();
+                    if let Some((k, _)) = self.keys.iter().find(|(k, _)| *k == c) {
+                        return Ok(Tick::Key(*k));
+                    }
+                }
+                Some(interactive::Key::Detach) | None => {}
             }
-            Some(interactive::Key::Interrupt) => {
-                // No detach offered: Ctrl‑C interrupts, as it would outside raw mode.
-                self.clear();
-                return Err(CliError::Cancelled);
+            if left <= slice {
+                return Ok(Tick::Idle);
             }
-            Some(interactive::Key::Char(c)) => self
-                .keys
-                .iter()
-                .find(|(k, _)| *k == c.to_ascii_lowercase())
-                .map_or(Tick::Idle, |(k, _)| Tick::Key(*k)),
-            _ => Tick::Idle,
-        })
+        }
     }
 
     #[cfg(not(feature = "tui"))]
@@ -532,7 +547,7 @@ mod tests {
         let rows = plain_rows(&w.rows(&view, 80, false));
         let spinners = rows
             .iter()
-            .filter(|r| r.contains(['◒', '◐', '◓', '◑']))
+            .filter(|r| r.contains(['✢', '✳', '✶', '✻', '✽']))
             .count();
         assert_eq!(spinners, 1, "{rows:#?}");
         assert!(
@@ -546,10 +561,13 @@ mod tests {
 
         let frozen = plain_rows(&w.rows(&view, 80, true));
         assert!(frozen[0].starts_with("◇  Pairing "), "{frozen:#?}");
-        assert!(!frozen[0].contains("left"), "no countdown once over: {frozen:#?}");
+        assert!(
+            !frozen[0].contains("left"),
+            "no countdown once over: {frozen:#?}"
+        );
         assert!(!frozen.iter().any(|r| r.contains("k kit")), "{frozen:#?}");
         assert!(
-            !frozen.iter().any(|r| r.contains(['◒', '◐', '◓', '◑'])),
+            !frozen.iter().any(|r| r.contains(['✢', '✳', '✶', '✻', '✽'])),
             "{frozen:#?}"
         );
 
@@ -561,7 +579,37 @@ mod tests {
         let rows = plain_rows(&Wait::new(false).rows(&bare, 80, false));
         assert!(rows[0].starts_with("◆  Waiting "), "{rows:#?}");
         assert!(rows[2].contains("waiting for the server"), "{rows:#?}");
-        assert!(rows[2].contains(['◒', '◐', '◓', '◑']), "{rows:#?}");
+        assert!(rows[2].contains(['✢', '✳', '✶', '✻', '✽']), "{rows:#?}");
+    }
+
+    #[test]
+    fn the_active_step_glows_and_nothing_else_does() {
+        let _g = crate::ui::tests::lock();
+        console::set_colors_enabled(true);
+        console::set_colors_enabled_stderr(true);
+        let view = WaitView {
+            steps: vec![
+                (Mark::Done, "code accepted".into()),
+                (Mark::Active, "approval".into()),
+                (Mark::Pending, "store pulled".into()),
+            ],
+            ..WaitView::default()
+        };
+        let mut w = Wait::new(false);
+        let mut lit = false;
+        for _ in 0..4 {
+            for r in w.rows(&view, 80, false) {
+                let bright = r.contains("38;5;255");
+                if console::strip_ansi_codes(&r).contains("approval") {
+                    lit |= bright;
+                } else {
+                    assert!(!bright, "only the active step glows: {r:?}");
+                }
+            }
+        }
+        console::set_colors_enabled(false);
+        console::set_colors_enabled_stderr(false);
+        assert!(lit, "the active step glows");
     }
 
     #[test]
