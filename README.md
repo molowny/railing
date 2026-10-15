@@ -57,6 +57,9 @@ Runnable examples live in [`examples/`](examples/) — one per module.
 | `output` | `cargo run --example output -- json` | `Renderable` trait, `make_table`, `DiagnosticsOutput`, pretty vs JSON |
 | `prompts` | `cargo run --example prompts` | `input`, `password`, `confirm`, `select`, `multiselect`, cancellation |
 | `ui` | `cargo run --example ui` | Gutter log lines (`ui::log`), `Spinner`, intro/outro banners |
+| `boxes` | `cargo run --example boxes` | Every box a flow draws, in one run: `flow.table`, `Grid::kv`, `text_box`, `flow.note`, `flow.checks`, then the frozen `browse_table` (`-- no-grid` skips it) |
+| `select` | `cargo run --example select` | `prompts::select` over four rows; `-- pick` shows `prompts::pick` over the same rows |
+| `multiselect` | `cargo run --example multiselect` | `prompts::multiselect`, all selected to start |
 | `pick` | `cargo run --example pick` | `prompts::pick` over 60 rows: filtering, scrolling, the count and filter in the box title |
 | `tui` | `cargo run --example tui --features tui` | `FlexRenderable` component model + `top_bar`/`footer`/`prompt` widgets |
 | `screen_canary` | `cargo run --example screen_canary --features tui` | `ScreenApp` on either surface; the probe used by `tools/altscreen-canary.sh` |
