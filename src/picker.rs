@@ -16,6 +16,9 @@
 //! filter is [`Fuzzy`], the matcher the TUIs use, so a space separates words;
 //! matches are ranked by relevance, best first. Once chosen, the box collapses
 //! to the prompt and its answer, like any clack prompt.
+//!
+//! [`List::select`] is the same list as `prompts::select`: a short, fixed set
+//! of choices with no filter, in a box sized to its rows.
 
 use std::io;
 
@@ -30,6 +33,7 @@ use crate::grid::Clack;
 const GAP: usize = 2;
 const HINTS: &str = "type to filter · ↑↓ move · enter pick · esc cancel";
 const QUERY_HINTS: &str = "↑↓ move · enter pick · esc clear";
+const SELECT_HINTS: &str = "↑↓ move · enter pick · esc cancel";
 
 /// What a key did to the list.
 #[derive(Debug, PartialEq, Eq)]
@@ -59,6 +63,9 @@ pub(crate) struct List<'a> {
     start: usize,
     error: Option<String>,
     fuzzy: Fuzzy,
+    /// Typing filters (the picker). Off for a select: a short, fixed set of
+    /// choices read whole, where letters do nothing and Esc leaves at once.
+    filterable: bool,
 }
 
 impl<'a> List<'a> {
@@ -73,9 +80,17 @@ impl<'a> List<'a> {
             start: 0,
             error: None,
             fuzzy: Fuzzy::new(),
+            filterable: true,
         };
         list.filter();
         list
+    }
+
+    /// The same list as a select: no filter, no chip, `jk` move, the box
+    /// sized to its rows, a count only when it has to scroll.
+    pub(crate) fn select(mut self) -> Self {
+        self.filterable = false;
+        self
     }
 
     fn filter(&mut self) {
@@ -111,6 +126,22 @@ impl<'a> List<'a> {
 
     pub(crate) fn on(&mut self, key: Key) -> Step {
         self.error = None;
+        if !self.filterable {
+            match key {
+                Key::Enter => return Step::Submit(self.shown[self.cursor].index),
+                Key::Escape | Key::CtrlC => return Step::Cancel,
+                Key::ArrowUp | Key::BackTab | Key::Char('k') => {
+                    self.move_to(self.cursor.saturating_sub(1))
+                }
+                Key::ArrowDown | Key::Tab | Key::Char('j') => self.move_to(self.cursor + 1),
+                Key::PageUp => self.move_to(self.cursor.saturating_sub(self.height)),
+                Key::PageDown => self.move_to(self.cursor + self.height),
+                Key::Home => self.move_to(0),
+                Key::End => self.move_to(usize::MAX),
+                _ => {}
+            }
+            return Step::Active;
+        }
         match key {
             Key::Enter => match self.shown.get(self.cursor) {
                 Some(row) => return Step::Submit(row.index),
@@ -209,16 +240,33 @@ impl<'a> List<'a> {
         let (label_w, hint_w) = (label_w.unwrap_or(0), hint_w.unwrap_or(0));
         let table = label_w + if hint_w > 0 { GAP + hint_w } else { 0 };
         let n = self.rows.len();
-        let worst = format!("{n} of {n} match · {n}–{n}");
+        // A select has no chip and says a count only when it scrolls; a
+        // picker keeps room for both while the person types.
+        let (worst, chip_room) = if self.filterable {
+            (format!("{n} of {n} match · {n}–{n}"), CHIP_ROOM)
+        } else if n > self.window() {
+            (format!("{n}–{n} of {n}"), 0)
+        } else {
+            (String::new(), 0)
+        };
         let chrome = measure_text_width(self.prompt) + measure_text_width(&worst) + 3;
-        let inner = table.max(chrome + CHIP_ROOM).min(max_inner);
+        let inner = table.max(chrome + chip_room).min(max_inner);
         let label_w = label_w.min(inner);
         // A hint narrower than this is noise; drop the column instead.
         let hint_w = hint_w.min(inner.saturating_sub(label_w + GAP));
         let hint_w = if hint_w < 4 { 0 } else { hint_w };
 
         let frame = Frame::new(inner, ThemeState::Active);
-        let mut out = frame.head(self.prompt, &self.query, Filter::Typing, &self.status());
+        let mut out = if self.filterable {
+            frame.head(self.prompt, &self.query, Filter::Typing, &self.status())
+        } else {
+            let status = if n > self.window() {
+                self.status()
+            } else {
+                String::new()
+            };
+            frame.head(self.prompt, "", Filter::Applied, &status)
+        };
         out += &frame.line("");
 
         let window = self.window();
@@ -263,6 +311,7 @@ impl<'a> List<'a> {
         out += &frame.close();
         out + &match &self.error {
             Some(e) => frame.warning(e, width),
+            None if !self.filterable => frame.controls(SELECT_HINTS, width),
             None if self.query.is_empty() => frame.controls(HINTS, width),
             None => frame.controls(QUERY_HINTS, width),
         }
@@ -378,6 +427,35 @@ mod tests {
         typed(&mut l, "/priv/a");
         assert_eq!(l.query, "priv/a");
         assert_eq!(l.status(), "1 of 2 match · 1–1");
+    }
+
+    #[test]
+    fn a_select_does_not_filter_and_fits_its_rows() {
+        let mut l = List::new(
+            "Colour",
+            vec![("Red", "warm"), ("Green", ""), ("Blue", "cool")],
+            10,
+        )
+        .select();
+        let frame = plain(&l, &Step::Active);
+        let lines: Vec<&str> = frame.lines().collect();
+        assert_eq!(lines[0], "◆  Colour ──────╮", "{frame}");
+        assert!(!frame.contains('▸') && !frame.contains(" of "), "{frame}");
+        assert!(lines.last().unwrap().contains("esc cancel"), "{frame}");
+        typed(&mut l, "jb");
+        assert_eq!(l.query, "", "letters do not filter");
+        assert_eq!(l.on(Key::Enter), Step::Submit(1), "j moved down");
+        assert_eq!(l.on(Key::Escape), Step::Cancel, "esc leaves at once");
+    }
+
+    #[test]
+    fn a_long_select_counts_its_window() {
+        let l = list(30, 5).select();
+        let frame = plain(&l, &Step::Active);
+        assert!(
+            frame.lines().next().unwrap().ends_with(" 1–5 of 30 ─╮"),
+            "{frame}"
+        );
     }
 
     #[test]

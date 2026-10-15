@@ -140,12 +140,23 @@ pub fn confirm(prompt: &str, default: bool) -> Result<bool, CliError> {
 ///
 /// Each item is `(value, label, hint)`. Returns the chosen value.
 /// Returns `Err(CliError::Cancelled)` if the user cancels.
+///
+/// A short, fixed set of choices, read whole: no filter (that is the picker,
+/// [`pick`]), letters do nothing, Esc cancels. It draws in the picker's box —
+/// the `›` cursor, every hint, the controls line — sized to its rows, with a
+/// count only when it has to scroll.
 pub fn select<T: Clone + Eq>(prompt: &str, items: &[(T, &str, &str)]) -> Result<T, CliError> {
-    let mut s = cliclack::select(prompt);
-    for (value, label, hint) in items {
-        s = s.item(value.clone(), label, hint);
-    }
-    quiet_ctrl_c(|| s.interact())
+    let list = crate::picker::List::new(
+        prompt,
+        items
+            .iter()
+            .map(|(_, label, hint)| (*label, *hint))
+            .collect(),
+        Rows::Auto.resolve(),
+    )
+    .select();
+    let chosen = quiet_ctrl_c(|| crate::picker::run(list))?;
+    Ok(items[chosen].0.clone())
 }
 
 /// [`select`] for a list that may be long: typing narrows it, at most `rows`
