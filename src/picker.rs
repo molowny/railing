@@ -34,6 +34,7 @@ const GAP: usize = 2;
 const HINTS: &str = "type to filter · ↑↓ move · enter pick · esc cancel";
 const QUERY_HINTS: &str = "↑↓ move · enter pick · esc clear";
 const SELECT_HINTS: &str = "↑↓ move · enter pick · esc cancel";
+const MULTI_HINTS: &str = "↑↓ move · space toggle · a all · enter done · esc cancel";
 
 /// What a key did to the list.
 #[derive(Debug, PartialEq, Eq)]
@@ -41,6 +42,8 @@ pub(crate) enum Step {
     Active,
     /// The index of the chosen row in the rows the list was given.
     Submit(usize),
+    /// A multiselect's checked rows, in the order given.
+    Chosen(Vec<usize>),
     Cancel,
 }
 
@@ -66,6 +69,8 @@ pub(crate) struct List<'a> {
     /// Typing filters (the picker). Off for a select: a short, fixed set of
     /// choices read whole, where letters do nothing and Esc leaves at once.
     filterable: bool,
+    /// A multiselect: which rows (by index in `rows`) are checked.
+    checked: Option<Vec<bool>>,
 }
 
 impl<'a> List<'a> {
@@ -81,6 +86,7 @@ impl<'a> List<'a> {
             error: None,
             fuzzy: Fuzzy::new(),
             filterable: true,
+            checked: None,
         };
         list.filter();
         list
@@ -90,6 +96,14 @@ impl<'a> List<'a> {
     /// sized to its rows, a count only when it has to scroll.
     pub(crate) fn select(mut self) -> Self {
         self.filterable = false;
+        self
+    }
+
+    /// A select where any number of rows can be checked (`space`, `a` for
+    /// all) and Enter returns them; `checked` is where it starts.
+    pub(crate) fn multi(mut self, checked: Vec<bool>) -> Self {
+        self.filterable = false;
+        self.checked = Some(checked);
         self
     }
 
@@ -126,6 +140,25 @@ impl<'a> List<'a> {
 
     pub(crate) fn on(&mut self, key: Key) -> Step {
         self.error = None;
+        if let Some(checked) = &mut self.checked {
+            match key {
+                Key::Char(' ') => {
+                    let i = self.shown[self.cursor].index;
+                    checked[i] = !checked[i];
+                    return Step::Active;
+                }
+                Key::Char('a') => {
+                    let all = checked.iter().all(|&c| c);
+                    checked.iter_mut().for_each(|c| *c = !all);
+                    return Step::Active;
+                }
+                Key::Enter => {
+                    let rows = (0..checked.len()).filter(|&i| checked[i]).collect();
+                    return Step::Chosen(rows);
+                }
+                _ => {}
+            }
+        }
         if !self.filterable {
             match key {
                 Key::Enter => return Step::Submit(self.shown[self.cursor].index),
@@ -203,6 +236,15 @@ impl<'a> List<'a> {
         let n = self.shown.len();
         let end = (self.start + self.window()).min(n);
         let window = format!("{}–{end}", self.start + 1);
+        if let Some(checked) = &self.checked {
+            // What was checked is the news; the window only when it scrolls.
+            let k = checked.iter().filter(|&&c| c).count();
+            return if total > self.window() {
+                format!("{k} of {total} selected · {window}")
+            } else {
+                format!("{k} of {total} selected")
+            };
+        }
         if self.query.trim().is_empty() {
             format!("{window} of {total}")
         } else if n == 0 {
@@ -225,6 +267,23 @@ impl<'a> List<'a> {
                     + &format!("{bar}  {}\n", style(label).dim().for_stderr())
                     + &format!("{bar}\n");
             }
+            // Chosen: the prompt and what was checked, on one line.
+            Step::Chosen(rows) => {
+                let state = ThemeState::Submit;
+                let bar = Clack.bar_color(&state).for_stderr().apply_to("│");
+                let labels = if rows.is_empty() {
+                    "none".to_string()
+                } else {
+                    rows.iter()
+                        .map(|&i| self.rows[i].0)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                };
+                let labels = cut(&labels, width.saturating_sub(4));
+                return Clack.format_header(&state, self.prompt)
+                    + &format!("{bar}  {}\n", style(labels).dim().for_stderr())
+                    + &format!("{bar}\n");
+            }
             Step::Cancel => {
                 return Clack.format_header(&ThemeState::Cancel, self.prompt)
                     + &Clack.format_footer(&ThemeState::Cancel);
@@ -238,12 +297,16 @@ impl<'a> List<'a> {
         let label_w = self.rows.iter().map(|(l, _)| measure_text_width(l)).max();
         let hint_w = self.rows.iter().map(|(_, h)| measure_text_width(h)).max();
         let (label_w, hint_w) = (label_w.unwrap_or(0), hint_w.unwrap_or(0));
-        let table = label_w + if hint_w > 0 { GAP + hint_w } else { 0 };
+        // A multiselect's checkbox (`◼ `) sits before the label.
+        let check_w = if self.checked.is_some() { 2 } else { 0 };
+        let table = check_w + label_w + if hint_w > 0 { GAP + hint_w } else { 0 };
         let n = self.rows.len();
         // A select has no chip and says a count only when it scrolls; a
         // picker keeps room for both while the person types.
         let (worst, chip_room) = if self.filterable {
             (format!("{n} of {n} match · {n}–{n}"), CHIP_ROOM)
+        } else if self.checked.is_some() {
+            (format!("{n} of {n} selected · {n}–{n}"), 0)
         } else if n > self.window() {
             (format!("{n}–{n} of {n}"), 0)
         } else {
@@ -251,16 +314,16 @@ impl<'a> List<'a> {
         };
         let chrome = measure_text_width(self.prompt) + measure_text_width(&worst) + 3;
         let inner = table.max(chrome + chip_room).min(max_inner);
-        let label_w = label_w.min(inner);
+        let label_w = label_w.min(inner.saturating_sub(check_w));
         // A hint narrower than this is noise; drop the column instead.
-        let hint_w = hint_w.min(inner.saturating_sub(label_w + GAP));
+        let hint_w = hint_w.min(inner.saturating_sub(check_w + label_w + GAP));
         let hint_w = if hint_w < 4 { 0 } else { hint_w };
 
         let frame = Frame::new(inner, ThemeState::Active);
         let mut out = if self.filterable {
             frame.head(self.prompt, &self.query, Filter::Typing, &self.status())
         } else {
-            let status = if n > self.window() {
+            let status = if self.checked.is_some() || n > self.window() {
                 self.status()
             } else {
                 String::new()
@@ -280,7 +343,12 @@ impl<'a> List<'a> {
             } else {
                 console::Style::new()
             };
-            let mut text = paint_hits(&label, 0, &row.hits, &base);
+            let mut text = match &self.checked {
+                Some(checked) if checked[row.index] => style("◼ ").cyan().for_stderr().to_string(),
+                Some(_) => dim("◻ "),
+                None => String::new(),
+            };
+            text += &paint_hits(&label, 0, &row.hits, &base);
             if hint_w > 0 && !hint.is_empty() {
                 let pad = " ".repeat(label_w - measure_text_width(&label) + GAP);
                 let hint = cut(hint, hint_w);
@@ -311,6 +379,7 @@ impl<'a> List<'a> {
         out += &frame.close();
         out + &match &self.error {
             Some(e) => frame.warning(e, width),
+            None if self.checked.is_some() => frame.controls(MULTI_HINTS, width),
             None if !self.filterable => frame.controls(SELECT_HINTS, width),
             None if self.query.is_empty() => frame.controls(HINTS, width),
             None => frame.controls(QUERY_HINTS, width),
@@ -320,7 +389,24 @@ impl<'a> List<'a> {
 
 /// Draw `list` on stderr until a row is chosen (its index) or the person
 /// cancels (`Interrupted`, which [`crate::error`] maps to `Cancelled`).
-pub(crate) fn run(mut list: List<'_>) -> io::Result<usize> {
+pub(crate) fn run(list: List<'_>) -> io::Result<usize> {
+    match drive(list)? {
+        Step::Submit(i) => Ok(i),
+        _ => Err(io::ErrorKind::InvalidInput.into()),
+    }
+}
+
+/// [`run`] for a [`List::multi`]: the checked rows, in the order given.
+pub(crate) fn run_multi(list: List<'_>) -> io::Result<Vec<usize>> {
+    match drive(list)? {
+        Step::Chosen(rows) => Ok(rows),
+        _ => Err(io::ErrorKind::InvalidInput.into()),
+    }
+}
+
+/// Draw `list` until it ends: the final [`Step`] (never `Active` or
+/// `Cancel` — a cancel is `Interrupted`).
+fn drive(mut list: List<'_>) -> io::Result<Step> {
     if list.rows.is_empty() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -341,9 +427,9 @@ pub(crate) fn run(mut list: List<'_>) -> io::Result<usize> {
             term.write_str(&frame)?;
             drawn = frame.lines().count();
             match step {
-                Step::Submit(i) => return Ok(i),
-                Step::Cancel => return Err(io::ErrorKind::Interrupted.into()),
                 Step::Active => {}
+                Step::Cancel => return Err(io::ErrorKind::Interrupted.into()),
+                done => return Ok(done),
             }
             step = match term.read_key() {
                 Ok(key) => list.on(key),
@@ -456,6 +542,40 @@ mod tests {
             frame.lines().next().unwrap().ends_with(" 1–5 of 30 ─╮"),
             "{frame}"
         );
+    }
+
+    #[test]
+    fn a_multiselect_toggles_counts_and_returns_the_checked_rows() {
+        let mut l = List::new(
+            "Toppings",
+            vec![("Cheese", ""), ("Olives", "veg"), ("Ham", "")],
+            10,
+        )
+        .multi(vec![true; 3]);
+        let frame = plain(&l, &Step::Active);
+        let lines: Vec<&str> = frame.lines().collect();
+        assert!(lines[0].contains(" 3 of 3 selected "), "{frame}");
+        assert!(lines[2].starts_with("│ › ◼ Cheese"), "{frame}");
+        assert!(lines.last().unwrap().contains("space toggle"), "{frame}");
+        l.on(Key::Char(' '));
+        l.on(Key::Char('j'));
+        let frame = plain(&l, &Step::Active);
+        assert!(
+            frame.contains("2 of 3 selected") && frame.contains("◻ Cheese"),
+            "{frame}"
+        );
+        assert_eq!(l.on(Key::Enter), Step::Chosen(vec![1, 2]));
+        l.on(Key::Char('a'));
+        assert_eq!(
+            l.on(Key::Enter),
+            Step::Chosen(vec![0, 1, 2]),
+            "a checks all"
+        );
+        l.on(Key::Char('a'));
+        assert_eq!(l.on(Key::Enter), Step::Chosen(vec![]), "a again clears all");
+        let done = plain(&l, &Step::Chosen(vec![0, 2]));
+        assert!(done.contains("Cheese, Ham"), "{done}");
+        assert_eq!(l.on(Key::Escape), Step::Cancel);
     }
 
     #[test]

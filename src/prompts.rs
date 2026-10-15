@@ -257,18 +257,25 @@ pub fn pick<T: Clone>(prompt: &str, rows: &[(T, String, String)]) -> Result<T, C
 ///
 /// Each item is `(value, label, hint)`. All items are pre-selected by default.
 /// Returns `Err(CliError::Cancelled)` if the user cancels.
+///
+/// [`select`]'s box with a checkbox per row and the count on the title
+/// (`3 of 5 selected`): `space` toggles a row, `a` all of them, Enter returns
+/// the checked ones (none is a valid answer), Esc cancels.
 pub fn multiselect<T: Clone + Eq>(
     prompt: &str,
     items: &[(T, &str, &str)],
 ) -> Result<Vec<T>, CliError> {
-    let all_values: Vec<T> = items.iter().map(|(v, _, _)| v.clone()).collect();
-    let mut s = cliclack::multiselect(prompt)
-        .required(false)
-        .initial_values(all_values);
-    for (value, label, hint) in items {
-        s = s.item(value.clone(), label, hint);
-    }
-    quiet_ctrl_c(|| s.interact())
+    let list = crate::picker::List::new(
+        prompt,
+        items
+            .iter()
+            .map(|(_, label, hint)| (*label, *hint))
+            .collect(),
+        Rows::Auto.resolve(),
+    )
+    .multi(vec![true; items.len()]);
+    let chosen = quiet_ctrl_c(|| crate::picker::run_multi(list))?;
+    Ok(chosen.into_iter().map(|i| items[i].0.clone()).collect())
 }
 
 #[cfg(test)]
