@@ -2,12 +2,21 @@
 //! checklist, and the keys that act on it.
 //!
 //! ```text
-//! ◓  Waiting for approval…                             9:12 left
-//! │   ✓ code accepted
-//! │   ◓ approval — on desktop run: app approve 3f9a
-//! │   · make the store and pull it
-//! │  [k] enter recovery kit here   [esc] finish later
+//! ◆  Joining ──────────────────────────────────── 9:12 left ─╮
+//! │                                                          │
+//! │   ✓ code accepted                                        │
+//! │   ◓ approval — on desktop run: app approve 3f9a          │
+//! │   · make the store and pull it                           │
+//! ├──────────────────────────────────────────────────────────╯
+//! │
+//! ◇  k enter recovery kit here · esc finish later
 //! ```
+//!
+//! The box is the grid's and the picker's ([`crate::frame`]): the wait's
+//! title, the countdown where they put their counts, the controls as a step
+//! below. One thing spins — the active step, or the status line of a wait
+//! without steps. [`Wait::freeze`] leaves the last state in place, grey and
+//! without controls, as a finished grid does.
 //!
 //! **Interactive** (a live [`Flow`](crate::Flow), stdin and stderr terminals,
 //! the `tui` feature): drawn in place on stderr and redrawn each
@@ -43,7 +52,11 @@ pub enum Mark {
 /// What one tick shows.
 #[derive(Clone, Debug, Default)]
 pub struct WaitView {
-    /// The headline, beside the spinner; alone in plain output.
+    /// What is being waited for as a whole (`Pairing`): the box's title.
+    /// Empty, the box is titled `Waiting`.
+    pub title: String,
+    /// Where it stands now, in a line: alone in plain output, and the one
+    /// spinning row of a wait without steps.
     pub status: String,
     pub steps: Vec<(Mark, String)>,
     /// When the wait gives up, in unix seconds: a countdown.
@@ -72,6 +85,9 @@ pub struct Wait {
     frame: usize,
     /// Interactive: lines drawn by the last tick, to redraw over.
     drawn: usize,
+    /// The box's content width so far: it only grows, so the box does not
+    /// jitter as a step's text changes.
+    inner: usize,
 }
 
 impl Wait {
@@ -84,6 +100,7 @@ impl Wait {
             said: String::new(),
             frame: 0,
             drawn: 0,
+            inner: 0,
         }
     }
 
@@ -150,59 +167,109 @@ impl Wait {
         self.drawn = 0;
     }
 
-    fn rows(&mut self, view: &WaitView, cols: usize) -> Vec<String> {
+    /// Leaves `view` in place as the wait's last word — grey, without the
+    /// controls — instead of erasing it; nothing to do off a terminal, where
+    /// the plain lines already said it. The wait is done drawing after this.
+    pub fn freeze(&mut self, view: &WaitView) {
+        #[cfg(feature = "tui")]
+        if self.interactive {
+            let rows = self.rows(view, interactive::columns(), true);
+            let _ = interactive::draw(self.drawn, &rows);
+            interactive::erase(0);
+        }
+        #[cfg(not(feature = "tui"))]
+        let _ = view;
+        self.drawn = 0;
+    }
+
+    /// The box for `view` on a terminal `cols` wide; `frozen` is the grey,
+    /// control-less last frame.
+    fn rows(&mut self, view: &WaitView, cols: usize, frozen: bool) -> Vec<String> {
+        use crate::frame::{Filter, Frame, dim, max_inner};
+        use cliclack::ThemeState;
+
         const SPIN: [&str; 4] = ["◒", "◐", "◓", "◑"];
         let spin = SPIN[self.frame % SPIN.len()];
         self.frame += 1;
-        let bar = style("│").dim().to_string();
-        let mut rows = Vec::with_capacity(view.steps.len() + 2);
 
+        let title = if view.title.is_empty() {
+            "Waiting"
+        } else {
+            view.title.as_str()
+        };
+        // A frozen wait is over: no time is left to count.
         let left = view
             .deadline
+            .filter(|_| !frozen)
             .map(|d| time_left(d, unix_now()))
             .unwrap_or_default();
-        let room = cols.saturating_sub(3 + width(&left) + 2);
-        let status = fit(&view.status, room);
-        let gap = " ".repeat(room.saturating_sub(width(&status)) + 2);
-        rows.push(format!(
-            "{}  {}{gap}{}",
-            style(spin).magenta(),
-            status,
-            style(left).dim()
-        ));
-        for (mark, text) in &view.steps {
-            let icon = match mark {
-                Mark::Done => style("✓").green().to_string(),
-                Mark::Active => style(spin).cyan().to_string(),
-                Mark::Pending => style("·").dim().to_string(),
-                Mark::Failed => style("✖").red().to_string(),
-            };
-            let text = fit(text, cols.saturating_sub(6));
+        // Each row's icon and text; the one spinner is the active step's, or
+        // the status line's when there are no steps.
+        let body: Vec<(String, String)> = if view.steps.is_empty() {
+            let icon = if frozen { "·" } else { spin };
+            vec![(style(icon).cyan().to_string(), view.status.clone())]
+        } else {
+            view.steps
+                .iter()
+                .map(|(mark, text)| {
+                    let icon = match mark {
+                        Mark::Done => style("✓").green().to_string(),
+                        Mark::Active if frozen => dim("·"),
+                        Mark::Active => style(spin).cyan().to_string(),
+                        Mark::Pending => dim("·"),
+                        Mark::Failed => style("✖").red().to_string(),
+                    };
+                    (icon, text.clone())
+                })
+                .collect()
+        };
+        let want = body
+            .iter()
+            .map(|(_, t)| width(t) + 2)
+            .chain(std::iter::once(width(title) + width(&left) + 3))
+            .max()
+            .unwrap_or(0);
+        self.inner = self.inner.max(want).min(max_inner(cols));
+        let inner = self.inner;
+
+        let state = if frozen {
+            ThemeState::Submit
+        } else {
+            ThemeState::Active
+        };
+        let frame = Frame::new(inner, state);
+        let mut out = frame.head(title, "", Filter::Applied, &left);
+        out += &frame.line("");
+        for ((icon, text), (mark, _)) in body.iter().zip(
+            view.steps
+                .iter()
+                .map(|(m, t)| (*m, t.as_str()))
+                .chain(std::iter::repeat((Mark::Active, ""))),
+        ) {
+            let text = fit(text, inner.saturating_sub(2));
             let text = match mark {
-                Mark::Pending => style(text).dim().to_string(),
+                Mark::Pending => dim(&text),
                 _ => text,
             };
-            rows.push(format!("{bar}   {icon} {text}"));
+            out += &frame.line(&format!("{icon} {text}"));
         }
-        let mut hint: Vec<String> = self
-            .keys
-            .iter()
-            .map(|(k, l)| format!("[{k}] {l}"))
-            .collect();
+        out += &frame.close();
+
+        // The keys are the controls line the grid and the picker end with.
+        let mut hint: Vec<String> = self.keys.iter().map(|(k, l)| format!("{k} {l}")).collect();
         if let Some(l) = &self.detach {
-            hint.push(format!("[esc] {l}"));
+            hint.push(format!("esc {l}"));
         }
-        if !hint.is_empty() {
-            let hint = fit(&hint.join("   "), cols.saturating_sub(3));
-            rows.push(format!("{bar}  {}", style(hint).dim()));
+        if !frozen && !hint.is_empty() {
+            out += &frame.controls(&hint.join(" · "), cols);
         }
-        rows
+        out.lines().map(str::to_owned).collect()
     }
 
     #[cfg(feature = "tui")]
     fn tick_interactive(&mut self, view: &WaitView, timeout: Duration) -> Result<Tick, CliError> {
         let cols = interactive::columns();
-        let rows = self.rows(view, cols);
+        let rows = self.rows(view, cols, false);
         let io = |e: std::io::Error| CliError::Internal(anyhow::anyhow!(e));
         interactive::draw(self.drawn, &rows).map_err(io)?;
         self.drawn = rows.len();
@@ -409,8 +476,8 @@ mod tests {
     fn the_plain_line_changes_once_a_minute() {
         let v = |deadline| WaitView {
             status: "waiting".into(),
-            steps: vec![],
             deadline,
+            ..WaitView::default()
         };
         assert_eq!(plain_line(&v(None), 0), "waiting");
         assert_eq!(plain_line(&v(Some(600)), 0), "waiting (10 min left)");
@@ -419,25 +486,95 @@ mod tests {
         assert_eq!(plain_line(&v(Some(600)), 600), "waiting (time is up)");
     }
 
+    fn plain_rows(rows: &[String]) -> Vec<String> {
+        rows.iter()
+            .map(|r| console::strip_ansi_codes(r).into_owned())
+            .collect()
+    }
+
     #[test]
     fn rows_fit_the_terminal() {
         assert_eq!(fit("short", 10), "short");
         assert_eq!(fit("a longer line", 8), "a longe…");
         let mut w = Wait::new(false).key('k', "kit").detach("leave");
-        let rows = w.rows(
+        let rows = plain_rows(&w.rows(
             &WaitView {
+                title: "Pairing".into(),
                 status: "x".repeat(200),
                 steps: vec![(Mark::Done, "y".repeat(200)), (Mark::Pending, "z".into())],
                 deadline: None,
             },
             40,
-        );
-        assert_eq!(rows.len(), 4, "status, two steps, the keys");
+            false,
+        ));
+        // head, blank, two steps, bottom rule, bar, controls
+        assert_eq!(rows.len(), 7, "{rows:#?}");
         for r in &rows {
-            let plain = console::strip_ansi_codes(r);
-            assert!(width(&plain) <= 40, "{plain:?} is wider than 40");
+            assert!(width(r) < 40, "{r:?} is wider than 40");
         }
-        assert!(console::strip_ansi_codes(&rows[3]).contains("[k] kit   [esc] leave"));
+        assert!(rows[0].starts_with("◆  Pairing "), "{rows:#?}");
+        assert_eq!(rows[6], "◇  k kit · esc leave", "{rows:#?}");
+    }
+
+    #[test]
+    fn one_thing_spins_and_a_frozen_wait_has_no_controls() {
+        let view = WaitView {
+            title: "Pairing".into(),
+            status: "waiting for approval".into(),
+            steps: vec![
+                (Mark::Done, "code accepted".into()),
+                (Mark::Active, "approval".into()),
+                (Mark::Pending, "store pulled".into()),
+            ],
+            deadline: Some(unix_now() + 600),
+        };
+        let mut w = Wait::new(false).key('k', "kit");
+        let rows = plain_rows(&w.rows(&view, 80, false));
+        let spinners = rows
+            .iter()
+            .filter(|r| r.contains(['◒', '◐', '◓', '◑']))
+            .count();
+        assert_eq!(spinners, 1, "{rows:#?}");
+        assert!(
+            rows[0].ends_with(" left ─╮"),
+            "the countdown is on the title: {rows:#?}"
+        );
+        assert!(
+            !rows.iter().any(|r| r.contains("waiting for approval")),
+            "{rows:#?}"
+        );
+
+        let frozen = plain_rows(&w.rows(&view, 80, true));
+        assert!(frozen[0].starts_with("◇  Pairing "), "{frozen:#?}");
+        assert!(!frozen[0].contains("left"), "no countdown once over: {frozen:#?}");
+        assert!(!frozen.iter().any(|r| r.contains("k kit")), "{frozen:#?}");
+        assert!(
+            !frozen.iter().any(|r| r.contains(['◒', '◐', '◓', '◑'])),
+            "{frozen:#?}"
+        );
+
+        // Without steps, the status line is the one that spins.
+        let bare = WaitView {
+            status: "waiting for the server".into(),
+            ..WaitView::default()
+        };
+        let rows = plain_rows(&Wait::new(false).rows(&bare, 80, false));
+        assert!(rows[0].starts_with("◆  Waiting "), "{rows:#?}");
+        assert!(rows[2].contains("waiting for the server"), "{rows:#?}");
+        assert!(rows[2].contains(['◒', '◐', '◓', '◑']), "{rows:#?}");
+    }
+
+    #[test]
+    fn the_box_only_grows() {
+        let mut w = Wait::new(false);
+        let view = |t: &str| WaitView {
+            title: "T".into(),
+            steps: vec![(Mark::Active, t.into())],
+            ..WaitView::default()
+        };
+        let wide = plain_rows(&w.rows(&view("a long step text here"), 80, false));
+        let narrow = plain_rows(&w.rows(&view("short"), 80, false));
+        assert_eq!(width(&wide[0]), width(&narrow[0]));
     }
 
     #[test]

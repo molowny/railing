@@ -40,6 +40,7 @@ fn main() -> Result<(), CliError> {
             })
             .collect();
         let view = WaitView {
+            title: "Pairing".into(),
             status: format!("Waiting for {}…", names[at.min(names.len() - 1)]),
             steps,
             deadline: Some(now + 600),
@@ -48,7 +49,13 @@ fn main() -> Result<(), CliError> {
             Tick::Key('k') => {
                 at += 1;
                 if at == names.len() {
-                    w.clear();
+                    // Every step done: the box stays as the wait's last word.
+                    let done = names.iter().map(|n| (Mark::Done, n.to_string())).collect();
+                    w.freeze(&WaitView {
+                        title: "Pairing".into(),
+                        steps: done,
+                        ..view
+                    });
                     flow.done("all steps done");
                     return Ok(());
                 }
