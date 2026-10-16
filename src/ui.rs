@@ -26,13 +26,15 @@ pub fn error(msg: &str) {
 // Spinner
 // ---------------------------------------------------------------------------
 
+pub use crate::spin::{SpinnerStyle, set_spinner_style, spinner_style};
+
 struct SpinnerState {
     msg: std::sync::Mutex<String>,
     done: std::sync::atomic::AtomicBool,
 }
 
-/// A spinner on its own line while something slow runs: [`crate::spin`]'s
-/// turning star and glow across the message. [`Spinner::stop`] leaves `◇ msg` in
+/// A spinner on its own line while something slow runs: the pulsing shape
+/// ([`SpinnerStyle`]) and a glow across the message. [`Spinner::stop`] leaves `◇ msg` in
 /// its place, [`Spinner::clear`] (or dropping it) leaves nothing. Off a
 /// terminal nothing animates.
 pub struct Spinner {
@@ -55,12 +57,11 @@ impl Spinner {
             let state = Arc::clone(&state);
             std::thread::spawn(move || {
                 let _ = term.hide_cursor();
-                let mut spin = crate::spin::Spin::new();
+                let spin = crate::spin::Spin::new();
                 while !state.done.load(Ordering::SeqCst) {
                     let msg = state.msg.lock().map(|m| m.clone()).unwrap_or_default();
                     let cols = usize::from(term.size().1);
                     let _ = term.write_str(&format!("\r\x1b[2K{}", spin.line(&msg, cols)));
-                    spin.advance();
                     std::thread::sleep(crate::spin::PACE);
                 }
                 let _ = term.write_str("\r\x1b[2K");

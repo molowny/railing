@@ -99,7 +99,7 @@ impl Wait {
             keys: Vec::new(),
             detach: None,
             said: String::new(),
-            // `·` marks a pending step here, so the star skips its dot.
+            // `·` marks a pending step here, so the diamond skips its dot.
             spin: crate::spin::Spin::new().without_dot(),
             drawn: 0,
             inner: 0,
@@ -190,8 +190,6 @@ impl Wait {
         use crate::frame::{Filter, Frame, dim, max_inner};
         use cliclack::ThemeState;
 
-        self.spin.advance();
-
         let title = if view.title.is_empty() {
             "Waiting"
         } else {
@@ -276,7 +274,7 @@ impl Wait {
     fn tick_interactive(&mut self, view: &WaitView, timeout: Duration) -> Result<Tick, CliError> {
         let io = |e: std::io::Error| CliError::Internal(anyhow::anyhow!(e));
         // Redrawn at the spinner's pace whatever the caller's tick, so the
-        // star turns and the glow moves as fast as every other spinner's.
+        // diamond pulses and the glow moves as fast as every other spinner's.
         let end = std::time::Instant::now() + timeout;
         loop {
             let rows = self.rows(view, interactive::columns(), false);
@@ -501,6 +499,14 @@ mod tests {
         assert_eq!(plain_line(&v(Some(600)), 600), "waiting (time is up)");
     }
 
+    /// Whether `row` shows a spinner frame, in any style but its dot.
+    fn spinning(row: &str) -> bool {
+        crate::ui::SpinnerStyle::ALL
+            .iter()
+            .flat_map(|s| s.frames()[1..].iter())
+            .any(|f| row.contains(f))
+    }
+
     fn plain_rows(rows: &[String]) -> Vec<String> {
         rows.iter()
             .map(|r| console::strip_ansi_codes(r).into_owned())
@@ -545,10 +551,10 @@ mod tests {
         };
         let mut w = Wait::new(false).key('k', "kit");
         let rows = plain_rows(&w.rows(&view, 80, false));
-        let spinners = rows
-            .iter()
-            .filter(|r| r.contains(['✢', '✳', '✶', '✻', '✽']))
-            .count();
+        // Only the box's body rows: the title and the controls line carry
+        // the flow's own diamonds (`◆`, `◇`).
+        let body = |r: &&String| r.starts_with("│   ");
+        let spinners = rows.iter().filter(body).filter(|r| spinning(r)).count();
         assert_eq!(spinners, 1, "{rows:#?}");
         assert!(
             rows[0].ends_with(" left ─╮"),
@@ -567,7 +573,7 @@ mod tests {
         );
         assert!(!frozen.iter().any(|r| r.contains("k kit")), "{frozen:#?}");
         assert!(
-            !frozen.iter().any(|r| r.contains(['✢', '✳', '✶', '✻', '✽'])),
+            !frozen.iter().filter(body).any(|r| spinning(r)),
             "{frozen:#?}"
         );
 
@@ -579,7 +585,7 @@ mod tests {
         let rows = plain_rows(&Wait::new(false).rows(&bare, 80, false));
         assert!(rows[0].starts_with("◆  Waiting "), "{rows:#?}");
         assert!(rows[2].contains("waiting for the server"), "{rows:#?}");
-        assert!(rows[2].contains(['✢', '✳', '✶', '✻', '✽']), "{rows:#?}");
+        assert!(spinning(&rows[2]), "{rows:#?}");
     }
 
     #[test]

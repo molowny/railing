@@ -1,7 +1,7 @@
 //! One command, one prompt group: the `wright commit` look as a reusable shape.
 //!
 //! ```text
-//! ┌   app cmd
+//! ┌  app cmd
 //! │
 //! ◇  Items ────────────────────────╮
 //! │                                │
@@ -64,7 +64,7 @@ pub fn begin(title: &str) {
     let title = style(title).bold().to_string();
     let _ = if DEPTH.fetch_add(1, Ordering::SeqCst) == 0 {
         CLOSED_BY_PROMPT.store(false, Ordering::SeqCst);
-        ui::intro(&format!(" {title} "))
+        ui::intro(&title)
     } else {
         ui::log::step(&title)
     };

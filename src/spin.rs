@@ -1,63 +1,154 @@
-//! The one spinner: a turning star beside what is in progress, and a glow
+//! The one spinner: a pulsing shape beside what is in progress, and a glow
 //! sweeping across its text. [`crate::ui::Spinner`] (behind `Flow::task`)
-//! and [`crate::Wait`]'s active step both draw through [`Spin`], so they turn,
-//! glow and keep pace alike.
+//! and [`crate::Wait`]'s active step both draw through [`Spin`], so they
+//! pulse, glow and keep pace alike.
 //!
 //! ```text
-//! ✶  Decrypting 312 items      ← the star turns · ✢ ✳ ✶ ✻ ✽ and back, in cyan;
+//! ◈  Decrypting 312 items      ← the shape fills · ◦ ◇ ◈ ◆ and back, in cyan;
 //!        ^^^                     a bright band walks over the muted text
 //! ```
+//!
+//! The shape is a [`SpinnerStyle`], one for the whole program
+//! ([`set_spinner_style`]); each spinner takes it when it starts.
 
-use std::time::Duration;
+use std::sync::atomic::{AtomicU8, Ordering};
+use std::time::{Duration, Instant};
 
 use console::style;
 
 use crate::ui::DIM_256;
 
+/// What the spinner pulses through. Every style is a ping-pong from a dot to
+/// a solid shape and back, one column wide.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SpinnerStyle {
+    /// `· ✢ ✳ ✶ ✻ ✽` — a star opening.
+    Star,
+    /// `· ◦ ◇ ◈ ◆` — the flow's own `◇` (a step) filling into `◆` (the open
+    /// one), so a running step reads as the step coming alive.
+    #[default]
+    Diamond,
+    /// `· ▫ ◻ ▣ ■` — a square filling.
+    Square,
+    /// `· ∘ ○ ◎ ●` — a ring breathing into a disc.
+    Circle,
+}
+
+impl SpinnerStyle {
+    pub const ALL: [SpinnerStyle; 4] = [Self::Star, Self::Diamond, Self::Square, Self::Circle];
+
+    /// The frames, the dot first.
+    pub(crate) fn frames(self) -> &'static [&'static str] {
+        match self {
+            Self::Star => &["·", "✢", "✳", "✶", "✻", "✽", "✻", "✶", "✳", "✢"],
+            Self::Diamond => &["·", "◦", "◇", "◈", "◆", "◈", "◇", "◦"],
+            Self::Square => &["·", "▫", "◻", "▣", "■", "▣", "◻", "▫"],
+            Self::Circle => &["·", "∘", "○", "◎", "●", "◎", "○", "∘"],
+        }
+    }
+
+    /// Its name, as [`str::parse`] takes it: `star`, `diamond`, `square`,
+    /// `circle`.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Star => "star",
+            Self::Diamond => "diamond",
+            Self::Square => "square",
+            Self::Circle => "circle",
+        }
+    }
+}
+
+impl std::str::FromStr for SpinnerStyle {
+    type Err = String;
+
+    /// `star`, `diamond`, `square` or `circle`, any case — for an app that
+    /// lets its users choose in a config file or a flag.
+    fn from_str(s: &str) -> Result<Self, String> {
+        Self::ALL
+            .into_iter()
+            .find(|st| st.name().eq_ignore_ascii_case(s.trim()))
+            .ok_or_else(|| format!("unknown spinner style '{s}' (star, diamond, square, circle)"))
+    }
+}
+
+/// The style spinners start with; [`SpinnerStyle::Diamond`] until set.
+static STYLE: AtomicU8 = AtomicU8::new(1);
+
+/// Use `style` for every spinner started from now on (`Flow::task`,
+/// `ui::Spinner`, a `Wait`'s active step). The app's choice — cli-kit only
+/// offers the styles.
+pub fn set_spinner_style(style: SpinnerStyle) {
+    let i = SpinnerStyle::ALL
+        .iter()
+        .position(|s| *s == style)
+        .unwrap_or(1);
+    STYLE.store(i as u8, Ordering::Relaxed);
+}
+
+/// The style set with [`set_spinner_style`].
+pub fn spinner_style() -> SpinnerStyle {
+    SpinnerStyle::ALL
+        .get(STYLE.load(Ordering::Relaxed) as usize)
+        .copied()
+        .unwrap_or_default()
+}
+
 /// How long one frame shows; whoever draws a [`Spin`] redraws at this pace.
 pub(crate) const PACE: Duration = Duration::from_millis(100);
-
-/// A ping-pong from a dot to a full star and back.
-const FRAMES: [&str; 10] = ["·", "✢", "✳", "✶", "✻", "✽", "✻", "✶", "✳", "✢"];
 
 /// Frames the glow rests past the text's end before it starts again.
 const GLOW_REST: usize = 8;
 
-/// One spinner's frame counter: [`Spin::symbol`] and [`Spin::glow`] at the
-/// same frame, moved on by [`Spin::advance`] once a [`PACE`].
-#[derive(Clone, Debug, Default)]
+/// One spinner: [`Spin::symbol`] and [`Spin::glow`] at the same frame. The
+/// frame is the time since it started in [`PACE`]s, not a count of draws, so
+/// however often a caller redraws — a `Wait` ticking every 120 ms, the
+/// spinner thread every 100 — every spinner moves at the same speed.
+#[derive(Clone, Debug)]
 pub(crate) struct Spin {
-    t: usize,
+    started: Instant,
+    /// Tests pin the frame instead of reading the clock.
+    #[cfg(test)]
+    fixed: Option<usize>,
+    style: SpinnerStyle,
     /// Skip the dot frame, where `·` already means something (a pending
     /// step in a wait).
     no_dot: bool,
 }
 
 impl Spin {
+    /// A spinner in the program's style ([`set_spinner_style`]).
     pub(crate) fn new() -> Self {
-        Self::default()
+        Self {
+            started: Instant::now(),
+            #[cfg(test)]
+            fixed: None,
+            style: spinner_style(),
+            no_dot: false,
+        }
     }
 
-    /// The star without its dot frame.
+    /// The frame shown now: whole [`PACE`]s since it started.
+    fn frame(&self) -> usize {
+        #[cfg(test)]
+        if let Some(t) = self.fixed {
+            return t;
+        }
+        (self.started.elapsed().as_millis() / PACE.as_millis()) as usize
+    }
+
+    /// The shape without its dot frame.
     pub(crate) fn without_dot(mut self) -> Self {
         self.no_dot = true;
         self
     }
 
-    /// The next frame.
-    pub(crate) fn advance(&mut self) {
-        self.t += 1;
-    }
-
-    /// The turning star, in cli-kit's colour for what is in progress: the
+    /// The pulsing shape, in cli-kit's colour for what is in progress: the
     /// cyan of the open `◆`, the active frame and the picker's cursor.
     pub(crate) fn symbol(&self) -> String {
-        let frames = if self.no_dot {
-            &FRAMES[1..]
-        } else {
-            &FRAMES[..]
-        };
-        let symbol = frames[self.t % frames.len()];
+        let all = self.style.frames();
+        let frames = if self.no_dot { &all[1..] } else { all };
+        let symbol = frames[self.frame() % frames.len()];
         style(symbol).cyan().for_stderr().to_string()
     }
 
@@ -68,7 +159,7 @@ impl Spin {
     /// the line never moves.
     pub(crate) fn glow(&self, text: &str) -> String {
         let n = text.chars().count();
-        let head = (self.t % (n + GLOW_REST)) as isize;
+        let head = (self.frame() % (n + GLOW_REST)) as isize;
         text.chars()
             .enumerate()
             .map(|(i, c)| {
@@ -83,7 +174,7 @@ impl Spin {
             .collect()
     }
 
-    /// `star  text`, glowing, cut to `cols` so it never wraps.
+    /// `◆  text`, glowing, cut to `cols` so it never wraps.
     pub(crate) fn line(&self, text: &str, cols: usize) -> String {
         let text = console::truncate_str(text, cols.saturating_sub(4), "…");
         format!("{}  {}", self.symbol(), self.glow(&text))
@@ -95,7 +186,11 @@ mod tests {
     use super::*;
 
     fn at(t: usize) -> Spin {
-        Spin { t, no_dot: false }
+        Spin {
+            fixed: Some(t),
+            style: SpinnerStyle::Diamond,
+            ..Spin::new()
+        }
     }
 
     #[test]
@@ -129,24 +224,78 @@ mod tests {
     }
 
     #[test]
-    fn the_star_turns_and_the_line_never_wraps() {
+    fn the_diamond_pulses_and_the_line_never_wraps() {
         let _g = crate::ui::tests::lock();
         console::set_colors_enabled_stderr(false);
         assert_eq!(at(0).line("Fetching", 80), "·  Fetching");
-        assert_eq!(at(5).line("Fetching", 80), "✽  Fetching");
-        assert_eq!(at(10).line("Fetching", 80), "·  Fetching");
+        assert_eq!(at(2).line("Fetching", 80), "◇  Fetching");
+        assert_eq!(at(4).line("Fetching", 80), "◆  Fetching");
+        assert_eq!(at(5).line("Fetching", 80), "◈  Fetching");
+        assert_eq!(at(8).line("Fetching", 80), "·  Fetching");
         let long = at(1).line(&"x".repeat(200), 40);
         assert!(console::measure_text_width(&long) <= 40, "{long}");
+    }
+
+    #[test]
+    fn every_style_pulses_from_the_dot_and_parses_by_name() {
+        let _g = crate::ui::tests::lock();
+        console::set_colors_enabled_stderr(false);
+        for style in SpinnerStyle::ALL {
+            let frames = style.frames();
+            assert_eq!(frames[0], "·", "{style:?}");
+            // A ping-pong: the second half mirrors the first.
+            let n = frames.len();
+            assert!(
+                n % 2 == 0 && (1..n / 2).all(|i| frames[i] == frames[n - i]),
+                "{style:?}"
+            );
+            assert!(
+                frames.iter().all(|f| console::measure_text_width(f) == 1),
+                "{style:?}"
+            );
+            assert_eq!(style.name().parse::<SpinnerStyle>(), Ok(style));
+            let peak = Spin {
+                fixed: Some(n / 2),
+                style,
+                ..Spin::new()
+            };
+            assert_eq!(peak.symbol(), frames[n / 2]);
+        }
+        assert_eq!(" Square ".parse(), Ok(SpinnerStyle::Square));
+        assert!("swirl".parse::<SpinnerStyle>().is_err());
+    }
+
+    #[test]
+    fn the_program_style_is_what_new_spinners_take() {
+        let _g = crate::ui::tests::lock();
+        let before = spinner_style();
+        assert_eq!(before, SpinnerStyle::Diamond, "the default");
+        set_spinner_style(SpinnerStyle::Circle);
+        assert_eq!(Spin::new().style, SpinnerStyle::Circle);
+        set_spinner_style(before);
+        assert_eq!(Spin::new().style, before);
     }
 
     #[test]
     fn without_the_dot_it_never_shows_one() {
         let _g = crate::ui::tests::lock();
         console::set_colors_enabled_stderr(false);
-        let mut s = Spin::new().without_dot();
-        for _ in 0..30 {
+        for t in 0..30 {
+            let s = Spin {
+                fixed: Some(t),
+                ..Spin::new().without_dot()
+            };
             assert_ne!(s.symbol(), "·");
-            s.advance();
         }
+    }
+
+    #[test]
+    fn the_frame_follows_the_clock_not_the_draws() {
+        let s = Spin::new();
+        // However often it is drawn, the frame holds until a pace has passed.
+        let first: Vec<usize> = (0..50).map(|_| s.frame()).collect();
+        assert!(first.iter().all(|&f| f == first[0]), "{first:?}");
+        std::thread::sleep(PACE * 2);
+        assert!(s.frame() >= first[0] + 2);
     }
 }
