@@ -8,7 +8,7 @@
 use cli_kit::{CliError, prompts, ui};
 
 fn run(pick: bool) -> Result<(), CliError> {
-    ui::intro(" select example ")?;
+    ui::intro("select example")?;
     let rows = [
         ("red", "Red", "warm"),
         ("green", "Green", ""),

@@ -7,7 +7,7 @@
 use cli_kit::{CliError, prompts, ui};
 
 fn run() -> Result<(), CliError> {
-    ui::intro(" cli-kit prompts demo ")?;
+    ui::intro("cli-kit prompts demo")?;
 
     let name = prompts::input("What is your name?", "e.g. Ada")?;
     let nickname = prompts::input_with_default("Nickname", &name)?;

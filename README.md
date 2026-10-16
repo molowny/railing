@@ -58,7 +58,7 @@ Runnable examples live in [`examples/`](examples/) — one per module.
 | `prompts` | `cargo run --example prompts` | `input`, `password`, `confirm`, `select`, `multiselect`, cancellation |
 | `ui` | `cargo run --example ui` | Gutter log lines (`ui::log`), `Spinner`, intro/outro banners |
 | `boxes` | `cargo run --example boxes` | Every box a flow draws, in one run: `flow.table`, `Grid::kv`, `text_box`, `flow.note`, `flow.checks`, then the frozen `browse_table` (`-- no-grid` skips it) |
-| `spinner` | `cargo run --example spinner` | `Flow::task` / `ui::Spinner`: the turning star and the glow across the message; a task that updates, one that ends as `◇`, one cleared (`-- slow` to watch) |
+| `spinner` | `cargo run --example spinner` | `Flow::task` / `ui::Spinner` in every `SpinnerStyle` (star, diamond, square, circle) one after another: the pulsing shape and the glow, a task that updates and ends as `◇`, then one cleared (`-- slow` to watch; `-- square` for one style) |
 | `select` | `cargo run --example select` | `prompts::select` over four rows; `-- pick` shows `prompts::pick` over the same rows |
 | `multiselect` | `cargo run --example multiselect` | `prompts::multiselect`, all selected to start |
 | `pick` | `cargo run --example pick` | `prompts::pick` over 60 rows: filtering, scrolling, the count and filter in the box title |

@@ -5,7 +5,7 @@
 use cli_kit::{CliError, prompts, ui};
 
 fn run() -> Result<(), CliError> {
-    ui::intro(" multiselect example ")?;
+    ui::intro("multiselect example")?;
     let toppings = prompts::multiselect(
         "Pizza toppings",
         &[

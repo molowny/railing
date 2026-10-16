@@ -6,7 +6,7 @@
 use cli_kit::{CliError, prompts, ui};
 
 fn run() -> Result<(), CliError> {
-    ui::intro(" cli-kit pick demo ")?;
+    ui::intro("cli-kit pick demo")?;
     let vaults = ["Private", "Homelab", "Work"];
     let kinds = ["login", "note", "ssh key", "card"];
     let rows: Vec<(usize, String, String)> = (0..60)

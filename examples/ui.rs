@@ -9,7 +9,7 @@ use std::time::Duration;
 use cli_kit::{CliError, ui};
 
 fn run() -> Result<(), CliError> {
-    ui::intro(" cli-kit ui demo ")?;
+    ui::intro("cli-kit ui demo")?;
 
     ui::log::info("3 items loaded")?;
     ui::log::warning("cache is stale")?;
