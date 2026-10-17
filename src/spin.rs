@@ -10,13 +10,17 @@
 //!
 //! The shape is a [`SpinnerStyle`], one for the whole program
 //! ([`set_spinner_style`]); each spinner takes it when it starts.
+//!
+//! [`Spin`] only makes strings: an app that draws on a terminal of its own
+//! (not stderr) animates one itself, redrawing [`Spin::line`] every
+//! [`PACE`]. It is in the slim core, so that needs no `full` feature.
 
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::time::{Duration, Instant};
 
 use console::style;
 
-use crate::ui::DIM_256;
+use crate::glyph::DIM_256;
 
 /// What the spinner pulses through. Every style is a ping-pong from a dot to
 /// a solid shape and back, one column wide.
@@ -95,7 +99,9 @@ pub fn spinner_style() -> SpinnerStyle {
 }
 
 /// How long one frame shows; whoever draws a [`Spin`] redraws at this pace.
-pub(crate) const PACE: Duration = Duration::from_millis(100);
+/// An app animating a [`Spin`] on a terminal of its own sleeps this long
+/// between draws.
+pub const PACE: Duration = Duration::from_millis(100);
 
 /// Frames the glow rests past the text's end before it starts again.
 const GLOW_REST: usize = 8;
@@ -105,7 +111,7 @@ const GLOW_REST: usize = 8;
 /// however often a caller redraws — a `Wait` ticking every 120 ms, the
 /// spinner thread every 100 — every spinner moves at the same speed.
 #[derive(Clone, Debug)]
-pub(crate) struct Spin {
+pub struct Spin {
     started: Instant,
     /// Tests pin the frame instead of reading the clock.
     #[cfg(test)]
@@ -118,7 +124,7 @@ pub(crate) struct Spin {
 
 impl Spin {
     /// A spinner in the program's style ([`set_spinner_style`]).
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             started: Instant::now(),
             #[cfg(test)]
@@ -138,14 +144,14 @@ impl Spin {
     }
 
     /// The shape without its dot frame.
-    pub(crate) fn without_dot(mut self) -> Self {
+    pub fn without_dot(mut self) -> Self {
         self.no_dot = true;
         self
     }
 
     /// The pulsing shape, in cli-kit's colour for what is in progress: the
     /// cyan of the open `◆`, the active frame and the picker's cursor.
-    pub(crate) fn symbol(&self) -> String {
+    pub fn symbol(&self) -> String {
         let all = self.style.frames();
         let frames = if self.no_dot { &all[1..] } else { all };
         let symbol = frames[self.frame() % frames.len()];
@@ -157,7 +163,7 @@ impl Spin {
     /// tone ([`DIM_256`]). It walks one column a frame, then rests past the
     /// end for [`GLOW_REST`] frames. Only colour changes, never the text, so
     /// the line never moves.
-    pub(crate) fn glow(&self, text: &str) -> String {
+    pub fn glow(&self, text: &str) -> String {
         let n = text.chars().count();
         let head = (self.frame() % (n + GLOW_REST)) as isize;
         text.chars()
@@ -175,13 +181,19 @@ impl Spin {
     }
 
     /// `◆  text`, glowing, cut to `cols` so it never wraps.
-    pub(crate) fn line(&self, text: &str, cols: usize) -> String {
+    pub fn line(&self, text: &str, cols: usize) -> String {
         let text = console::truncate_str(text, cols.saturating_sub(4), "…");
         format!("{}  {}", self.symbol(), self.glow(&text))
     }
 }
 
-#[cfg(test)]
+impl Default for Spin {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(all(test, feature = "full"))]
 mod tests {
     use super::*;
 

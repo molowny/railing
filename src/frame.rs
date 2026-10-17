@@ -186,13 +186,7 @@ impl Frame {
     }
 }
 
-/// The muted tone ([`crate::ui::DIM_256`]), for stderr.
-pub(crate) fn dim(s: &str) -> String {
-    style(s)
-        .color256(crate::ui::DIM_256)
-        .for_stderr()
-        .to_string()
-}
+pub(crate) use crate::glyph::dim;
 
 /// The search colour (`tui::theme::SEARCH`), bold.
 fn search(s: &str) -> String {

@@ -341,14 +341,7 @@ pub fn init_colors() {
 // with `eval`/`source` of stdout. Color codes are gated by `console`'s
 // stderr-color global, which `init_colors` configures correctly at startup.
 
-/// 256-colour index of dim text, everywhere cli-kit draws it: CLI output,
-/// flows, grids, and the TUI's `theme::FG_DIM`.
-///
-/// A grayscale-ramp entry (`#949494`) rather than SGR 2 "faint", which
-/// terminals render anywhere from invisible to identical to normal text, or
-/// palette `DarkGray`, whose shade is up to the terminal theme. Readable on
-/// dark backgrounds and still clearly below normal text on light ones.
-pub const DIM_256: u8 = 246;
+pub use crate::glyph::DIM_256;
 
 /// Style for dim text: [`DIM_256`]. Add `.for_stderr()` for stderr-bound
 /// output, so colour follows that stream's flag.

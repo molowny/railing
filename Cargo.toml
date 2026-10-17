@@ -1,4 +1,3 @@
-
 [package]
 name = "cli-kit"
 version = "0.5.0"
@@ -7,34 +6,43 @@ edition = "2024"
 license = "MIT"
 
 [dependencies]
-anyhow             = { version = "1" }
-clap               = { version = "4", features = ["derive", "env"] }
-clap_complete      = { version = "4" }
-cliclack           = "0.3"
-comfy-table        = { version = "7", features = ["custom_styling"] }
+anyhow             = { version = "1", optional = true }
+clap               = { version = "4", features = ["derive", "env"], optional = true }
+clap_complete      = { version = "4", optional = true }
+cliclack           = { version = "0.3", optional = true }
+comfy-table        = { version = "7", features = ["custom_styling"], optional = true }
 console            = "0.15"
 crossterm          = { version = "0.28", optional = true }
-dirs               = { version = "6" }
-nucleo-matcher     = "0.3"
+dirs               = { version = "6", optional = true }
+nucleo-matcher     = { version = "0.3", optional = true }
 ratatui            = { version = "0.29", optional = true }
-serde              = { version = "1", features = ["derive"] }
-serde_json         = { version = "1" }
-toml               = { version = "0.8" }
-thiserror          = { version = "2" }
-tracing            = { version = "0.1" }
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+serde              = { version = "1", features = ["derive"], optional = true }
+serde_json         = { version = "1", optional = true }
+toml               = { version = "0.8", optional = true }
+thiserror          = { version = "2", optional = true }
+tracing            = { version = "0.1", optional = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
 unicode-width      = { version = "0.2", optional = true }
 zeroize            = { version = "1.7", features = ["derive", "serde"], optional = true }
 
 [target.'cfg(unix)'.dependencies]
-libc = "0.2"
+libc = { version = "0.2", optional = true }
 
 [dev-dependencies]
 tempfile = { version = "3" }
 
 [features]
-default = []
-tui = ["ratatui", "crossterm", "unicode-width", "zeroize"]
+default = ["full"]
+# Everything but the slim core (`glyph`, `spin`): flows, prompts, output,
+# errors, logging. Off, cli-kit is the flow's marks and the spinner as plain
+# strings over `console` alone — for a process that draws on a terminal it
+# does not own and must keep its dependency tree small (sealward-askpass).
+full = [
+  "dep:anyhow", "dep:clap", "dep:clap_complete", "dep:cliclack", "dep:comfy-table",
+  "dep:dirs", "dep:nucleo-matcher", "dep:serde", "dep:serde_json", "dep:toml",
+  "dep:thiserror", "dep:tracing", "dep:tracing-subscriber", "dep:libc",
+]
+tui = ["full", "ratatui", "crossterm", "unicode-width", "zeroize"]
 
 [[example]]
 name = "tui"
