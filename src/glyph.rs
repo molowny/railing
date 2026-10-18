@@ -11,8 +11,10 @@
 //! ```
 //!
 //! Colours are cliclack's default theme, which the live flow draws with
-//! (`grid::Clack`); a test holds the two together. Like the rest of
-//! cli-kit, colour follows `console`'s stderr flag
+//! (`grid::Clack`); a test holds the two together. The marks are always
+//! these Unicode ones: cliclack swaps in ASCII (`o`, `*`) when the locale
+//! is not UTF-8, which would mix with the box rules (`─╮│`) that never do.
+//! Like the rest of cli-kit, colour follows `console`'s stderr flag
 //! (`console::set_colors_enabled_stderr`).
 
 use console::{Style, style};
@@ -77,6 +79,17 @@ pub fn tinted(state: State, text: &str) -> String {
     state.bar_style().apply_to(text).to_string()
 }
 
+/// A prompt's header, as clack draws it: `◆  first line`, then `│  line`
+/// for each line after it.
+pub fn header(state: State, prompt: &str) -> String {
+    let mut out = String::new();
+    for (i, line) in prompt.lines().enumerate() {
+        let mark = if i == 0 { step(state) } else { bar(state) };
+        out += &format!("{mark}  {line}\n");
+    }
+    out
+}
+
 /// `text` in the muted tone ([`DIM_256`]).
 pub fn dim(text: &str) -> String {
     style(text).color256(DIM_256).for_stderr().to_string()
@@ -89,7 +102,9 @@ mod tests {
 
     /// The live flow draws with cliclack's theme; these strings must be the
     /// same marks in the same colours, or a step drawn here would not match
-    /// the one above it.
+    /// the one above it. The mark is compared through cliclack's colour,
+    /// not its `state_symbol`: that one is locale-dependent (ASCII under
+    /// `LANG=C`, as on CI), ours is not.
     #[test]
     fn marks_match_the_live_flow() {
         let _g = crate::ui::tests::lock();
@@ -97,13 +112,17 @@ mod tests {
         console::set_colors_enabled(true);
         console::set_colors_enabled_stderr(true);
         let theme = crate::grid::Clack;
-        for (ours, theirs) in [
-            (State::Active, ThemeState::Active),
-            (State::Submit, ThemeState::Submit),
-            (State::Error, ThemeState::Error(String::new())),
-            (State::Cancel, ThemeState::Cancel),
+        for (ours, theirs, mark) in [
+            (State::Active, ThemeState::Active, "◆"),
+            (State::Submit, ThemeState::Submit, "◇"),
+            (State::Error, ThemeState::Error(String::new()), "▲"),
+            (State::Cancel, ThemeState::Cancel, "■"),
         ] {
-            assert_eq!(step(ours), theme.state_symbol(&theirs), "{ours:?}");
+            assert_eq!(
+                step(ours),
+                theme.state_symbol_color(&theirs).apply_to(mark).to_string(),
+                "{ours:?}"
+            );
             assert_eq!(
                 bar(ours),
                 theme.bar_color(&theirs).apply_to("│").to_string(),
