@@ -80,16 +80,12 @@ impl Spinner {
 
     /// Stop the spinner and leave `◇ msg` (and the gutter's bar) in its place.
     pub fn stop(mut self, msg: &str) {
-        use cliclack::{Theme, ThemeState};
+        use crate::glyph::{self, State};
         self.halt();
-        let theme = crate::grid::Clack;
-        let bar = theme
-            .bar_color(&ThemeState::Submit)
-            .for_stderr()
-            .apply_to("│");
         let _ = console::Term::stderr().write_str(&format!(
-            "{}  {msg}\n{bar}\n",
-            theme.state_symbol(&ThemeState::Submit)
+            "{}  {msg}\n{}\n",
+            glyph::step(State::Submit),
+            glyph::bar(State::Submit)
         ));
     }
 

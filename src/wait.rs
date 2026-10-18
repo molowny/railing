@@ -188,7 +188,7 @@ impl Wait {
     /// control-less last frame.
     fn rows(&mut self, view: &WaitView, cols: usize, frozen: bool) -> Vec<String> {
         use crate::frame::{Filter, Frame, dim, max_inner};
-        use cliclack::ThemeState;
+        use crate::glyph::State;
 
         let title = if view.title.is_empty() {
             "Waiting"
@@ -234,11 +234,7 @@ impl Wait {
         self.inner = self.inner.max(want).min(max_inner(cols));
         let inner = self.inner;
 
-        let state = if frozen {
-            ThemeState::Submit
-        } else {
-            ThemeState::Active
-        };
+        let state = if frozen { State::Submit } else { State::Active };
         let frame = Frame::new(inner, state);
         let mut out = frame.head(title, "", Filter::Applied, &left);
         out += &frame.line("");

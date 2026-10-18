@@ -22,12 +22,11 @@
 
 use std::io;
 
-use cliclack::{Theme, ThemeState};
+use crate::glyph::{self, State};
 use console::{Key, Term, measure_text_width, style};
 
 use crate::frame::{self, CHIP_ROOM, Filter, Frame, cut, dim, paint_hits};
 use crate::fuzzy::Fuzzy;
-use crate::grid::Clack;
 
 /// Columns between the label and the hint.
 const GAP: usize = 2;
@@ -260,17 +259,17 @@ impl<'a> List<'a> {
         match step {
             // Chosen: the prompt and its answer, as a submitted clack prompt.
             Step::Submit(i) => {
-                let state = ThemeState::Submit;
-                let bar = Clack.bar_color(&state).for_stderr().apply_to("│");
+                let state = State::Submit;
+                let bar = glyph::bar(state);
                 let label = cut(self.rows[*i].0, width.saturating_sub(4));
-                return Clack.format_header(&state, self.prompt)
+                return glyph::header(state, self.prompt)
                     + &format!("{bar}  {}\n", style(label).dim().for_stderr())
                     + &format!("{bar}\n");
             }
             // Chosen: the prompt and what was checked, on one line.
             Step::Chosen(rows) => {
-                let state = ThemeState::Submit;
-                let bar = Clack.bar_color(&state).for_stderr().apply_to("│");
+                let state = State::Submit;
+                let bar = glyph::bar(state);
                 let labels = if rows.is_empty() {
                     "none".to_string()
                 } else {
@@ -280,13 +279,16 @@ impl<'a> List<'a> {
                         .join(", ")
                 };
                 let labels = cut(&labels, width.saturating_sub(4));
-                return Clack.format_header(&state, self.prompt)
+                return glyph::header(state, self.prompt)
                     + &format!("{bar}  {}\n", style(labels).dim().for_stderr())
                     + &format!("{bar}\n");
             }
             Step::Cancel => {
-                return Clack.format_header(&ThemeState::Cancel, self.prompt)
-                    + &Clack.format_footer(&ThemeState::Cancel);
+                return glyph::header(State::Cancel, self.prompt)
+                    + &format!(
+                        "{}\n",
+                        glyph::tinted(State::Cancel, "└  Operation cancelled.")
+                    );
             }
             Step::Active => {}
         }
@@ -319,7 +321,7 @@ impl<'a> List<'a> {
         let hint_w = hint_w.min(inner.saturating_sub(check_w + label_w + GAP));
         let hint_w = if hint_w < 4 { 0 } else { hint_w };
 
-        let frame = Frame::new(inner, ThemeState::Active);
+        let frame = Frame::new(inner, State::Active);
         let mut out = if self.filterable {
             frame.head(self.prompt, &self.query, Filter::Typing, &self.status())
         } else {

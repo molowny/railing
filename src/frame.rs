@@ -19,10 +19,9 @@
 
 use std::borrow::Cow;
 
-use cliclack::{Theme, ThemeState};
 use console::{measure_text_width, style};
 
-use crate::grid::Clack;
+use crate::glyph::{self, State};
 
 /// Room kept beside the title for a short filter chip (` ▸ [/]query`), so
 /// the box does not widen while the person types.
@@ -48,22 +47,18 @@ pub(crate) enum Filter {
 
 pub(crate) struct Frame {
     inner: usize,
-    state: ThemeState,
+    state: State,
 }
 
 impl Frame {
     /// A box with `inner` columns of content: cyan while `Active`, grey once
     /// `Submit`ted.
-    pub(crate) fn new(inner: usize, state: ThemeState) -> Self {
+    pub(crate) fn new(inner: usize, state: State) -> Self {
         Self { inner, state }
     }
 
     fn paint(&self, s: &str) -> String {
-        Clack
-            .bar_color(&self.state)
-            .for_stderr()
-            .apply_to(s)
-            .to_string()
+        glyph::tinted(self.state, s)
     }
 
     /// `◆  title ▸ /query ─── status ─╮`. A filter being typed shows its
@@ -103,7 +98,7 @@ impl Frame {
                 search(&format!("[/]{}", cut(query, room.saturating_sub(6))))
             ),
         };
-        let symbol = Clack.state_symbol(&self.state);
+        let symbol = glyph::step(self.state);
         let title = style(title).bold().for_stderr();
         if status.is_empty() {
             // `◇  title ─────╮`: the rule runs to the corner.
@@ -135,7 +130,7 @@ impl Frame {
             .chain(std::iter::once(measure_text_width(title)))
             .max()
             .unwrap_or(0);
-        let frame = Frame::new(inner, ThemeState::Submit);
+        let frame = Frame::new(inner, State::Submit);
         let mut out = frame.head(title, "", Filter::Applied, "");
         out += &frame.line("");
         for l in body.lines() {
@@ -273,7 +268,7 @@ mod tests {
     #[test]
     fn every_line_of_the_box_is_inner_plus_six() {
         let _c = plain();
-        let f = Frame::new(30, ThemeState::Active);
+        let f = Frame::new(30, State::Active);
         for head in [
             f.head("Items", "", Filter::Applied, "1–4 of 9"),
             f.head("Items", "git", Filter::Typing, "1 of 9 match · 1–1"),
@@ -290,7 +285,7 @@ mod tests {
     #[test]
     fn the_chip_says_whether_the_filter_is_typed_or_applied() {
         let _c = plain();
-        let f = Frame::new(40, ThemeState::Active);
+        let f = Frame::new(40, State::Active);
         assert!(f.head("T", "git", Filter::Typing, "").contains("T ▸ /git"));
         assert!(
             f.head("T", "git", Filter::Applied, "")

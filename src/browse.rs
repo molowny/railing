@@ -28,7 +28,7 @@
 
 use std::io;
 
-use cliclack::ThemeState;
+use crate::glyph::State;
 use console::{Key, Term, measure_text_width, style};
 
 use crate::frame::{self, CHIP_ROOM, Filter, Frame, align, cut, dim, paint_hits};
@@ -369,9 +369,9 @@ impl<'a> Browser<'a> {
         let frame = Frame::new(
             inner,
             if finished {
-                ThemeState::Submit
+                State::Submit
             } else {
-                ThemeState::Active
+                State::Active
             },
         );
         let line = |content: &str| frame.line(content);
