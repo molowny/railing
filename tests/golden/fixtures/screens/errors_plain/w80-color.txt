@@ -1,0 +1,13 @@
+# errors_plain · 80×60 · colour
+# each error kind reaching main with no group open
+
+── end ──
+cursor 8:1 shown
+⟦red⟧✖⟦⟧ ⟦red⟧`app⟦⟧ ⟦red⟧add`⟦⟧ ⟦red⟧needs⟦⟧ ⟦red⟧a⟦⟧ ⟦red⟧name⟦⟧ ⟦red⟧—⟦⟧ ⟦red⟧pass⟦⟧ ⟦red⟧it⟦⟧ ⟦red⟧as⟦⟧ ⟦red⟧an⟦⟧ ⟦red⟧argument⟦⟧
+⟦red⟧✖⟦⟧ ⟦red⟧`app⟦⟧ ⟦red⟧add`⟦⟧ ⟦red⟧needs⟦⟧ ⟦red⟧an⟦⟧ ⟦red⟧item⟦⟧ ⟦red⟧—⟦⟧ ⟦red⟧pass⟦⟧ ⟦red⟧it⟦⟧ ⟦red⟧as⟦⟧ ⟦red⟧an⟦⟧ ⟦red⟧argument⟦⟧
+⟦red⟧✖⟦⟧ ⟦red⟧Authentication⟦⟧ ⟦red⟧error:⟦⟧ ⟦red⟧token⟦⟧ ⟦red⟧expired⟦⟧
+⟦red⟧✖⟦⟧ ⟦red⟧Config⟦⟧ ⟦red⟧error:⟦⟧ ⟦red⟧missing⟦⟧ ⟦red⟧[server]⟦⟧ ⟦red⟧url⟦⟧
+⟦red⟧✖⟦⟧ ⟦red⟧API⟦⟧ ⟦red⟧error:⟦⟧ ⟦red⟧503⟦⟧ ⟦red⟧Service⟦⟧ ⟦red⟧Unavailable⟦⟧
+⟦red⟧✖⟦⟧ ⟦red⟧saving⟦⟧ ⟦red⟧the⟦⟧ ⟦red⟧vault⟦⟧
+⟦red⟧✖⟦⟧ ⟦red⟧Config⟦⟧ ⟦red⟧error:⟦⟧ ⟦red⟧bad⟦⟧ ⟦red⟧value⟦⟧
+exit 0

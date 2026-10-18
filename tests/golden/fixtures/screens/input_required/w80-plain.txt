@@ -1,0 +1,30 @@
+# input_required · 80×60 · no colour
+# prompts::input submitted empty: the error state, then a value
+
+── error ──
+cursor 6:1 hidden
+┌  Setup
+│
+▲  Project name
+│
+└  Input required
+
+── typing after the error ──
+cursor 6:1 hidden
+┌  Setup
+│
+◆  Project name
+│  b
+└
+
+── end ──
+cursor 7:1 shown
+┌  Setup
+│
+◇  Project name
+│  bob
+│
+└  ✔ Saved
+exit 0
+stdout:
+"bob"

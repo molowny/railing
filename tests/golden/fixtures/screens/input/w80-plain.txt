@@ -1,0 +1,30 @@
+# input · 80×60 · no colour
+# prompts::input with a placeholder: active, typed, submitted
+
+── active ──
+cursor 6:1 hidden
+┌  Setup
+│
+◆  Project name
+│  my-project
+└
+
+── typed ──
+cursor 6:1 hidden
+┌  Setup
+│
+◆  Project name
+│  alice
+└
+
+── end ──
+cursor 7:1 shown
+┌  Setup
+│
+◇  Project name
+│  alice
+│
+└  ✔ Saved
+exit 0
+stdout:
+"alice"

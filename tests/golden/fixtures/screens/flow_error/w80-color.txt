@@ -1,0 +1,17 @@
+# flow_error · 80×60 · colour
+# an internal error with context, and a multi-line one, reaching main inside a group
+
+── end ──
+cursor 12:1 shown
+⟦bright-black⟧┌⟦⟧  ⟦bold⟧Sync⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦green⟧◇⟦⟧  Fetched
+⟦bright-black⟧│⟦⟧
+⟦bright-black⟧└⟦⟧  ⟦red⟧✖⟦⟧ ⟦red⟧writing⟦⟧ ⟦red⟧the⟦⟧ ⟦red⟧index⟦⟧
+⟦bright-black⟧┌⟦⟧  ⟦bold⟧Push⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦green⟧◇⟦⟧  Packed
+⟦bright-black⟧│⟦⟧
+⟦bright-black⟧└⟦⟧  ⟦red⟧✖⟦⟧ ⟦red⟧API⟦⟧ ⟦red⟧error:⟦⟧ ⟦red⟧server⟦⟧ ⟦red⟧said:⟦⟧
+   ⟦red⟧quota⟦⟧ ⟦red⟧exceeded⟦⟧
+exit 1

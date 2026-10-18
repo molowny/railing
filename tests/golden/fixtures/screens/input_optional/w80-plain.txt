@@ -1,0 +1,22 @@
+# input_optional · 80×60 · no colour
+# prompts::input_optional: active, submitted empty
+
+── active ──
+cursor 6:1 hidden
+┌  Setup
+│
+◆  Description
+│  none
+└
+
+── end ──
+cursor 7:1 shown
+┌  Setup
+│
+◇  Description
+│  none
+│
+└  ✔ Saved
+exit 0
+stdout:
+""

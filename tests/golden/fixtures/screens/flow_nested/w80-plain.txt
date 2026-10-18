@@ -1,0 +1,25 @@
+# flow_nested · 80×60 · no colour
+# groups inside a group: closed ok, warn and fail, then the outer one
+
+── end ──
+cursor 20:1 shown
+┌  Release
+│
+◇  Version bumped
+│
+◇  Publish
+│
+◇  Uploaded
+│
+◆  Published
+│
+◇  Tag
+│
+▲  Tag already exists
+│
+◇  Announce
+│
+■  Webhook unreachable
+│
+└  ✔ Released
+exit 0

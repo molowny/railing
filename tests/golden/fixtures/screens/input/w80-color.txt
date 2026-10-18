@@ -1,0 +1,30 @@
+# input · 80×60 · colour
+# prompts::input with a placeholder: active, typed, submitted
+
+── active ──
+cursor 6:1 hidden
+⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦cyan⟧◆⟦⟧  Project name
+⟦cyan⟧│⟦⟧  ⟦inverse⟧m⟦dim⟧y-project⟦⟧
+⟦cyan⟧└⟦⟧
+
+── typed ──
+cursor 6:1 hidden
+⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦cyan⟧◆⟦⟧  Project name
+⟦cyan⟧│⟦⟧  alice⟦inverse⟧ ⟦⟧
+⟦cyan⟧└⟦⟧
+
+── end ──
+cursor 7:1 shown
+⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦green⟧◇⟦⟧  Project name
+⟦bright-black⟧│⟦⟧  ⟦dim⟧alice⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦bright-black⟧└⟦⟧  ⟦green⟧✔⟦⟧ ⟦green⟧Saved⟦⟧
+exit 0
+stdout:
+"alice"

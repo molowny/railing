@@ -1,0 +1,13 @@
+# confirm_cancel · 80×60 · no colour
+# prompts::confirm cancelled with Esc
+
+── end ──
+cursor 6:1 shown
+┌  Setup
+│
+■  Commit this?
+│  Yes
+└  Operation cancelled.
+exit 130
+stdout:
+Err(cancelled)

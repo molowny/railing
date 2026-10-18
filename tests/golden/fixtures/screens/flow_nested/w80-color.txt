@@ -1,0 +1,25 @@
+# flow_nested · 80×60 · colour
+# groups inside a group: closed ok, warn and fail, then the outer one
+
+── end ──
+cursor 20:1 shown
+⟦bright-black⟧┌⟦⟧  ⟦bold⟧Release⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦green⟧◇⟦⟧  Version bumped
+⟦bright-black⟧│⟦⟧
+⟦green⟧◇⟦⟧  ⟦bold⟧Publish⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦green⟧◇⟦⟧  Uploaded
+⟦bright-black⟧│⟦⟧
+⟦green⟧◆⟦⟧  Published
+⟦bright-black⟧│⟦⟧
+⟦green⟧◇⟦⟧  ⟦bold⟧Tag⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦yellow⟧▲⟦⟧  Tag already exists
+⟦bright-black⟧│⟦⟧
+⟦green⟧◇⟦⟧  ⟦bold⟧Announce⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦red⟧■⟦⟧  Webhook unreachable
+⟦bright-black⟧│⟦⟧
+⟦bright-black⟧└⟦⟧  ⟦green⟧✔⟦⟧ ⟦green⟧Released⟦⟧
+exit 0

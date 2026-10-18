@@ -1,0 +1,30 @@
+# input_required · 80×60 · colour
+# prompts::input submitted empty: the error state, then a value
+
+── error ──
+cursor 6:1 hidden
+⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦yellow⟧▲⟦⟧  Project name
+⟦yellow⟧│⟦⟧  ⟦inverse⟧ ⟦⟧
+⟦yellow⟧└⟦⟧  ⟦yellow⟧Input⟦⟧ ⟦yellow⟧required⟦⟧
+
+── typing after the error ──
+cursor 6:1 hidden
+⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦cyan⟧◆⟦⟧  Project name
+⟦cyan⟧│⟦⟧  b⟦inverse⟧ ⟦⟧
+⟦cyan⟧└⟦⟧
+
+── end ──
+cursor 7:1 shown
+⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦green⟧◇⟦⟧  Project name
+⟦bright-black⟧│⟦⟧  ⟦dim⟧bob⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦bright-black⟧└⟦⟧  ⟦green⟧✔⟦⟧ ⟦green⟧Saved⟦⟧
+exit 0
+stdout:
+"bob"

@@ -1,0 +1,11 @@
+# flow_fail · 80×60 · no colour
+# a group closed by Flow::fail, the error then reaching main
+
+── end ──
+cursor 6:1 shown
+┌  Upload
+│
+◇  Connected
+│
+└  ✖ Upload rejected: quota exceeded
+exit 1

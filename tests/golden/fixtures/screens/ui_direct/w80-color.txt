@@ -1,0 +1,36 @@
+# ui_direct · 80×60 · colour
+# ui's intro, outros, note and log lines called directly
+
+── end ──
+cursor 31:1 shown
+⟦bright-black⟧┌⟦⟧  Direct
+⟦bright-black⟧│⟦⟧
+⟦green⟧◇⟦⟧  step
+⟦bright-black⟧│⟦⟧
+⟦blue⟧●⟦⟧  info
+⟦bright-black⟧│⟦⟧
+⟦bright-black⟧├⟦⟧  remark
+⟦bright-black⟧│⟦⟧
+⟦green⟧◆⟦⟧  success
+⟦bright-black⟧│⟦⟧
+⟦yellow⟧▲⟦⟧  warning
+⟦bright-black⟧│⟦⟧
+⟦red⟧■⟦⟧  error
+⟦bright-black⟧│⟦⟧
+⟦green⟧◇⟦⟧  ⟦bold⟧A⟦⟧ ⟦bold⟧note⟦⟧ ⟦bright-black⟧─────────╮⟦⟧
+⟦bright-black⟧│⟦⟧                  ⟦bright-black⟧│⟦⟧
+⟦bright-black⟧│⟦⟧   ⟦c246⟧its⟦⟧ ⟦c246⟧body⟦⟧       ⟦bright-black⟧│⟦⟧
+⟦bright-black⟧│⟦⟧   ⟦c246⟧over⟦⟧ ⟦c246⟧two⟦⟧ ⟦c246⟧lines⟦⟧ ⟦bright-black⟧│⟦⟧
+⟦bright-black⟧├──────────────────╯⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦bright-black⟧└⟦⟧  Neutral outro
+⟦bright-black⟧┌⟦⟧  Second
+⟦bright-black⟧│⟦⟧
+⟦bright-black⟧└⟦⟧  ⟦green⟧✔⟦⟧ ⟦green⟧Success⟦⟧ ⟦green⟧outro⟦⟧
+⟦bright-black⟧┌⟦⟧  Third
+⟦bright-black⟧│⟦⟧
+⟦bright-black⟧└⟦⟧  ⟦yellow⟧⚠⟦⟧ ⟦yellow⟧Warning⟦⟧ ⟦yellow⟧outro⟦⟧
+⟦bright-black⟧┌⟦⟧  Fourth
+⟦bright-black⟧│⟦⟧
+⟦bright-black⟧└⟦⟧  ⟦red⟧✖⟦⟧ ⟦red⟧Error⟦⟧ ⟦red⟧outro⟦⟧
+exit 0

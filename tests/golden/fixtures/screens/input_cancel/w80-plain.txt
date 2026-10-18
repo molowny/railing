@@ -1,0 +1,13 @@
+# input_cancel · 80×60 · no colour
+# prompts::input cancelled with Esc after typing
+
+── end ──
+cursor 6:1 shown
+┌  Setup
+│
+■  Project name
+│  half
+└  Operation cancelled.
+exit 130
+stdout:
+Err(cancelled)

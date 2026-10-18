@@ -1,0 +1,11 @@
+# flow_cancel · 80×60 · no colour
+# Cancelled reaching main inside a group
+
+── end ──
+cursor 6:1 shown
+┌  Setup
+│
+◇  Started
+│
+└  Aborted.
+exit 130

@@ -1,0 +1,13 @@
+# errors_plain · 80×60 · no colour
+# each error kind reaching main with no group open
+
+── end ──
+cursor 8:1 shown
+✖ `app add` needs a name — pass it as an argument
+✖ `app add` needs an item — pass it as an argument
+✖ Authentication error: token expired
+✖ Config error: missing [server] url
+✖ API error: 503 Service Unavailable
+✖ saving the vault
+✖ Config error: bad value
+exit 0

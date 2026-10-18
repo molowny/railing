@@ -1,0 +1,22 @@
+# confirm_yes · 80×60 · no colour
+# prompts::confirm defaulting to yes, submitted
+
+── active ──
+cursor 6:1 hidden
+┌  Setup
+│
+◆  Commit this?
+│  ● Yes  / ○ No
+└
+
+── end ──
+cursor 7:1 shown
+┌  Setup
+│
+◇  Commit this?
+│  Yes
+│
+└  ✔ Saved
+exit 0
+stdout:
+true

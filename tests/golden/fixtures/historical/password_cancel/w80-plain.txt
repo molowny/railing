@@ -1,0 +1,13 @@
+# password_cancel · 80×60 · no colour
+# HISTORICAL: prompts::password cancelled with Esc after typing
+
+── end ──
+cursor 6:1 shown
+┌  Setup
+│
+■  Master password
+│  ▪▪▪
+└  Operation cancelled.
+exit 130
+stdout:
+Err(cancelled)

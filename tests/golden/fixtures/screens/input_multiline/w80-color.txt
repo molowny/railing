@@ -1,0 +1,41 @@
+# input_multiline · 80×60 · colour
+# prompts::input_multiline: editing two lines, preview, submitted
+
+── active ──
+cursor 6:1 hidden
+⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦cyan⟧◆⟦⟧  Notes
+⟦cyan⟧│⟦⟧  ⟦inverse⟧ ⟦⟧
+⟦cyan⟧└⟦⟧  ⟦cyan⟧[Esc](Preview)⟦⟧
+
+── editing ──
+cursor 7:1 hidden
+⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦cyan⟧◆⟦⟧  Notes
+⟦cyan⟧│⟦⟧  line one
+⟦cyan⟧│⟦⟧  line two⟦inverse⟧ ⟦⟧
+⟦cyan⟧└⟦⟧  ⟦cyan⟧[Esc](Preview)⟦⟧
+
+── preview ──
+cursor 7:1 hidden
+⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦cyan⟧◆⟦⟧  Notes
+⟦cyan⟧│⟦⟧  line one
+⟦cyan⟧│⟦⟧  line two⟦inverse⟧ ⟦⟧
+⟦cyan⟧└⟦⟧  ⟦cyan⟧[Enter](Submit)⟦⟧
+
+── end ──
+cursor 8:1 shown
+⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦green⟧◇⟦⟧  Notes
+⟦bright-black⟧│⟦⟧  ⟦dim⟧line⟦⟧ ⟦dim⟧one⟦⟧
+⟦bright-black⟧│⟦⟧  ⟦dim⟧line⟦⟧ ⟦dim⟧two⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦bright-black⟧└⟦⟧  ⟦green⟧✔⟦⟧ ⟦green⟧Saved⟦⟧
+exit 0
+stdout:
+"line one\nline two"

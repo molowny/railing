@@ -1,0 +1,30 @@
+# password · 80×60 · no colour
+# HISTORICAL: prompts::password masks every key and keeps the mask once submitted
+
+── active ──
+cursor 6:1 hidden
+┌  Setup
+│
+◆  Master password
+│
+└
+
+── typed ──
+cursor 6:1 hidden
+┌  Setup
+│
+◆  Master password
+│  ▪▪▪▪▪▪▪
+└
+
+── end ──
+cursor 7:1 shown
+┌  Setup
+│
+◇  Master password
+│  ▪▪▪▪▪▪▪
+│
+└  ✔ Saved
+exit 0
+stdout:
+"hunter2"

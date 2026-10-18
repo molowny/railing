@@ -1,0 +1,27 @@
+# flow_table · 48×60 · no colour
+# a grid in its box (borderless, fitted), and a checks report
+
+── end ──
+cursor 22:1 shown
+┌  Inventory
+│
+◇  Items ──────────────────────────╮
+│                                  │
+│   3 items                        │
+│   NAME              KIND    SIZE │
+│   alpha             file   12 KB │
+│   bravo (two        dir        — │
+│   lines)                         │
+│   日本語のファイル  file  1.2 MB │
+│   styled            link     0 B │
+├──────────────────────────────────╯
+│
+◇  Doctor ──────────────────╮
+│                           │
+│   ✔  config   found       │
+│   ▲  cache    stale       │
+│   ✖  network  unreachable │
+├───────────────────────────╯
+│
+└  ✖ Checked
+exit 0

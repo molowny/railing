@@ -1,0 +1,25 @@
+# flow_lines · 80×60 · colour
+# every gutter line of a live group, one wrapped and one multi-line, closed ok
+
+── end ──
+cursor 20:1 shown
+⟦bright-black⟧┌⟦⟧  ⟦bold⟧Deploy⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦green⟧◇⟦⟧  Built 3 crates
+⟦bright-black⟧│⟦⟧
+⟦blue⟧●⟦⟧  Using profile release
+⟦bright-black⟧│⟦⟧
+⟦bright-black⟧├⟦⟧  ⟦c246⟧cached:⟦⟧ ⟦c246⟧12⟦⟧ ⟦c246⟧of⟦⟧ ⟦c246⟧14⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦yellow⟧▲⟦⟧  2 tests skipped
+⟦bright-black⟧│⟦⟧
+⟦red⟧■⟦⟧  lint failed in cli-kit
+⟦bright-black⟧│⟦⟧
+⟦green⟧◇⟦⟧  Resolved the dependency graph for every workspace member, including the
+⟦bright-black⟧│⟦⟧  optional features each app enables, in one pass
+⟦bright-black⟧│⟦⟧
+⟦blue⟧●⟦⟧  first line
+⟦bright-black⟧│⟦⟧  second line
+⟦bright-black⟧│⟦⟧
+⟦bright-black⟧└⟦⟧  ⟦green⟧✔⟦⟧ ⟦green⟧Deployed⟦⟧
+exit 0

@@ -1,0 +1,30 @@
+# input_optional_default · 80×60 · colour
+# prompts::input_optional_with_default: active, cleared, submitted
+
+── active ──
+cursor 6:1 hidden
+⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦cyan⟧◆⟦⟧  Description
+⟦cyan⟧│⟦⟧  ⟦inverse⟧k⟦dim⟧ept⟦⟧ ⟦dim⟧(default)⟦⟧
+⟦cyan⟧└⟦⟧
+
+── cleared ──
+cursor 6:1 hidden
+⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦cyan⟧◆⟦⟧  Description
+⟦cyan⟧│⟦⟧  ⟦inverse⟧k⟦dim⟧ept⟦⟧ ⟦dim⟧(default)⟦⟧
+⟦cyan⟧└⟦⟧
+
+── end ──
+cursor 7:1 shown
+⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦green⟧◇⟦⟧  Description
+⟦bright-black⟧│⟦⟧  ⟦dim⟧kept⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦bright-black⟧└⟦⟧  ⟦green⟧✔⟦⟧ ⟦green⟧Saved⟦⟧
+exit 0
+stdout:
+"kept"

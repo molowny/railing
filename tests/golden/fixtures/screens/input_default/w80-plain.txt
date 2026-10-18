@@ -1,0 +1,22 @@
+# input_default · 80×60 · no colour
+# prompts::input_with_default: active, submitted untouched
+
+── active ──
+cursor 6:1 hidden
+┌  Setup
+│
+◆  Branch
+│  main (default)
+└
+
+── end ──
+cursor 7:1 shown
+┌  Setup
+│
+◇  Branch
+│  main
+│
+└  ✔ Saved
+exit 0
+stdout:
+"main"

@@ -1,0 +1,11 @@
+# flow_fail · 80×60 · colour
+# a group closed by Flow::fail, the error then reaching main
+
+── end ──
+cursor 6:1 shown
+⟦bright-black⟧┌⟦⟧  ⟦bold⟧Upload⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦green⟧◇⟦⟧  Connected
+⟦bright-black⟧│⟦⟧
+⟦bright-black⟧└⟦⟧  ⟦red⟧✖⟦⟧ ⟦red⟧Upload⟦⟧ ⟦red⟧rejected:⟦⟧ ⟦red⟧quota⟦⟧ ⟦red⟧exceeded⟦⟧
+exit 1
