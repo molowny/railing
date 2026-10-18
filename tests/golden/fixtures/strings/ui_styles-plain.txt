@@ -1,0 +1,5 @@
+diff_added   +new-item
+diff_removed -old-item
+dim_hint     (press q to quit)
+warn_body    check the logs
+flow::bar    │

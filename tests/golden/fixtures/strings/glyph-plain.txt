@@ -1,0 +1,30 @@
+[Active]
+step    ◆
+bar     │
+corner  └
+tinted  text
+header  ◆  first
+│  second
+[Submit]
+step    ◇
+bar     │
+corner  └
+tinted  text
+header  ◇  first
+│  second
+[Error]
+step    ▲
+bar     │
+corner  └
+tinted  text
+header  ▲  first
+│  second
+[Cancel]
+step    ■
+bar     │
+corner  └
+tinted  text
+header  ■  first
+│  second
+[dim]
+muted
