@@ -30,9 +30,13 @@
 
 #[cfg(unix)]
 mod keys;
+#[cfg(unix)]
+mod raw;
 
 #[cfg(unix)]
 pub use keys::{ESC_WAIT, Event, Key};
+#[cfg(unix)]
+pub use raw::Raw;
 
 /// Whether this platform has interactive terminals (`Tty`, raw mode, keys).
 pub const SUPPORTED: bool = cfg!(unix);
