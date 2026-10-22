@@ -32,6 +32,8 @@
 mod keys;
 #[cfg(unix)]
 mod raw;
+#[cfg(unix)]
+pub mod signals;
 
 #[cfg(unix)]
 pub use keys::{ESC_WAIT, Event, Key};
