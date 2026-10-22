@@ -1,10 +1,14 @@
 //! Reusable CLI helpers. The `full` feature (default) is the whole kit; off,
-//! only the slim core is built: [`glyph`] (the flow's marks and tones) and
-//! [`spin`] (the spinner and its glow), as plain strings over `console`, for
-//! a process that draws on a terminal of its own choosing.
+//! only the core is built, over libc, unicode-width and zeroize: [`style`]
+//! (colour per terminal, widths), [`term`] (a named terminal, raw mode,
+//! keys, signals), [`glyph`] (the flow's marks and tones) and [`spin`] (the
+//! spinner and its glow), for a process that draws on a terminal of its own
+//! choosing.
 
 pub mod glyph;
 pub mod spin;
+pub mod style;
+pub mod term;
 
 #[cfg(feature = "full")]
 pub mod args;
@@ -44,6 +48,7 @@ pub mod tui;
 
 #[cfg(feature = "full")]
 pub use comfy_table::Table;
+#[cfg(feature = "full")]
 pub use console::style;
 #[cfg(feature = "full")]
 pub use error::CliError;
