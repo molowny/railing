@@ -11,16 +11,16 @@
 //! The shape is a [`SpinnerStyle`], one for the whole program
 //! ([`set_spinner_style`]); each spinner takes it when it starts.
 //!
-//! [`Spin`] only makes strings: an app that draws on a terminal of its own
-//! (not stderr) animates one itself, redrawing [`Spin::line`] every
-//! [`PACE`]. It is in the slim core, so that needs no `full` feature.
+//! [`Spin`] only makes strings, coloured for the [`Caps`] it is given: an
+//! app that draws on a terminal of its own (not stderr) animates one itself,
+//! redrawing [`Spin::line`] every [`PACE`]. It is in the slim core, so that
+//! needs no `full` feature.
 
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::time::{Duration, Instant};
 
-use console::style;
-
 use crate::glyph::DIM_256;
+use crate::style::{self, Caps, Style};
 
 /// What the spinner pulses through. Every style is a ping-pong from a dot to
 /// a solid shape and back, one column wide.
@@ -151,11 +151,11 @@ impl Spin {
 
     /// The pulsing shape, in cli-kit's colour for what is in progress: the
     /// cyan of the open `◆`, the active frame and the picker's cursor.
-    pub fn symbol(&self) -> String {
+    pub fn symbol(&self, caps: Caps) -> String {
         let all = self.style.frames();
         let frames = if self.no_dot { &all[1..] } else { all };
         let symbol = frames[self.frame() % frames.len()];
-        style(symbol).cyan().for_stderr().to_string()
+        Style::new().cyan().paint(caps, symbol)
     }
 
     /// `text` with the glow at this frame: the letters under it brighten
@@ -163,7 +163,7 @@ impl Spin {
     /// tone ([`DIM_256`]). It walks one column a frame, then rests past the
     /// end for [`GLOW_REST`] frames. Only colour changes, never the text, so
     /// the line never moves.
-    pub fn glow(&self, text: &str) -> String {
+    pub fn glow(&self, caps: Caps, text: &str) -> String {
         let n = text.chars().count();
         let head = (self.frame() % (n + GLOW_REST)) as isize;
         text.chars()
@@ -175,15 +175,15 @@ impl Spin {
                     2 => 249,
                     _ => DIM_256,
                 };
-                style(c).color256(shade).for_stderr().to_string()
+                Style::new().color256(shade).paint(caps, c)
             })
             .collect()
     }
 
     /// `◆  text`, glowing, cut to `cols` so it never wraps.
-    pub fn line(&self, text: &str, cols: usize) -> String {
-        let text = console::truncate_str(text, cols.saturating_sub(4), "…");
-        format!("{}  {}", self.symbol(), self.glow(&text))
+    pub fn line(&self, caps: Caps, text: &str, cols: usize) -> String {
+        let text = style::truncate(text, cols.saturating_sub(4), "…");
+        format!("{}  {}", self.symbol(caps), self.glow(caps, &text))
     }
 }
 
@@ -193,7 +193,7 @@ impl Default for Spin {
     }
 }
 
-#[cfg(all(test, feature = "full"))]
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -207,18 +207,13 @@ mod tests {
 
     #[test]
     fn the_glow_brightens_a_moving_band_and_never_changes_the_text() {
-        let _g = crate::ui::tests::lock();
-        console::set_colors_enabled_stderr(true);
+        let c = Caps::COLOR;
         let msg = "Loading items";
         for t in 0..40 {
-            assert_eq!(
-                console::strip_ansi_codes(&at(t).glow(msg)),
-                msg,
-                "frame {t}"
-            );
+            assert_eq!(style::strip(&at(t).glow(c, msg)), msg, "frame {t}");
         }
         // Frame 3: the brightest letter is the fourth.
-        let lit = at(3).glow(msg);
+        let lit = at(3).glow(c, msg);
         let cells: Vec<&str> = lit.split("\x1b[0m").filter(|c| !c.is_empty()).collect();
         assert!(cells[3].contains("38;5;255"), "{cells:?}");
         assert!(
@@ -227,31 +222,27 @@ mod tests {
         );
         assert!(cells[0].contains(&format!("38;5;{DIM_256}")), "{cells:?}");
         // Past the end the glow rests: every letter is the muted tone.
-        let rest = at(msg.len() + 4).glow(msg);
+        let rest = at(msg.len() + 4).glow(c, msg);
         assert!(
             !rest.contains("38;5;255") && !rest.contains("38;5;249"),
             "{rest:?}"
         );
-        console::set_colors_enabled_stderr(false);
     }
 
     #[test]
     fn the_diamond_pulses_and_the_line_never_wraps() {
-        let _g = crate::ui::tests::lock();
-        console::set_colors_enabled_stderr(false);
-        assert_eq!(at(0).line("Fetching", 80), "·  Fetching");
-        assert_eq!(at(2).line("Fetching", 80), "◇  Fetching");
-        assert_eq!(at(4).line("Fetching", 80), "◆  Fetching");
-        assert_eq!(at(5).line("Fetching", 80), "◈  Fetching");
-        assert_eq!(at(8).line("Fetching", 80), "·  Fetching");
-        let long = at(1).line(&"x".repeat(200), 40);
-        assert!(console::measure_text_width(&long) <= 40, "{long}");
+        let p = Caps::PLAIN;
+        assert_eq!(at(0).line(p, "Fetching", 80), "·  Fetching");
+        assert_eq!(at(2).line(p, "Fetching", 80), "◇  Fetching");
+        assert_eq!(at(4).line(p, "Fetching", 80), "◆  Fetching");
+        assert_eq!(at(5).line(p, "Fetching", 80), "◈  Fetching");
+        assert_eq!(at(8).line(p, "Fetching", 80), "·  Fetching");
+        let long = at(1).line(p, &"x".repeat(200), 40);
+        assert!(style::measure(&long) <= 40, "{long}");
     }
 
     #[test]
     fn every_style_pulses_from_the_dot_and_parses_by_name() {
-        let _g = crate::ui::tests::lock();
-        console::set_colors_enabled_stderr(false);
         for style in SpinnerStyle::ALL {
             let frames = style.frames();
             assert_eq!(frames[0], "·", "{style:?}");
@@ -261,17 +252,14 @@ mod tests {
                 n % 2 == 0 && (1..n / 2).all(|i| frames[i] == frames[n - i]),
                 "{style:?}"
             );
-            assert!(
-                frames.iter().all(|f| console::measure_text_width(f) == 1),
-                "{style:?}"
-            );
+            assert!(frames.iter().all(|f| style::measure(f) == 1), "{style:?}");
             assert_eq!(style.name().parse::<SpinnerStyle>(), Ok(style));
             let peak = Spin {
                 fixed: Some(n / 2),
                 style,
                 ..Spin::new()
             };
-            assert_eq!(peak.symbol(), frames[n / 2]);
+            assert_eq!(peak.symbol(Caps::PLAIN), frames[n / 2]);
         }
         assert_eq!(" Square ".parse(), Ok(SpinnerStyle::Square));
         assert!("swirl".parse::<SpinnerStyle>().is_err());
@@ -279,7 +267,6 @@ mod tests {
 
     #[test]
     fn the_program_style_is_what_new_spinners_take() {
-        let _g = crate::ui::tests::lock();
         let before = spinner_style();
         assert_eq!(before, SpinnerStyle::Diamond, "the default");
         set_spinner_style(SpinnerStyle::Circle);
@@ -290,14 +277,12 @@ mod tests {
 
     #[test]
     fn without_the_dot_it_never_shows_one() {
-        let _g = crate::ui::tests::lock();
-        console::set_colors_enabled_stderr(false);
         for t in 0..30 {
             let s = Spin {
                 fixed: Some(t),
                 ..Spin::new().without_dot()
             };
-            assert_ne!(s.symbol(), "·");
+            assert_ne!(s.symbol(Caps::PLAIN), "·");
         }
     }
 

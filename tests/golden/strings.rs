@@ -2,6 +2,7 @@
 //! exactly what was emitted, not what a terminal made of it.
 
 use cli_kit::glyph::{self, State};
+use cli_kit::style::Caps;
 use cli_kit::{CliError, Grid, Tone, style, ui};
 
 pub fn all() -> Vec<(String, Result<String, String>)> {
@@ -9,7 +10,7 @@ pub fn all() -> Vec<(String, Result<String, String>)> {
     for color in [true, false] {
         let variant = if color { "color" } else { "plain" };
         colors(color);
-        out.push((format!("strings/glyph-{variant}.txt"), Ok(glyphs())));
+        out.push((format!("strings/glyph-{variant}.txt"), Ok(glyphs(color))));
         out.push((
             format!("strings/grid_plain-{variant}.txt"),
             Ok(grid_plain()),
@@ -30,20 +31,25 @@ fn visible(s: &str) -> String {
     s.replace('\x1b', "\\e")
 }
 
-fn glyphs() -> String {
+fn glyphs(color: bool) -> String {
+    // The caps a terminal that takes colour (or not) would have.
+    let caps = Caps {
+        color,
+        redraw: true,
+    };
     let mut out = String::new();
     for state in [State::Active, State::Submit, State::Error, State::Cancel] {
         out += &format!("[{state:?}]\n");
-        out += &format!("step    {}\n", visible(&glyph::step(state)));
-        out += &format!("bar     {}\n", visible(&glyph::bar(state)));
-        out += &format!("corner  {}\n", visible(&glyph::corner(state)));
-        out += &format!("tinted  {}\n", visible(&glyph::tinted(state, "text")));
+        out += &format!("step    {}\n", visible(&glyph::step(caps, state)));
+        out += &format!("bar     {}\n", visible(&glyph::bar(caps, state)));
+        out += &format!("corner  {}\n", visible(&glyph::corner(caps, state)));
+        out += &format!("tinted  {}\n", visible(&glyph::tinted(caps, state, "text")));
         out += &format!(
             "header  {}",
-            visible(&glyph::header(state, "first\nsecond"))
+            visible(&glyph::header(caps, state, "first\nsecond"))
         );
     }
-    out += &format!("[dim]\n{}\n", visible(&glyph::dim("muted")));
+    out += &format!("[dim]\n{}\n", visible(&glyph::dim(caps, "muted")));
     out
 }
 

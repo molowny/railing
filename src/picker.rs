@@ -260,16 +260,16 @@ impl<'a> List<'a> {
             // Chosen: the prompt and its answer, as a submitted clack prompt.
             Step::Submit(i) => {
                 let state = State::Submit;
-                let bar = glyph::bar(state);
+                let bar = glyph::bar(crate::ui::stderr_caps(), state);
                 let label = cut(self.rows[*i].0, width.saturating_sub(4));
-                return glyph::header(state, self.prompt)
+                return glyph::header(crate::ui::stderr_caps(), state, self.prompt)
                     + &format!("{bar}  {}\n", style(label).dim().for_stderr())
                     + &format!("{bar}\n");
             }
             // Chosen: the prompt and what was checked, on one line.
             Step::Chosen(rows) => {
                 let state = State::Submit;
-                let bar = glyph::bar(state);
+                let bar = glyph::bar(crate::ui::stderr_caps(), state);
                 let labels = if rows.is_empty() {
                     "none".to_string()
                 } else {
@@ -279,15 +279,19 @@ impl<'a> List<'a> {
                         .join(", ")
                 };
                 let labels = cut(&labels, width.saturating_sub(4));
-                return glyph::header(state, self.prompt)
+                return glyph::header(crate::ui::stderr_caps(), state, self.prompt)
                     + &format!("{bar}  {}\n", style(labels).dim().for_stderr())
                     + &format!("{bar}\n");
             }
             Step::Cancel => {
-                return glyph::header(State::Cancel, self.prompt)
+                return glyph::header(crate::ui::stderr_caps(), State::Cancel, self.prompt)
                     + &format!(
                         "{}\n",
-                        glyph::tinted(State::Cancel, "└  Operation cancelled.")
+                        glyph::tinted(
+                            crate::ui::stderr_caps(),
+                            State::Cancel,
+                            "└  Operation cancelled."
+                        )
                     );
             }
             Step::Active => {}

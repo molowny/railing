@@ -207,7 +207,7 @@ impl Wait {
             let icon = if frozen {
                 dim("·")
             } else {
-                self.spin.symbol()
+                self.spin.symbol(crate::ui::stderr_caps())
             };
             vec![(icon, view.status.clone())]
         } else {
@@ -217,7 +217,7 @@ impl Wait {
                     let icon = match mark {
                         Mark::Done => style("✓").green().to_string(),
                         Mark::Active if frozen => dim("·"),
-                        Mark::Active => self.spin.symbol(),
+                        Mark::Active => self.spin.symbol(crate::ui::stderr_caps()),
                         Mark::Pending => dim("·"),
                         Mark::Failed => style("✖").red().to_string(),
                     };
@@ -248,7 +248,7 @@ impl Wait {
             // What is in progress glows, as every spinner's message does.
             let text = match mark {
                 Mark::Pending => dim(&text),
-                Mark::Active if !frozen => self.spin.glow(&text),
+                Mark::Active if !frozen => self.spin.glow(crate::ui::stderr_caps(), &text),
                 _ => text,
             };
             out += &frame.line(&format!("{icon} {text}"));

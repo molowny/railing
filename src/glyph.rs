@@ -14,10 +14,10 @@
 //! (`grid::Clack`); a test holds the two together. The marks are always
 //! these Unicode ones: cliclack swaps in ASCII (`o`, `*`) when the locale
 //! is not UTF-8, which would mix with the box rules (`─╮│`) that never do.
-//! Like the rest of cli-kit, colour follows `console`'s stderr flag
-//! (`console::set_colors_enabled_stderr`).
+//! Every function takes the [`Caps`] of the terminal it draws for, so the
+//! marks are coloured for that terminal and no other.
 
-use console::{Style, style};
+use crate::style::{Caps, Style};
 
 /// 256-colour index of dim text, everywhere cli-kit draws it: CLI output,
 /// flows, grids, the spinner's glow, and the TUI's `theme::FG_DIM`.
@@ -42,57 +42,60 @@ pub enum State {
 }
 
 impl State {
-    fn bar_style(self) -> Style {
+    const fn bar_style(self) -> Style {
         match self {
             Self::Active => Style::new().cyan(),
             Self::Cancel => Style::new().red(),
             Self::Submit => Style::new().bright().black(),
             Self::Error => Style::new().yellow(),
         }
-        .for_stderr()
     }
 }
 
 /// The step's mark: `◆` `◇` `▲` `■`, coloured.
-pub fn step(state: State) -> String {
+pub fn step(caps: Caps, state: State) -> String {
     let (mark, color) = match state {
         State::Active => ("◆", state.bar_style()),
-        State::Submit => ("◇", Style::new().green().for_stderr()),
+        State::Submit => ("◇", Style::new().green()),
         State::Error => ("▲", state.bar_style()),
         State::Cancel => ("■", state.bar_style()),
     };
-    color.apply_to(mark).to_string()
+    color.paint(caps, mark)
 }
 
 /// The gutter's `│`, in the step's colour.
-pub fn bar(state: State) -> String {
-    state.bar_style().apply_to("│").to_string()
+pub fn bar(caps: Caps, state: State) -> String {
+    state.bar_style().paint(caps, "│")
 }
 
 /// The `└` that closes an open step, in its colour.
-pub fn corner(state: State) -> String {
-    state.bar_style().apply_to("└").to_string()
+pub fn corner(caps: Caps, state: State) -> String {
+    state.bar_style().paint(caps, "└")
 }
 
 /// `text` in the step's colour: an error's message beside its `└`.
-pub fn tinted(state: State, text: &str) -> String {
-    state.bar_style().apply_to(text).to_string()
+pub fn tinted(caps: Caps, state: State, text: &str) -> String {
+    state.bar_style().paint(caps, text)
 }
 
 /// A prompt's header, as clack draws it: `◆  first line`, then `│  line`
 /// for each line after it.
-pub fn header(state: State, prompt: &str) -> String {
+pub fn header(caps: Caps, state: State, prompt: &str) -> String {
     let mut out = String::new();
     for (i, line) in prompt.lines().enumerate() {
-        let mark = if i == 0 { step(state) } else { bar(state) };
+        let mark = if i == 0 {
+            step(caps, state)
+        } else {
+            bar(caps, state)
+        };
         out += &format!("{mark}  {line}\n");
     }
     out
 }
 
 /// `text` in the muted tone ([`DIM_256`]).
-pub fn dim(text: &str) -> String {
-    style(text).color256(DIM_256).for_stderr().to_string()
+pub fn dim(caps: Caps, text: &str) -> String {
+    Style::new().color256(DIM_256).paint(caps, text)
 }
 
 #[cfg(all(test, feature = "full"))]
@@ -112,6 +115,7 @@ mod tests {
         console::set_colors_enabled(true);
         console::set_colors_enabled_stderr(true);
         let theme = crate::grid::Clack;
+        let caps = Caps::COLOR;
         for (ours, theirs, mark) in [
             (State::Active, ThemeState::Active, "◆"),
             (State::Submit, ThemeState::Submit, "◇"),
@@ -119,12 +123,12 @@ mod tests {
             (State::Cancel, ThemeState::Cancel, "■"),
         ] {
             assert_eq!(
-                step(ours),
+                step(caps, ours),
                 theme.state_symbol_color(&theirs).apply_to(mark).to_string(),
                 "{ours:?}"
             );
             assert_eq!(
-                bar(ours),
+                bar(caps, ours),
                 theme.bar_color(&theirs).apply_to("│").to_string(),
                 "{ours:?}"
             );

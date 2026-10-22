@@ -309,6 +309,8 @@ pub struct Flow {
 impl Flow {
     /// Start a command's flow. `live` is the app's policy decision.
     pub fn begin(title: &str, live: bool) -> Self {
+        // Off Unix there is no terminal layer to draw a live frame with.
+        let live = live && crate::term::SUPPORTED;
         if live {
             begin(title);
         }
@@ -382,10 +384,11 @@ impl Flow {
 
     /// Whether the command may ask (a picker, an input, a confirm): the frame
     /// is drawn, so the prompt has a gutter and nobody is capturing it, and
-    /// stdin is a terminal, so the prompt cannot hang a script. A command that
+    /// stdin is a terminal, so the prompt cannot hang a script (and the
+    /// platform has interactive terminals at all). A command that
     /// cannot ask fails instead, naming what it needed ([`CliError::needs`]).
     pub fn can_ask(&self) -> bool {
-        self.live && std::io::IsTerminal::is_terminal(&std::io::stdin())
+        crate::term::SUPPORTED && self.live && std::io::IsTerminal::is_terminal(&std::io::stdin())
     }
 
     /// A table in its own titled box (live) or the bordered table on stdout

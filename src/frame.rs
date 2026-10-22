@@ -58,7 +58,7 @@ impl Frame {
     }
 
     fn paint(&self, s: &str) -> String {
-        glyph::tinted(self.state, s)
+        glyph::tinted(crate::ui::stderr_caps(), self.state, s)
     }
 
     /// `◆  title ▸ /query ─── status ─╮`. A filter being typed shows its
@@ -98,7 +98,7 @@ impl Frame {
                 search(&format!("[/]{}", cut(query, room.saturating_sub(6))))
             ),
         };
-        let symbol = glyph::step(self.state);
+        let symbol = glyph::step(crate::ui::stderr_caps(), self.state);
         let title = style(title).bold().for_stderr();
         if status.is_empty() {
             // `◇  title ─────╮`: the rule runs to the corner.
@@ -181,7 +181,10 @@ impl Frame {
     }
 }
 
-pub(crate) use crate::glyph::dim;
+/// `text` in the muted tone, for stderr.
+pub(crate) fn dim(text: &str) -> String {
+    glyph::dim(crate::ui::stderr_caps(), text)
+}
 
 /// The search colour (`tui::theme::SEARCH`), bold.
 fn search(s: &str) -> String {

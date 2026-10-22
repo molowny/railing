@@ -61,7 +61,10 @@ impl Spinner {
                 while !state.done.load(Ordering::SeqCst) {
                     let msg = state.msg.lock().map(|m| m.clone()).unwrap_or_default();
                     let cols = usize::from(term.size().1);
-                    let _ = term.write_str(&format!("\r\x1b[2K{}", spin.line(&msg, cols)));
+                    let _ = term.write_str(&format!(
+                        "\r\x1b[2K{}",
+                        spin.line(stderr_caps(), &msg, cols)
+                    ));
                     std::thread::sleep(crate::spin::PACE);
                 }
                 let _ = term.write_str("\r\x1b[2K");
@@ -84,8 +87,8 @@ impl Spinner {
         self.halt();
         let _ = console::Term::stderr().write_str(&format!(
             "{}  {msg}\n{}\n",
-            glyph::step(State::Submit),
-            glyph::bar(State::Submit)
+            glyph::step(stderr_caps(), State::Submit),
+            glyph::bar(stderr_caps(), State::Submit)
         ));
     }
 
@@ -338,6 +341,16 @@ pub fn init_colors() {
 // stderr-color global, which `init_colors` configures correctly at startup.
 
 pub use crate::glyph::DIM_256;
+
+/// The caps the full kit draws on stderr with, until it holds a
+/// [`crate::term::Tty`] of its own (core refactor M5): colour as
+/// `console`'s stderr flag decides ([`init_colors`]), cursor movement on.
+pub(crate) fn stderr_caps() -> crate::style::Caps {
+    crate::style::Caps {
+        color: console::colors_enabled_stderr(),
+        redraw: true,
+    }
+}
 
 /// Style for dim text: [`DIM_256`]. Add `.for_stderr()` for stderr-bound
 /// output, so colour follows that stream's flag.
