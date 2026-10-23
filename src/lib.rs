@@ -6,6 +6,7 @@
 //! choosing.
 
 pub mod glyph;
+pub mod render;
 pub mod spin;
 pub mod style;
 pub mod term;
