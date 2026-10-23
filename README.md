@@ -33,8 +33,10 @@ cli-kit = { version = "0.1", features = ["tui"] }
 | `prompts` | Text input, password, confirmation, select, and the filtered picker (`pick`), with automatic cancellation handling |
 | `fuzzy` | `Fuzzy`: the `nucleo-matcher` scorer shared by the picker and the TUIs |
 | `ui` | Colored alerts, spinners, intro/outro banners |
-| `glyph` | The flow's marks (`◆ ◇ ▲ ■`, `│`, `└`) and the muted tone as plain strings, for an app drawing the flow's look on a terminal of its own (slim core) |
-| `spin` | `Spin`: the pulsing shape and the glow as strings at a steady `PACE` — what `ui::Spinner` and `Wait` animate, and what an app on its own terminal animates itself (slim core) |
+| `style` | `Style` painted against a terminal's `Caps` (no global colour flag), `TermEnv`, and escape-aware `measure`/`strip`/`truncate`/`pad` (core) |
+| `term` | `Tty`: a terminal named by path, fd or `Tty::stderr()`, its caps and size; `Raw` (hardened raw mode, the key reader); `signals` that wake a read instead of killing a raw terminal. Unix; a stub elsewhere (core) |
+| `glyph` | The flow's marks (`◆ ◇ ▲ ■`, `│`, `└`) and the muted tone as strings for given `Caps`, for an app drawing the flow's look on a terminal of its own (core) |
+| `spin` | `Spin`: the pulsing shape and the glow as strings at a steady `PACE` — what `ui::Spinner` and `Wait` animate, and what an app on its own terminal animates itself (core) |
 
 ### Optional
 
@@ -46,15 +48,17 @@ cli-kit = { version = "0.1", features = ["tui"] }
 
 | Flag | Enables | Extra dependencies |
 |------|---------|-------------------|
-| `full` (default) | Everything but the slim core: flows, prompts, output, errors, logging, completion | `cliclack`, `clap`, `comfy-table`, `tracing`, `serde`, … |
-| `tui` | TUI components and layout system | `ratatui`, `crossterm`, `unicode-width` |
+| `full` (default) | Everything but the core: flows, prompts, output, errors, logging, completion | `cliclack`, `clap`, `comfy-table`, `console`, `tracing`, `serde`, … |
+| `tui` | TUI components and layout system | `ratatui`, `crossterm` |
 
-Without `full` (`default-features = false`) cli-kit is only its slim core,
-`glyph` and `spin`, over `console`: the flow's look as strings, for a process
-that draws on a terminal it did not inherit and must keep its dependency tree
-small — `sealward-askpass` draws the unlock prompt as a step of the client's
-flow this way. Colour follows `console`'s stderr flag, as everywhere in
-cli-kit; such an app sets it for the terminal it draws on.
+Without `full` (`default-features = false`) cli-kit is only its core, `style`,
+`term`, `glyph` and `spin`, over libc, unicode-width and zeroize: a terminal
+the caller names, raw mode and keys, and the flow's look as strings, for a
+process that draws on a terminal it did not inherit and must keep its
+dependency tree small. `sealward-askpass` reads the unlock prompt's keys and
+draws it as a step of the client's flow this way. Colour is decided per
+terminal (`Caps`); the full kit still follows `console`'s stderr flag until
+it moves onto `term` too ([docs/core-refactor.md](docs/core-refactor.md)).
 
 ## Examples
 
