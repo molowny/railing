@@ -29,12 +29,16 @@
 //! ([`SUPPORTED`] is false), and asking interactively is a usage error.
 
 #[cfg(unix)]
+mod alt;
+#[cfg(unix)]
 mod keys;
 #[cfg(unix)]
 mod raw;
 #[cfg(unix)]
 pub mod signals;
 
+#[cfg(unix)]
+pub use alt::AltScreen;
 #[cfg(unix)]
 pub use keys::{ESC_WAIT, Event, Key};
 #[cfg(unix)]
@@ -51,7 +55,7 @@ pub struct Size {
 }
 
 #[cfg(unix)]
-pub use unix::Tty;
+pub use unix::{Tty, Writer};
 
 #[cfg(unix)]
 mod unix {
@@ -61,7 +65,7 @@ mod unix {
     use std::os::unix::fs::OpenOptionsExt;
     use std::path::Path;
 
-    use super::{Raw, Size};
+    use super::{AltScreen, Raw, Size};
     use crate::style::{Caps, TermEnv};
 
     /// A terminal to draw on and read from, and what it can do.
@@ -137,6 +141,11 @@ mod unix {
         /// process.
         pub fn raw(&self) -> io::Result<Raw> {
             Raw::new(self.file.as_fd())
+        }
+
+        /// The alternate screen, entered now; see [`AltScreen`].
+        pub fn alt_screen(&self) -> io::Result<AltScreen> {
+            AltScreen::enter(self.writer()?)
         }
 
         /// A second handle that only writes, for another thread (a spinner)
