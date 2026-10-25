@@ -193,6 +193,87 @@ impl Default for Spin {
     }
 }
 
+/// A [`Spin`] animated on a thread of its own, drawing through `out` every
+/// [`PACE`] until [`Animation::stop`] (or drop), which joins it, so nothing
+/// it draws can land after whatever the caller writes next.
+///
+/// `out` is the thread's own handle (`term::Tty::writer`): while it runs it
+/// is the terminal's only writer, which is the caller's to keep.
+pub struct Animation {
+    stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+impl Animation {
+    /// Run `paint` every frame, then `end` once, on a thread.
+    pub fn start<W, P, E>(mut out: W, mut paint: P, end: E) -> Animation
+    where
+        W: std::io::Write + Send + 'static,
+        P: FnMut(&mut W, &Spin) + Send + 'static,
+        E: FnOnce(&mut W) + Send + 'static,
+    {
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let stopping = std::sync::Arc::clone(&stop);
+        let thread = std::thread::spawn(move || {
+            let spin = Spin::new();
+            while !stopping.load(Ordering::Relaxed) {
+                paint(&mut out, &spin);
+                std::thread::sleep(PACE);
+            }
+            end(&mut out);
+        });
+        Animation {
+            stop,
+            thread: Some(thread),
+        }
+    }
+
+    /// `◆  msg`, glowing, on the line the cursor is on (the one under a
+    /// step), cut to `cols`; the cursor hidden meanwhile. Stopped, the line
+    /// is cleared and the cursor shown.
+    pub fn line<W>(out: W, caps: Caps, msg: &str, cols: usize) -> Animation
+    where
+        W: std::io::Write + Send + 'static,
+    {
+        let msg = msg.to_string();
+        let mut first = true;
+        Animation::start(
+            out,
+            move |w, spin| {
+                let hide = if std::mem::take(&mut first) {
+                    "\x1b[?25l"
+                } else {
+                    ""
+                };
+                let _ = write!(w, "{hide}\r\x1b[2K{}", spin.line(caps, &msg, cols));
+                let _ = w.flush();
+            },
+            |w| {
+                let _ = write!(w, "\r\x1b[2K\x1b[?25h");
+                let _ = w.flush();
+            },
+        )
+    }
+
+    /// Stop it and wait for its last draw.
+    pub fn stop(mut self) {
+        self.halt();
+    }
+
+    fn halt(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(t) = self.thread.take() {
+            let _ = t.join();
+        }
+    }
+}
+
+impl Drop for Animation {
+    fn drop(&mut self) {
+        self.halt();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -284,6 +365,35 @@ mod tests {
             };
             assert_ne!(s.symbol(Caps::PLAIN), "·");
         }
+    }
+
+    #[test]
+    fn an_animated_line_hides_the_cursor_and_clears_itself_when_stopped() {
+        use std::sync::{Arc, Mutex};
+        #[derive(Clone)]
+        struct Sink(Arc<Mutex<Vec<u8>>>);
+        impl std::io::Write for Sink {
+            fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+                self.0.lock().unwrap().extend_from_slice(b);
+                Ok(b.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let sink = Sink(Arc::default());
+        let a = Animation::line(sink.clone(), Caps::PLAIN, "Working", 40);
+        std::thread::sleep(PACE * 3);
+        a.stop();
+        let out = String::from_utf8(sink.0.lock().unwrap().clone()).unwrap();
+        assert!(out.starts_with("\x1b[?25l\r\x1b[2K"), "{out:?}");
+        assert_eq!(out.matches("\x1b[?25l").count(), 1, "{out:?}");
+        assert!(out.contains("Working"), "{out:?}");
+        assert!(out.ends_with("\r\x1b[2K\x1b[?25h"), "{out:?}");
+        // Joined: nothing is drawn after stop returns.
+        let len = sink.0.lock().unwrap().len();
+        std::thread::sleep(PACE * 2);
+        assert_eq!(sink.0.lock().unwrap().len(), len);
     }
 
     #[test]
