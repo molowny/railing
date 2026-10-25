@@ -31,6 +31,8 @@
 #[cfg(unix)]
 mod alt;
 #[cfg(unix)]
+mod cooked;
+#[cfg(unix)]
 mod keys;
 #[cfg(unix)]
 mod raw;
@@ -39,6 +41,8 @@ pub mod signals;
 
 #[cfg(unix)]
 pub use alt::AltScreen;
+#[cfg(unix)]
+pub use cooked::Line;
 #[cfg(unix)]
 pub use keys::{ESC_WAIT, Event, Key};
 #[cfg(unix)]
@@ -72,6 +76,9 @@ mod unix {
     #[derive(Debug)]
     pub struct Tty {
         file: File,
+        /// Where keys are read when it is not `file`: stdin, for a command
+        /// drawing on its stderr (see [`Tty::stderr`]).
+        input: Option<File>,
         caps: Caps,
     }
 
@@ -97,14 +104,31 @@ mod unix {
 
         /// The terminal this command inherited on stderr, with caps from
         /// this process's environment: the one named way to it.
+        ///
+        /// It is drawn on through stderr. Keys are read from stdin when stdin
+        /// is that same terminal (stderr may be open for writing only, as a
+        /// shell's `2>/dev/tty` leaves it), and from stderr otherwise.
         pub fn stderr() -> io::Result<Tty> {
             let fd = io::stderr().as_fd().try_clone_to_owned()?;
-            Ok(Self::from_fd(fd, &TermEnv::of_process()))
+            let mut tty = Self::from_fd(fd, &TermEnv::of_process());
+            let stdin = io::stdin();
+            if same_terminal(stdin.as_fd(), tty.file.as_fd()) {
+                tty.input = Some(File::from(stdin.as_fd().try_clone_to_owned()?));
+            }
+            Ok(tty)
         }
 
         fn from_file(file: File, env: &TermEnv) -> Tty {
             let caps = Caps::detect(is_terminal(file.as_fd()), env);
-            Tty { file, caps }
+            Tty {
+                file,
+                input: None,
+                caps,
+            }
+        }
+
+        fn input_fd(&self) -> BorrowedFd<'_> {
+            self.input.as_ref().unwrap_or(&self.file).as_fd()
         }
 
         /// What this terminal can be asked to do.
@@ -140,7 +164,15 @@ mod unix {
         /// Raw mode and the key reader: see [`Raw`]. One at a time per
         /// process.
         pub fn raw(&self) -> io::Result<Raw> {
-            Raw::new(self.file.as_fd())
+            Raw::new(self.input_fd())
+        }
+
+        /// One line in the terminal's own line mode, for a terminal that
+        /// cannot be redrawn: the driver edits (Backspace, Ctrl-U) and echoes
+        /// (unless `echo` is off, for a secret). Signal keys are characters
+        /// here too: a Ctrl-C (or Esc) in the line cancels it.
+        pub fn read_line(&self, echo: bool) -> io::Result<super::Line> {
+            super::cooked::read_line(self.input_fd(), echo)
         }
 
         /// The alternate screen, entered now; see [`AltScreen`].
@@ -184,6 +216,18 @@ mod unix {
         fn flush(&mut self) -> io::Result<()> {
             self.0.flush()
         }
+    }
+
+    /// Whether two descriptors are the same terminal device.
+    fn same_terminal(a: BorrowedFd<'_>, b: BorrowedFd<'_>) -> bool {
+        let dev = |fd: BorrowedFd<'_>| {
+            // SAFETY: a zeroed stat is filled in by fstat.
+            let mut st: libc::stat = unsafe { std::mem::zeroed() };
+            // SAFETY: a valid fd and an out-pointer.
+            (is_terminal(fd) && unsafe { libc::fstat(fd.as_raw_fd(), &mut st) } == 0)
+                .then_some(st.st_rdev)
+        };
+        dev(a).is_some_and(|d| Some(d) == dev(b))
     }
 
     fn is_terminal(fd: BorrowedFd<'_>) -> bool {
