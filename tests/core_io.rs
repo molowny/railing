@@ -32,12 +32,14 @@ const ALLOWED: &[(&str, &str, &str)] = &[
 
 fn core_files() -> Vec<PathBuf> {
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    let mut files: Vec<PathBuf> = ["style.rs", "glyph.rs", "spin.rs"]
+    let mut files: Vec<PathBuf> = ["style.rs", "glyph.rs", "spin.rs", "render.rs", "step.rs"]
         .iter()
         .map(|f| src.join(f))
         .collect();
-    for entry in std::fs::read_dir(src.join("term")).unwrap() {
-        files.push(entry.unwrap().path());
+    for dir in ["term", "prompt"] {
+        for entry in std::fs::read_dir(src.join(dir)).unwrap() {
+            files.push(entry.unwrap().path());
+        }
     }
     files
 }

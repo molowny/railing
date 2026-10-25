@@ -356,6 +356,33 @@ static SCENES: &[Scene] = &[
         },
         script: &[],
     },
+    // ── The core's blocks ──────────────────────────────────────────────
+    Scene {
+        name: "region",
+        about: "blocks replaced in place and erased on Tty::stderr(): the line above survives",
+        widths: WIDE,
+        historical: false,
+        run: || {
+            use cli_kit::render::{Block, Park, Region};
+            use std::io::Write as _;
+            let mut tty = cli_kit::term::Tty::stderr().expect("stderr");
+            let _ = writeln!(tty, "above");
+            let mut r = Region::new(tty.caps());
+            let lines = |ls: &[&str]| Block::of_lines(ls.iter().map(|l| l.to_string()));
+            let _ = r.draw(&mut tty, &lines(&["one", "two", "three"]));
+            let _ = r.draw(
+                &mut tty,
+                &lines(&["parked", "", "end"]).parked(Park::At { up: 2, col: 3 }),
+            );
+            let _ = r.draw(&mut tty, &lines(&["a", "b", "c", "d"]));
+            let _ = r.erase(&mut tty);
+            let _ = r.draw(&mut tty, &lines(&["kept"]));
+            let _ = r.keep(&mut tty);
+            let _ = r.draw(&mut tty, &lines(&["last"]));
+            0
+        },
+        script: &[],
+    },
     // ── Prompts ────────────────────────────────────────────────────────
     Scene {
         name: "input",

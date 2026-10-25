@@ -56,6 +56,9 @@ fn child() {
     let tty = Tty::open(std::env::var(PATH).unwrap(), &env).unwrap();
     say(out, format!("caps {:?}", tty.caps()));
     say(out, format!("size {:?}", tty.size()));
+    if mode == "secret" || mode == "mask" {
+        return secret_child(out, tty, mode == "mask", say);
+    }
     let before = termios(&tty);
     let mut raw = tty.raw().unwrap();
     say(out, "ready".into());
@@ -78,6 +81,66 @@ fn child() {
     }
     raw.restore().unwrap();
     say(out, format!("restored {}", same(&before, &termios(&tty))));
+}
+
+/// A secret read the way a prompt reads one: the step drawn first, then
+/// nothing (or masks on the alternate screen). Reports how each read ended,
+/// the length only for an entered secret.
+fn secret_child(
+    out: &mut std::io::Stdout,
+    mut tty: Tty,
+    mask: bool,
+    say: impl Fn(&mut std::io::Stdout, String),
+) {
+    use cli_kit::prompt::{self, Echo, Secret};
+    use cli_kit::render::Region;
+    use cli_kit::step::{self, Body, Foot, Status, Step};
+    let step = Step {
+        status: Status::Active,
+        label: "Password",
+        desc: "",
+        body: Body::silent_input(),
+        foot: Foot::Hint("hidden as you type"),
+    };
+    let mut region = Region::new(tty.caps());
+    let mut alt = None;
+    if mask {
+        alt = Some(tty.alt_screen().unwrap());
+    } else {
+        let block = step::render(tty.caps(), &step, 100);
+        region.draw(&mut tty, &block).unwrap();
+    }
+    let mut raw = tty.raw().unwrap();
+    say(out, "ready".into());
+    loop {
+        let mut paint = |s: &mut cli_kit::term::AltScreen, n: usize| {
+            write!(s, "\r[{}]", "▪".repeat(n))?;
+            s.flush()
+        };
+        let echo = match alt.as_mut() {
+            Some(screen) => Echo::Mask {
+                screen,
+                paint: &mut paint,
+            },
+            None => Echo::Silent,
+        };
+        let result = prompt::secret(&mut raw, echo).unwrap();
+        match result {
+            Secret::Entered(s) => say(out, format!("Entered({})", s.chars().count())),
+            Secret::Empty => {
+                say(out, "Empty".into());
+                continue;
+            }
+            other => say(out, format!("{other:?}")),
+        }
+        break;
+    }
+    raw.restore().unwrap();
+    match alt.as_mut() {
+        Some(a) => a.leave().unwrap(),
+        None => region.erase(&mut tty).unwrap(),
+    }
+    say(out, "done".into());
 }
 
 fn termios(fd: &impl AsFd) -> libc::termios {
@@ -225,6 +288,31 @@ impl Session {
             );
             std::thread::sleep(Duration::from_millis(10));
         }
+    }
+
+    /// What reached the terminal since the last call, waiting `quiet` for
+    /// more each time.
+    fn painted(&mut self, quiet: Duration) -> String {
+        let fd = self.pty.master.as_raw_fd();
+        let mut out = Vec::new();
+        loop {
+            let mut p = libc::pollfd {
+                fd,
+                events: libc::POLLIN,
+                revents: 0,
+            };
+            // SAFETY: one pollfd.
+            let n = unsafe { libc::poll(&mut p, 1, quiet.as_millis() as i32) };
+            if n <= 0 {
+                break;
+            }
+            let mut buf = [0u8; 4096];
+            match self.pty.master.read(&mut buf) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => out.extend_from_slice(&buf[..n]),
+            }
+        }
+        String::from_utf8_lossy(&out).into_owned()
     }
 
     fn signal(&self, sig: libc::c_int) {
@@ -444,4 +532,62 @@ fn only_one_terminal_is_raw_at_a_time() {
     drop(third);
     let mut buf = [0u8; 1];
     let _ = (&pty.master).read(&mut buf[..0]);
+}
+
+#[test]
+fn a_secret_is_read_with_nothing_drawn() {
+    // A6: the step is drawn once; between it and Enter the terminal gets
+    // zero bytes, whatever is typed or deleted.
+    let mut s = started("secret", false);
+    let drawn = s.painted(Duration::from_millis(150));
+    assert!(drawn.contains("◆\x1b[0m  Password"), "{drawn:?}");
+    s.keys("hunter2\x7fł\x1b[D\x15abc".as_bytes());
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(
+        s.painted(Duration::from_millis(100)),
+        "",
+        "drawn while typing"
+    );
+    s.keys(b"\r");
+    s.expect("Entered(3)");
+    s.expect("done");
+    // The step goes: back from the input row, up over its three lines, cleared.
+    let end = s.painted(Duration::from_millis(100));
+    assert!(end.contains("\x1b[2B\r\x1b[3F\x1b[J\x1b[?25h"), "{end:?}");
+}
+
+#[test]
+fn an_empty_secret_is_not_entered_and_a_hangup_drops_what_was_typed() {
+    // A7.
+    let mut s = started("secret", false);
+    s.keys(b"\r");
+    s.expect("Empty");
+    s.keys(b"partial");
+    std::thread::sleep(Duration::from_millis(100));
+    let Session { pty, .. } = &mut s;
+    drop(std::mem::replace(
+        &mut pty.master,
+        std::fs::File::open("/dev/null").unwrap(),
+    ));
+    s.expect("Hangup");
+}
+
+#[test]
+fn a_mask_is_drawn_only_on_the_alternate_screen() {
+    // A6: Echo::Mask needs a held AltScreen, so a mask can only follow
+    // entering it.
+    let mut s = start("mask", false);
+    s.expect("caps Caps { color: true, redraw: true }");
+    s.expect("size Some(Size { rows: 30, cols: 100 })");
+    s.expect("ready");
+    s.keys(b"abc");
+    std::thread::sleep(Duration::from_millis(150));
+    s.keys(b"\x1b");
+    s.expect("Cancelled");
+    s.expect("done");
+    let painted = s.painted(Duration::from_millis(100));
+    let enter = painted.find("\x1b[?1049h").expect("entered");
+    let mask = painted.find('▪').expect("masked");
+    let leave = painted.rfind("\x1b[?1049l").expect("left");
+    assert!(enter < mask && mask < leave, "{painted:?}");
 }

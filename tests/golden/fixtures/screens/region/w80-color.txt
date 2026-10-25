@@ -1,0 +1,9 @@
+# region · 80×60 · colour
+# blocks replaced in place and erased on Tty::stderr(): the line above survives
+
+── end ──
+cursor 4:1 shown
+above
+kept
+last
+exit 0

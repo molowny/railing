@@ -1,0 +1,44 @@
+[secret active] 4 lines, park up 2 col 3
+◆  Master password
+│  Unlock your sealward vault
+│  
+└  hidden as you type · enter to submit · esc to cancel
+
+[secret error] 4 lines, park up 2 col 3
+▲  Master password
+│  Unlock your sealward vault
+│  
+└  Wrong password (4 attempts remaining)
+
+[secret submitted] 2 lines, no park
+◇  Master password
+│
+
+[secret cancelled] 4 lines, no park
+■  Master password
+│  Unlock your sealward vault
+│  
+└  Operation cancelled.
+
+[value active] 4 lines, park up 2 col 8
+◆  Project name
+│  second line of the question
+│  alice
+└  [Esc](Preview)
+
+[value submitted] 4 lines, no park
+◇  Project name
+│  second line of the question
+│  alice
+│
+
+[secret active, 40 columns] 4 lines, park up 2 col 3
+◆  Master password
+│  Unlock your sealward vault
+│  
+└  hidden as you type · enter to submi…
+
+[secret error, plain terminal] 2 lines, park here
+▲  Wrong password
+◆  Master password
+│  

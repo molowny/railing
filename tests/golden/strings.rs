@@ -16,6 +16,7 @@ pub fn all() -> Vec<(String, Result<String, String>)> {
             Ok(grid_plain()),
         ));
         out.push((format!("strings/ui_styles-{variant}.txt"), Ok(ui_styles())));
+        out.push((format!("strings/step-{variant}.txt"), Ok(steps(color))));
     }
     colors(false);
     out.push(("strings/errors.txt".into(), Ok(errors())));
@@ -151,5 +152,83 @@ fn errors() -> String {
                 .replace('\n', "\n         ")
         );
     }
+    out
+}
+
+/// The core's step blocks in every state, with no `Flow` in scope (askpass
+/// bar A8): the open secret step askpass draws, its error, submitted and
+/// cancelled forms, an input row with a value, and the plain form for a
+/// terminal that cannot redraw.
+fn steps(color: bool) -> String {
+    use cli_kit::render::Park;
+    use cli_kit::step::{self, Body, Foot, Status, Step};
+    let caps = Caps {
+        color,
+        redraw: true,
+    };
+    let secret = |status| Step {
+        status,
+        label: "Master password",
+        desc: "Unlock your sealward vault",
+        body: Body::silent_input(),
+        foot: Foot::Hint("hidden as you type · enter to submit · esc to cancel"),
+    };
+    let value = |status| Step {
+        status,
+        label: "Project name\nsecond line of the question",
+        desc: "",
+        body: Body::Rows {
+            rows: vec!["alice".into()],
+            cursor: Some((0, 5)),
+        },
+        foot: Foot::Message("[Esc](Preview)"),
+    };
+    let mut out = String::new();
+    let mut show = |name: &str, b: cli_kit::render::Block| {
+        let park = match b.park {
+            Some(Park::At { up, col }) => format!("park up {up} col {col}"),
+            Some(Park::Here) => "park here".into(),
+            None => "no park".into(),
+        };
+        out += &format!("[{name}] {} lines, {park}\n{}\n", b.lines, visible(&b.text));
+    };
+    show(
+        "secret active",
+        step::render(caps, &secret(Status::Active), 80),
+    );
+    show(
+        "secret error",
+        step::render(
+            caps,
+            &secret(Status::Error("Wrong password (4 attempts remaining)")),
+            80,
+        ),
+    );
+    let done = Step {
+        desc: "",
+        body: Body::None,
+        ..secret(Status::Submit)
+    };
+    show("secret submitted", step::render(caps, &done, 80));
+    show(
+        "secret cancelled",
+        step::render(caps, &secret(Status::Cancel), 80),
+    );
+    show(
+        "value active",
+        step::render(caps, &value(Status::Active), 80),
+    );
+    show(
+        "value submitted",
+        step::render(caps, &value(Status::Submit), 80),
+    );
+    show(
+        "secret active, 40 columns",
+        step::render(caps, &secret(Status::Active), 40),
+    );
+    show(
+        "secret error, plain terminal",
+        step::render(Caps::PLAIN, &secret(Status::Error("Wrong password")), 80),
+    );
     out
 }
