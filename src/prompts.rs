@@ -1,4 +1,7 @@
-//! Shared interactive prompt helpers built on [`cliclack`].
+//! Shared interactive prompt helpers. Text and confirm prompts are the core's
+//! ([`crate::prompt`]) on the terminal the command inherited; the password
+//! prompt and the lists still read keys through cliclack and console until
+//! the rest of the core refactor lands.
 //!
 //! All functions here return `Result<T, CliError>` so cancellation (Esc /
 //! Ctrl+C) automatically maps to [`CliError::Cancelled`] and propagates
@@ -64,6 +67,59 @@ pub(crate) fn without_sigint<T>(f: impl FnOnce() -> T) -> T {
 }
 
 // ---------------------------------------------------------------------------
+// Asking through the core
+// ---------------------------------------------------------------------------
+
+/// Ask on the terminal this command inherited (`term::Tty::stderr`), and
+/// turn how it ended into a result: Esc or Ctrl-C is [`CliError::Cancelled`]
+/// with the gutter marked closed (the cancelled step's footer ends it); a
+/// signal installed through `term::signals` is re-raised. Asking where there
+/// is no terminal to ask on is a usage error naming what to pass instead.
+///
+/// Colour follows `console`'s stderr flag, like everything else the full
+/// kit draws (until it holds a `Tty` of its own, core refactor M5).
+#[cfg(unix)]
+fn ask_on_stderr<T>(
+    what: &str,
+    ask: impl FnOnce(&mut crate::term::Tty) -> io::Result<crate::prompt::Answer<T>>,
+) -> Result<T, CliError> {
+    use crate::prompt::Answer;
+    let tty = crate::term::Tty::stderr().map_err(|e| CliError::Internal(anyhow::anyhow!(e)))?;
+    let caps = crate::style::Caps {
+        color: crate::ui::stderr_caps().color,
+        ..tty.caps()
+    };
+    let mut tty = tty.with_caps(caps);
+    match ask(&mut tty) {
+        Ok(Answer::Submitted(v)) => Ok(v),
+        Ok(Answer::Cancelled) => {
+            crate::flow::prompt_cancelled();
+            Err(CliError::Cancelled)
+        }
+        Ok(Answer::Hangup) => Err(CliError::Cancelled),
+        Ok(Answer::Interrupted(sig)) => crate::term::signals::reraise(sig),
+        Err(e) if e.raw_os_error() == Some(libc::ENOTTY) => Err(CliError::Usage(format!(
+            "interactive prompts need a terminal; pass {} as an argument",
+            what_to_pass(what)
+        ))),
+        Err(e) => Err(CliError::Internal(anyhow::anyhow!(e))),
+    }
+}
+
+/// The prompt's question as the thing to pass: `Project name?` → `Project name`.
+fn what_to_pass(prompt: &str) -> &str {
+    prompt.trim_end_matches(['?', ':']).trim()
+}
+
+#[cfg(not(unix))]
+fn no_terminal_here(prompt: &str) -> CliError {
+    CliError::Usage(format!(
+        "interactive prompts need a Unix terminal; pass {} as an argument",
+        what_to_pass(prompt)
+    ))
+}
+
+// ---------------------------------------------------------------------------
 // Text input
 // ---------------------------------------------------------------------------
 
@@ -73,53 +129,81 @@ pub(crate) fn without_sigint<T>(f: impl FnOnce() -> T) -> T {
 /// * `placeholder` — hint text shown when the field is empty (pass `""` for
 ///   none).
 pub fn input(prompt: &str, placeholder: &str) -> Result<String, CliError> {
-    let mut p = cliclack::input(prompt);
-    if !placeholder.is_empty() {
-        p = p.placeholder(placeholder);
+    #[cfg(unix)]
+    return ask_on_stderr(prompt, |tty| {
+        crate::prompt::Input::new(prompt)
+            .placeholder(placeholder)
+            .ask(tty)
+    });
+    #[cfg(not(unix))]
+    {
+        let _ = placeholder;
+        Err(no_terminal_here(prompt))
     }
-    quiet_ctrl_c(prompt, || p.interact())
 }
 
 /// Prompt for a single line of text, pre-filling a default value.
 ///
 /// If the user presses Enter without typing, `default` is returned.
 pub fn input_with_default(prompt: &str, default: &str) -> Result<String, CliError> {
-    quiet_ctrl_c(prompt, || {
-        cliclack::input(prompt).default_input(default).interact()
-    })
+    #[cfg(unix)]
+    return ask_on_stderr(prompt, |tty| {
+        crate::prompt::Input::new(prompt).default(default).ask(tty)
+    });
+    #[cfg(not(unix))]
+    {
+        let _ = default;
+        Err(no_terminal_here(prompt))
+    }
 }
 
 /// Prompt for a single line of text that is allowed to be empty.
 ///
 /// Unlike `input`, this does **not** add a required-field validator.
 pub fn input_optional(prompt: &str, placeholder: &str) -> Result<String, CliError> {
-    let mut p = cliclack::input(prompt).required(false);
-    if !placeholder.is_empty() {
-        p = p.placeholder(placeholder);
+    #[cfg(unix)]
+    return ask_on_stderr(prompt, |tty| {
+        crate::prompt::Input::new(prompt)
+            .placeholder(placeholder)
+            .required(false)
+            .ask(tty)
+    });
+    #[cfg(not(unix))]
+    {
+        let _ = placeholder;
+        Err(no_terminal_here(prompt))
     }
-    quiet_ctrl_c(prompt, || p.interact())
 }
 
 /// Prompt for optional text, pre-filling an existing value.
 ///
 /// If the user clears the field and presses Enter the existing value is kept.
 pub fn input_optional_with_default(prompt: &str, default: &str) -> Result<String, CliError> {
-    quiet_ctrl_c(prompt, || {
-        cliclack::input(prompt)
+    #[cfg(unix)]
+    return ask_on_stderr(prompt, |tty| {
+        crate::prompt::Input::new(prompt)
             .required(false)
-            .default_input(default)
-            .interact()
-    })
+            .default(default)
+            .ask(tty)
+    });
+    #[cfg(not(unix))]
+    {
+        let _ = default;
+        Err(no_terminal_here(prompt))
+    }
 }
 
 /// Prompt for optional multi-line text (Esc to review, Enter to submit).
 pub fn input_multiline(prompt: &str) -> Result<String, CliError> {
-    quiet_ctrl_c(prompt, || {
-        cliclack::input(prompt)
+    #[cfg(unix)]
+    return ask_on_stderr(prompt, |tty| {
+        crate::prompt::Input::new(prompt)
             .required(false)
             .multiline()
-            .interact()
-    })
+            .ask(tty)
+    });
+    #[cfg(not(unix))]
+    Err(no_terminal_here(prompt))
 }
 
 // ---------------------------------------------------------------------------
@@ -141,9 +225,15 @@ pub fn password(prompt: &str) -> Result<String, CliError> {
 /// for destructive or skippable steps ("Delete everything?").
 /// Returns `Err(CliError::Cancelled)` if the user cancels.
 pub fn confirm(prompt: &str, default: bool) -> Result<bool, CliError> {
-    quiet_ctrl_c(prompt, || {
-        cliclack::confirm(prompt).initial_value(default).interact()
-    })
+    #[cfg(unix)]
+    return ask_on_stderr(prompt, |tty| {
+        crate::prompt::Confirm::new(prompt, default).ask(tty)
+    });
+    #[cfg(not(unix))]
+    {
+        let _ = default;
+        Err(no_terminal_here(prompt))
+    }
 }
 
 // ---------------------------------------------------------------------------
