@@ -7,7 +7,13 @@
 //! the alternate screen outlives the session.
 
 #[cfg(unix)]
+mod ask;
+#[cfg(unix)]
+pub mod line;
+#[cfg(unix)]
 mod secret;
 
+#[cfg(unix)]
+pub use ask::{Answer, Confirm, Input};
 #[cfg(unix)]
 pub use secret::{Echo, Secret, secret};
