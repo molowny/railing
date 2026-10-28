@@ -15,10 +15,10 @@
 //!   `Grid::plain`, the error chain and JSON) captured byte for byte in
 //!   process, with escapes written as `\e`.
 //!
-//! `historical/` holds what cliclack draws for passwords today: the masks
-//! that leak the password's length. They are a record, not a target: M2
-//! replaces them with silent frames, and they are excluded from the
-//! compatibility check then.
+//! `historical/` holds what cliclack drew for passwords before M2: the masks
+//! that leaked the password's length. They are a frozen record, not a
+//! target: no scene produces them, nothing compares against them, and they
+//! are never rewritten or removed as stale.
 //!
 //! Appearance only. Behaviour the refactor fixes on purpose (Ctrl-C, resize,
 //! raw mode, which stream colour follows, long lines wrapping) is not pinned
@@ -99,7 +99,7 @@ fn main() -> ExitCode {
     if filter.is_none() {
         let want: BTreeSet<PathBuf> = produced.iter().map(|(p, _)| root.join(p)).collect();
         for file in fixtures(&root) {
-            if want.contains(&file) {
+            if want.contains(&file) || file.starts_with(root.join("historical")) {
                 continue;
             }
             if update {

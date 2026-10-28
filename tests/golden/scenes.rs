@@ -586,28 +586,30 @@ static SCENES: &[Scene] = &[
         run: || asked(|| prompts::confirm("Commit this?", true)),
         script: &[Expect("Commit this?"), Keys(b"\x1b")],
     },
-    // ── Passwords: a record of the leak, not a target ──────────────────
+    // ── Passwords: nothing drawn while typed ────────────────────────────
+    // `historical/` keeps what cliclack drew (a mask per key, kept once
+    // submitted), frozen as the record of the leak these replace.
     Scene {
         name: "password",
-        about: "HISTORICAL: prompts::password masks every key and keeps the mask once submitted",
+        about: "prompts::password: typing changes nothing on screen; submitted with no value row",
         widths: WIDE,
-        historical: true,
+        historical: false,
         term: XTERM,
         run: || asked(|| prompts::password("Master password")),
         script: &[
             Expect("Master password"),
             Snap("active"),
             Keys(b"hunter2"),
-            Expect("▪▪▪▪▪▪▪"),
+            Settle,
             Snap("typed"),
             Keys(b"\r"),
         ],
     },
     Scene {
         name: "password_required",
-        about: "HISTORICAL: prompts::password submitted empty, then a value",
+        about: "prompts::password submitted empty: the step's error state, then a value",
         widths: WIDE,
-        historical: true,
+        historical: false,
         term: XTERM,
         run: || asked(|| prompts::password("Master password")),
         script: &[
@@ -620,15 +622,15 @@ static SCENES: &[Scene] = &[
     },
     Scene {
         name: "password_cancel",
-        about: "HISTORICAL: prompts::password cancelled with Esc after typing",
+        about: "prompts::password cancelled with Esc after typing: no value row",
         widths: WIDE,
-        historical: true,
+        historical: false,
         term: XTERM,
         run: || asked(|| prompts::password("Master password")),
         script: &[
             Expect("Master password"),
             Keys(b"abc"),
-            Expect("▪▪▪"),
+            Settle,
             Keys(b"\x1b"),
         ],
     },
