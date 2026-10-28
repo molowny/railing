@@ -6,6 +6,7 @@
 //! choosing.
 
 pub mod glyph;
+pub mod group;
 pub mod prompt;
 pub mod render;
 pub mod spin;
