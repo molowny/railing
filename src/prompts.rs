@@ -19,6 +19,8 @@
 
 use std::io;
 
+use zeroize::Zeroizing;
+
 use crate::error::{CliError, map_prompt_err};
 
 /// Run one prompt with SIGINT ignored. console's key reader answers Ctrl-C by
@@ -210,9 +212,18 @@ pub fn input_multiline(prompt: &str) -> Result<String, CliError> {
 // Password / hidden input
 // ---------------------------------------------------------------------------
 
-/// Prompt for a passphrase or password (input is hidden).
-pub fn password(prompt: &str) -> Result<String, CliError> {
-    quiet_ctrl_c(prompt, || cliclack::password(prompt).interact())
+/// Prompt for a passphrase or password.
+///
+/// Nothing is drawn while it is typed, not even a mask: the step stays as
+/// drawn, then collapses to `◇  prompt` with no value row, so nothing about
+/// the secret (its length included) reaches scrollback or a log of the
+/// terminal. The answer is wiped when dropped: keep it in `Zeroizing` up to
+/// where it is used, and make any copy out of it visible at the call site.
+pub fn password(prompt: &str) -> Result<Zeroizing<String>, CliError> {
+    #[cfg(unix)]
+    return ask_on_stderr(prompt, |tty| crate::prompt::Password::new(prompt).ask(tty));
+    #[cfg(not(unix))]
+    Err(no_terminal_here(prompt))
 }
 
 // ---------------------------------------------------------------------------

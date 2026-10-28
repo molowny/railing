@@ -480,6 +480,98 @@ impl Ask for Confirm {
     }
 }
 
+// ── Password ───────────────────────────────────────────────────────────
+
+/// A password or passphrase on the primary screen: the step is drawn, then
+/// nothing while it is typed (not a mask, not a counter, not a redraw), and
+/// it collapses to `◇  label` with no value row once submitted. An empty
+/// Enter redraws the step as `Input required`, which says nothing about what
+/// was typed. The answer is wiped when dropped.
+///
+/// Read by [`crate::prompt::secret`], which is given the read half of the
+/// terminal only.
+pub struct Password {
+    label: String,
+}
+
+/// The hint under an open secret prompt.
+const SECRET_HINT: &str = "hidden as you type";
+
+impl Password {
+    pub fn new(label: &str) -> Password {
+        Password {
+            label: label.to_string(),
+        }
+    }
+
+    fn step<'a>(&'a self, status: Status<'a>) -> Step<'a> {
+        let open = matches!(status, Status::Active | Status::Error(_));
+        Step {
+            status,
+            label: &self.label,
+            desc: "",
+            body: if open {
+                Body::silent_input()
+            } else {
+                Body::None
+            },
+            foot: Foot::Hint(SECRET_HINT),
+        }
+    }
+
+    pub fn ask(self, tty: &mut Tty) -> io::Result<Answer<zeroize::Zeroizing<String>>> {
+        use crate::prompt::{Echo, Secret, secret};
+        let caps = tty.caps();
+        if !caps.redraw {
+            return self.plain(tty);
+        }
+        let cols = tty.size().map_or(80, |s| usize::from(s.cols));
+        let mut region = Region::new(caps);
+        let mut raw = tty.raw()?;
+        region.draw(tty, &step::render(caps, &self.step(Status::Active), cols))?;
+        loop {
+            let (status, answer) = match secret(&mut raw, Echo::Silent)? {
+                Secret::Entered(s) => (Status::Submit, Answer::Submitted(s)),
+                Secret::Empty => {
+                    let required = self.step(Status::Error("Input required"));
+                    region.draw(tty, &step::render(caps, &required, cols))?;
+                    continue;
+                }
+                Secret::Cancelled => (Status::Cancel, Answer::Cancelled),
+                Secret::Hangup => {
+                    let _ = raw.restore();
+                    let _ = region.leave_input(tty);
+                    return Ok(Answer::Hangup);
+                }
+                Secret::Interrupted(sig) => {
+                    let _ = region.erase(tty);
+                    return Ok(Answer::Interrupted(sig));
+                }
+            };
+            raw.restore()?;
+            region.draw(tty, &step::render(caps, &self.step(status), cols))?;
+            region.keep(tty)?;
+            return Ok(answer);
+        }
+    }
+
+    fn plain(self, tty: &mut Tty) -> io::Result<Answer<zeroize::Zeroizing<String>>> {
+        let mut error = None;
+        loop {
+            write_plain_step(tty, &self.label, error)?;
+            let line = tty.read_line(false)?;
+            // Echo was off, the newline with it: end the input line.
+            writeln!(tty)?;
+            match line {
+                Line::Entered(s) if s.is_empty() => error = Some("Input required"),
+                Line::Entered(s) => return Ok(Answer::Submitted(s)),
+                Line::Cancelled => return Ok(Answer::Cancelled),
+                Line::Hangup => return Ok(Answer::Hangup),
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
