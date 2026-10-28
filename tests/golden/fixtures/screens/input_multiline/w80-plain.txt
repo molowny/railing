@@ -2,7 +2,7 @@
 # prompts::input_multiline: editing two lines, preview, submitted
 
 ── active ──
-cursor 6:1 hidden
+cursor 4:4 shown
 ┌  Setup
 │
 ◆  Notes
@@ -10,7 +10,7 @@ cursor 6:1 hidden
 └  [Esc](Preview)
 
 ── editing ──
-cursor 7:1 hidden
+cursor 5:12 shown
 ┌  Setup
 │
 ◆  Notes
@@ -19,7 +19,7 @@ cursor 7:1 hidden
 └  [Esc](Preview)
 
 ── preview ──
-cursor 7:1 hidden
+cursor 5:12 shown
 ┌  Setup
 │
 ◆  Notes

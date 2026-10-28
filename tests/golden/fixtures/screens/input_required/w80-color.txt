@@ -2,19 +2,19 @@
 # prompts::input submitted empty: the error state, then a value
 
 ── error ──
-cursor 6:1 hidden
+cursor 4:4 shown
 ⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
 ⟦bright-black⟧│⟦⟧
 ⟦yellow⟧▲⟦⟧  Project name
-⟦yellow⟧│⟦⟧  ⟦inverse⟧ ⟦⟧
+⟦yellow⟧│⟦⟧
 ⟦yellow⟧└⟦⟧  ⟦yellow⟧Input⟦⟧ ⟦yellow⟧required⟦⟧
 
 ── typing after the error ──
-cursor 6:1 hidden
+cursor 4:5 shown
 ⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
 ⟦bright-black⟧│⟦⟧
 ⟦cyan⟧◆⟦⟧  Project name
-⟦cyan⟧│⟦⟧  b⟦inverse⟧ ⟦⟧
+⟦cyan⟧│⟦⟧  b
 ⟦cyan⟧└⟦⟧
 
 ── end ──

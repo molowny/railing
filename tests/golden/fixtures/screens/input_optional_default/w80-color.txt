@@ -2,19 +2,19 @@
 # prompts::input_optional_with_default: active, cleared, submitted
 
 ── active ──
-cursor 6:1 hidden
+cursor 4:4 shown
 ⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
 ⟦bright-black⟧│⟦⟧
 ⟦cyan⟧◆⟦⟧  Description
-⟦cyan⟧│⟦⟧  ⟦inverse⟧k⟦dim⟧ept⟦⟧ ⟦dim⟧(default)⟦⟧
+⟦cyan⟧│⟦⟧  ⟦dim⟧kept⟦⟧ ⟦dim⟧(default)⟦⟧
 ⟦cyan⟧└⟦⟧
 
 ── cleared ──
-cursor 6:1 hidden
+cursor 4:4 shown
 ⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
 ⟦bright-black⟧│⟦⟧
 ⟦cyan⟧◆⟦⟧  Description
-⟦cyan⟧│⟦⟧  ⟦inverse⟧k⟦dim⟧ept⟦⟧ ⟦dim⟧(default)⟦⟧
+⟦cyan⟧│⟦⟧  ⟦dim⟧kept⟦⟧ ⟦dim⟧(default)⟦⟧
 ⟦cyan⟧└⟦⟧
 
 ── end ──

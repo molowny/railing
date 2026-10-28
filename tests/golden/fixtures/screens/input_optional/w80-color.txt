@@ -2,11 +2,11 @@
 # prompts::input_optional: active, submitted empty
 
 ── active ──
-cursor 6:1 hidden
+cursor 4:4 shown
 ⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
 ⟦bright-black⟧│⟦⟧
 ⟦cyan⟧◆⟦⟧  Description
-⟦cyan⟧│⟦⟧  ⟦inverse⟧n⟦dim⟧one⟦⟧
+⟦cyan⟧│⟦⟧  ⟦dim⟧none⟦⟧
 ⟦cyan⟧└⟦⟧
 
 ── end ──

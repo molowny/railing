@@ -2,7 +2,7 @@
 # prompts::input_optional: active, submitted empty
 
 ── active ──
-cursor 6:1 hidden
+cursor 4:4 shown
 ┌  Setup
 │
 ◆  Description

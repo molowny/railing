@@ -2,7 +2,7 @@
 # prompts::input submitted empty: the error state, then a value
 
 ── error ──
-cursor 6:1 hidden
+cursor 4:4 shown
 ┌  Setup
 │
 ▲  Project name
@@ -10,7 +10,7 @@ cursor 6:1 hidden
 └  Input required
 
 ── typing after the error ──
-cursor 6:1 hidden
+cursor 4:5 shown
 ┌  Setup
 │
 ◆  Project name

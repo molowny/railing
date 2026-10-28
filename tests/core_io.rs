@@ -26,6 +26,7 @@ const FORBIDDEN: &[&str] = &[
 /// (file, function, what it may use): the named ways in.
 const ALLOWED: &[(&str, &str, &str)] = &[
     ("term/mod.rs", "stderr", "io::stderr"),
+    ("term/mod.rs", "stderr", "io::stdin"),
     ("style.rs", "of_process", "std::env"),
     ("style.rs", "of_process", "env::var"),
 ];

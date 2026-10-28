@@ -2,11 +2,11 @@
 # prompts::input_with_default: active, submitted untouched
 
 ── active ──
-cursor 6:1 hidden
+cursor 4:4 shown
 ⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
 ⟦bright-black⟧│⟦⟧
 ⟦cyan⟧◆⟦⟧  Branch
-⟦cyan⟧│⟦⟧  ⟦inverse⟧m⟦dim⟧ain⟦⟧ ⟦dim⟧(default)⟦⟧
+⟦cyan⟧│⟦⟧  ⟦dim⟧main⟦⟧ ⟦dim⟧(default)⟦⟧
 ⟦cyan⟧└⟦⟧
 
 ── end ──

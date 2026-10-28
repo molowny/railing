@@ -17,6 +17,7 @@ pub struct Session {
     term: avt::Terminal,
     /// The tail of a UTF-8 sequence split across reads.
     pending: Vec<u8>,
+    rows: u16,
     eof: bool,
 }
 
@@ -24,7 +25,13 @@ impl Session {
     /// Start `scene` in a child of this binary: a new session with the pty
     /// as its controlling terminal, stdin and stderr on it, stdout a pipe so
     /// what a prompt returned can be told apart from what it drew.
-    pub fn start(scene: &str, color: bool, cols: u16, rows: u16) -> Result<Self, String> {
+    pub fn start(
+        scene: &str,
+        color: bool,
+        cols: u16,
+        rows: u16,
+        term: &str,
+    ) -> Result<Self, String> {
         let (master, slave) = openpty(cols, rows)?;
         let exe = std::env::current_exe().map_err(|e| e.to_string())?;
         let mut cmd = Command::new(exe);
@@ -33,7 +40,7 @@ impl Session {
             .env(super::COLOR_ENV, if color { "1" } else { "0" })
             .env("LANG", "C.UTF-8")
             .env("LC_ALL", "C.UTF-8")
-            .env("TERM", "xterm-256color")
+            .env("TERM", term)
             .stdin(Stdio::from(slave.try_clone().map_err(|e| e.to_string())?))
             .stderr(Stdio::from(slave))
             .stdout(Stdio::piped());
@@ -53,8 +60,26 @@ impl Session {
             term: avt::Terminal::new(usize::from(cols), usize::from(rows))
                 .map_err(|_| "terminal size".to_string())?,
             pending: Vec::new(),
+            rows,
             eof: false,
         })
+    }
+
+    /// The window is now `cols` wide: the emulator reflows, then the pty
+    /// reports the new size, as a terminal does.
+    pub fn resize(&mut self, cols: u16) -> Result<(), String> {
+        self.term.resize(usize::from(cols), usize::from(self.rows));
+        let ws = libc::winsize {
+            ws_row: self.rows,
+            ws_col: cols,
+            ws_xpixel: 0,
+            ws_ypixel: 0,
+        };
+        // SAFETY: a valid fd and winsize.
+        if unsafe { libc::ioctl(self.master.as_raw_fd(), libc::TIOCSWINSZ, &ws) } != 0 {
+            return Err(format!("resize: {}", std::io::Error::last_os_error()));
+        }
+        Ok(())
     }
 
     pub fn term(&self) -> &avt::Terminal {

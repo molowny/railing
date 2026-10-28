@@ -2,19 +2,19 @@
 # prompts::input with a placeholder: active, typed, submitted
 
 ── active ──
-cursor 6:1 hidden
+cursor 4:4 shown
 ⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
 ⟦bright-black⟧│⟦⟧
 ⟦cyan⟧◆⟦⟧  Project name
-⟦cyan⟧│⟦⟧  ⟦inverse⟧m⟦dim⟧y-project⟦⟧
+⟦cyan⟧│⟦⟧  ⟦dim⟧my-project⟦⟧
 ⟦cyan⟧└⟦⟧
 
 ── typed ──
-cursor 6:1 hidden
+cursor 4:9 shown
 ⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
 ⟦bright-black⟧│⟦⟧
 ⟦cyan⟧◆⟦⟧  Project name
-⟦cyan⟧│⟦⟧  alice⟦inverse⟧ ⟦⟧
+⟦cyan⟧│⟦⟧  alice
 ⟦cyan⟧└⟦⟧
 
 ── end ──

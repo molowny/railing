@@ -2,7 +2,7 @@
 # prompts::input_optional_with_default: active, cleared, submitted
 
 ── active ──
-cursor 6:1 hidden
+cursor 4:4 shown
 ┌  Setup
 │
 ◆  Description
@@ -10,7 +10,7 @@ cursor 6:1 hidden
 └
 
 ── cleared ──
-cursor 6:1 hidden
+cursor 4:4 shown
 ┌  Setup
 │
 ◆  Description

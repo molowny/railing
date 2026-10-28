@@ -2,29 +2,29 @@
 # prompts::input_multiline: editing two lines, preview, submitted
 
 ── active ──
-cursor 6:1 hidden
+cursor 4:4 shown
 ⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
 ⟦bright-black⟧│⟦⟧
 ⟦cyan⟧◆⟦⟧  Notes
-⟦cyan⟧│⟦⟧  ⟦inverse⟧ ⟦⟧
+⟦cyan⟧│⟦⟧
 ⟦cyan⟧└⟦⟧  ⟦cyan⟧[Esc](Preview)⟦⟧
 
 ── editing ──
-cursor 7:1 hidden
+cursor 5:12 shown
 ⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
 ⟦bright-black⟧│⟦⟧
 ⟦cyan⟧◆⟦⟧  Notes
 ⟦cyan⟧│⟦⟧  line one
-⟦cyan⟧│⟦⟧  line two⟦inverse⟧ ⟦⟧
+⟦cyan⟧│⟦⟧  line two
 ⟦cyan⟧└⟦⟧  ⟦cyan⟧[Esc](Preview)⟦⟧
 
 ── preview ──
-cursor 7:1 hidden
+cursor 5:12 shown
 ⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
 ⟦bright-black⟧│⟦⟧
 ⟦cyan⟧◆⟦⟧  Notes
 ⟦cyan⟧│⟦⟧  line one
-⟦cyan⟧│⟦⟧  line two⟦inverse⟧ ⟦⟧
+⟦cyan⟧│⟦⟧  line two
 ⟦cyan⟧└⟦⟧  ⟦cyan⟧[Enter](Submit)⟦⟧
 
 ── end ──

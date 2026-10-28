@@ -26,6 +26,8 @@ enum Step {
     Keys(&'static [u8]),
     /// Record the screen under this name.
     Snap(&'static str),
+    /// Make the window this many columns wide.
+    Resize(u16),
 }
 use Step::*;
 
@@ -35,9 +37,13 @@ struct Scene {
     widths: &'static [u16],
     /// A record of a known leak, not a target (`historical/`).
     historical: bool,
+    /// `TERM` for the child.
+    term: &'static str,
     run: fn() -> i32,
     script: &'static [Step],
 }
+
+const XTERM: &str = "xterm-256color";
 
 const NARROW: &[u16] = &[80, 48];
 const WIDE: &[u16] = &[80];
@@ -63,11 +69,16 @@ pub fn all() -> Vec<(String, Result<String, String>)> {
 }
 
 fn capture(scene: &Scene, cols: u16, color: bool) -> Result<String, String> {
-    let mut s = Session::start(scene.name, color, cols, ROWS)?;
+    let mut s = Session::start(scene.name, color, cols, ROWS, scene.term)?;
     let mut out = format!(
-        "# {} · {cols}×{ROWS} · {}\n# {}\n",
+        "# {} · {cols}×{ROWS} · {}{}\n# {}\n",
         scene.name,
         if color { "colour" } else { "no colour" },
+        if scene.term == XTERM {
+            String::new()
+        } else {
+            format!(" · TERM={}", scene.term)
+        },
         scene.about
     );
     for step in scene.script {
@@ -75,6 +86,12 @@ fn capture(scene: &Scene, cols: u16, color: bool) -> Result<String, String> {
             Expect(text) => s.expect(text)?,
             Settle => s.settle(),
             Keys(keys) => s.keys(keys)?,
+            Resize(cols) => {
+                s.resize(cols)?;
+                // The prompt checks the width between keys.
+                std::thread::sleep(std::time::Duration::from_millis(400));
+                s.settle();
+            }
             Snap(name) => {
                 out += &format!("\n── {name} ──\n");
                 out += &screen::snapshot(s.term(), color);
@@ -152,6 +169,7 @@ static SCENES: &[Scene] = &[
         about: "every gutter line of a live group, one wrapped and one multi-line, closed ok",
         widths: NARROW,
         historical: false,
+        term: XTERM,
         run: || {
             let f = Flow::begin("Deploy", true);
             f.step("Built 3 crates");
@@ -171,6 +189,7 @@ static SCENES: &[Scene] = &[
         about: "a block per gutter mark, with and without a body, a note, closed with a warning",
         widths: NARROW,
         historical: false,
+        term: XTERM,
         run: || {
             let f = Flow::begin("Review", true);
             f.block(
@@ -193,6 +212,7 @@ static SCENES: &[Scene] = &[
         about: "groups inside a group: closed ok, warn and fail, then the outer one",
         widths: WIDE,
         historical: false,
+        term: XTERM,
         run: || {
             let outer = Flow::begin("Release", true);
             outer.step("Version bumped");
@@ -213,6 +233,7 @@ static SCENES: &[Scene] = &[
         about: "a group closed by Flow::fail, the error then reaching main",
         widths: WIDE,
         historical: false,
+        term: XTERM,
         run: || {
             let f = Flow::begin("Upload", true);
             f.step("Connected");
@@ -227,6 +248,7 @@ static SCENES: &[Scene] = &[
         about: "an internal error with context, and a multi-line one, reaching main inside a group",
         widths: WIDE,
         historical: false,
+        term: XTERM,
         run: || {
             let f = Flow::begin("Sync", true);
             f.step("Fetched");
@@ -246,6 +268,7 @@ static SCENES: &[Scene] = &[
         about: "Cancelled reaching main inside a group",
         widths: WIDE,
         historical: false,
+        term: XTERM,
         run: || {
             let f = Flow::begin("Setup", true);
             f.step("Started");
@@ -260,6 +283,7 @@ static SCENES: &[Scene] = &[
         about: "a grid in its box (borderless, fitted), and a checks report",
         widths: NARROW,
         historical: false,
+        term: XTERM,
         run: || {
             let f = Flow::begin("Inventory", true);
             f.table("Items", &sample_grid());
@@ -291,6 +315,7 @@ static SCENES: &[Scene] = &[
         about: "the same calls on a plain flow: data on stdout, chatter on stderr",
         widths: WIDE,
         historical: false,
+        term: XTERM,
         run: || {
             let f = Flow::plain();
             f.step("Built 3 crates");
@@ -311,6 +336,7 @@ static SCENES: &[Scene] = &[
         about: "ui's intro, outros, note and log lines called directly",
         widths: WIDE,
         historical: false,
+        term: XTERM,
         run: || {
             let _ = ui::intro("Direct");
             let _ = ui::log::step("step");
@@ -336,6 +362,7 @@ static SCENES: &[Scene] = &[
         about: "each error kind reaching main with no group open",
         widths: WIDE,
         historical: false,
+        term: XTERM,
         run: || {
             let io = std::io::Error::other("disk full");
             for e in [
@@ -362,6 +389,7 @@ static SCENES: &[Scene] = &[
         about: "blocks replaced in place and erased on Tty::stderr(): the line above survives",
         widths: WIDE,
         historical: false,
+        term: XTERM,
         run: || {
             use cli_kit::render::{Block, Park, Region};
             use std::io::Write as _;
@@ -389,6 +417,7 @@ static SCENES: &[Scene] = &[
         about: "prompts::input with a placeholder: active, typed, submitted",
         widths: WIDE,
         historical: false,
+        term: XTERM,
         run: || asked(|| prompts::input("Project name", "my-project")),
         script: &[
             Expect("Project name"),
@@ -400,10 +429,50 @@ static SCENES: &[Scene] = &[
         ],
     },
     Scene {
+        name: "input_resize",
+        about: "a long answer narrowed from 80 to 40 columns: repainted, the cursor in view (avt keeps the cursor row when reflowing, so ┌ scrolls into history)",
+        widths: WIDE,
+        historical: false,
+        term: XTERM,
+        run: || asked(|| prompts::input("Project name", "")),
+        script: &[
+            Expect("Project name"),
+            Keys(b"a-long-project-name-that-takes-most-of-the-terminal-width-here"),
+            Expect("width-here"),
+            Snap("wide"),
+            Resize(40),
+            Snap("narrowed"),
+            Keys(b"\r"),
+        ],
+    },
+    Scene {
+        name: "input_dumb",
+        about: "prompts on TERM=dumb: plain steps, the terminal's own line editing and echo",
+        widths: WIDE,
+        historical: false,
+        term: "dumb",
+        run: || {
+            asked(|| {
+                let name = prompts::input("Project name", "")?;
+                let sure = prompts::confirm("Create it?", true)?;
+                Ok((name, sure))
+            })
+        },
+        script: &[
+            Expect("Project name"),
+            Keys(b"\r"),
+            Expect("Input required"),
+            Keys(b"alicx\x7fe\r"),
+            Expect("Create it?"),
+            Keys(b"\r"),
+        ],
+    },
+    Scene {
         name: "input_required",
         about: "prompts::input submitted empty: the error state, then a value",
         widths: WIDE,
         historical: false,
+        term: XTERM,
         run: || asked(|| prompts::input("Project name", "")),
         script: &[
             Expect("Project name"),
@@ -421,6 +490,7 @@ static SCENES: &[Scene] = &[
         about: "prompts::input cancelled with Esc after typing",
         widths: WIDE,
         historical: false,
+        term: XTERM,
         run: || asked(|| prompts::input("Project name", "my-project")),
         script: &[
             Expect("Project name"),
@@ -434,6 +504,7 @@ static SCENES: &[Scene] = &[
         about: "prompts::input_with_default: active, submitted untouched",
         widths: WIDE,
         historical: false,
+        term: XTERM,
         run: || asked(|| prompts::input_with_default("Branch", "main")),
         script: &[Expect("Branch"), Snap("active"), Keys(b"\r")],
     },
@@ -442,6 +513,7 @@ static SCENES: &[Scene] = &[
         about: "prompts::input_optional: active, submitted empty",
         widths: WIDE,
         historical: false,
+        term: XTERM,
         run: || asked(|| prompts::input_optional("Description", "none")),
         script: &[Expect("Description"), Snap("active"), Keys(b"\r")],
     },
@@ -450,6 +522,7 @@ static SCENES: &[Scene] = &[
         about: "prompts::input_optional_with_default: active, cleared, submitted",
         widths: WIDE,
         historical: false,
+        term: XTERM,
         run: || asked(|| prompts::input_optional_with_default("Description", "kept")),
         script: &[
             Expect("Description"),
@@ -465,6 +538,7 @@ static SCENES: &[Scene] = &[
         about: "prompts::input_multiline: editing two lines, preview, submitted",
         widths: WIDE,
         historical: false,
+        term: XTERM,
         run: || asked(|| prompts::input_multiline("Notes")),
         script: &[
             Expect("Notes"),
@@ -483,6 +557,7 @@ static SCENES: &[Scene] = &[
         about: "prompts::confirm defaulting to yes, submitted",
         widths: WIDE,
         historical: false,
+        term: XTERM,
         run: || asked(|| prompts::confirm("Commit this?", true)),
         script: &[Expect("Commit this?"), Snap("active"), Keys(b"\r")],
     },
@@ -491,6 +566,7 @@ static SCENES: &[Scene] = &[
         about: "prompts::confirm defaulting to no, switched with y, submitted",
         widths: WIDE,
         historical: false,
+        term: XTERM,
         run: || asked(|| prompts::confirm("Delete everything?", false)),
         script: &[
             Expect("Delete everything?"),
@@ -506,6 +582,7 @@ static SCENES: &[Scene] = &[
         about: "prompts::confirm cancelled with Esc",
         widths: WIDE,
         historical: false,
+        term: XTERM,
         run: || asked(|| prompts::confirm("Commit this?", true)),
         script: &[Expect("Commit this?"), Keys(b"\x1b")],
     },
@@ -515,6 +592,7 @@ static SCENES: &[Scene] = &[
         about: "HISTORICAL: prompts::password masks every key and keeps the mask once submitted",
         widths: WIDE,
         historical: true,
+        term: XTERM,
         run: || asked(|| prompts::password("Master password")),
         script: &[
             Expect("Master password"),
@@ -530,6 +608,7 @@ static SCENES: &[Scene] = &[
         about: "HISTORICAL: prompts::password submitted empty, then a value",
         widths: WIDE,
         historical: true,
+        term: XTERM,
         run: || asked(|| prompts::password("Master password")),
         script: &[
             Expect("Master password"),
@@ -544,6 +623,7 @@ static SCENES: &[Scene] = &[
         about: "HISTORICAL: prompts::password cancelled with Esc after typing",
         widths: WIDE,
         historical: true,
+        term: XTERM,
         run: || asked(|| prompts::password("Master password")),
         script: &[
             Expect("Master password"),

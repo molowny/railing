@@ -1,0 +1,28 @@
+# input_resize · 80×60 · no colour
+# a long answer narrowed from 80 to 40 columns: repainted, the cursor in view (avt keeps the cursor row when reflowing, so ┌ scrolls into history)
+
+── wide ──
+cursor 4:66 shown
+┌  Setup
+│
+◆  Project name
+│  a-long-project-name-that-takes-most-of-the-terminal-width-here
+└
+
+── narrowed ──
+cursor 3:39 shown
+│
+◆  Project name
+│  …es-most-of-the-terminal-width-here
+└
+
+── end ──
+cursor 6:1 shown
+│
+◇  Project name
+│  a-long-project-name-that-takes-most…
+│
+└  ✔ Saved
+exit 0
+stdout:
+"a-long-project-name-that-takes-most-of-the-terminal-width-here"
