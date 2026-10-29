@@ -7,7 +7,7 @@
 //!   public API (a `Flow`, a prompt, an error reaching `main`) in a child of
 //!   this binary on a real pty, with the pty as its controlling terminal. The
 //!   test drives keys into the pty and snapshots what a terminal would show
-//!   (through `vt100`) at each named point: the plain text, the styled runs,
+//!   (through `avt`) at each named point: the plain text, the styled runs,
 //!   the cursor, then the exit code and anything written to stdout. A screen
 //!   is the right contract for drawn output, because the redraw sequences
 //!   that produce it are what the refactor replaces.
@@ -23,8 +23,9 @@
 //! Appearance only. Behaviour the refactor fixes on purpose (Ctrl-C, resize,
 //! raw mode, which stream colour follows, long lines wrapping) is not pinned
 //! here: those get PTY behaviour tests of their own. The capture runs under
-//! `LC_ALL=C.UTF-8` with colour forced on or off. M3 adds a `LANG=C` pass
-//! that must produce the same files.
+//! `LC_ALL=C.UTF-8` with colour forced on or off, and every screen again
+//! under `LANG=C`, which must draw the same file (it is compared, never
+//! written): the flow's marks do not depend on the locale.
 //!
 //! ```text
 //! cargo test -p cli-kit --test golden                         # compare

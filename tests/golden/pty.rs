@@ -21,6 +21,16 @@ pub struct Session {
     eof: bool,
 }
 
+/// The locale a scene runs under. The marks are Unicode whatever it is, so
+/// both draw the same screens.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Locale {
+    /// `LC_ALL=C.UTF-8`: what the fixtures are captured under.
+    Utf8,
+    /// `LANG=C`, nothing else: CI's locale, where cliclack fell back to ASCII.
+    C,
+}
+
 impl Session {
     /// Start `scene` in a child of this binary: a new session with the pty
     /// as its controlling terminal, stdin and stderr on it, stdout a pipe so
@@ -31,6 +41,7 @@ impl Session {
         cols: u16,
         rows: u16,
         term: &str,
+        locale: Locale,
     ) -> Result<Self, String> {
         let (master, slave) = openpty(cols, rows)?;
         let exe = std::env::current_exe().map_err(|e| e.to_string())?;
@@ -38,12 +49,14 @@ impl Session {
         cmd.env_clear()
             .env(super::SCENE_ENV, scene)
             .env(super::COLOR_ENV, if color { "1" } else { "0" })
-            .env("LANG", "C.UTF-8")
-            .env("LC_ALL", "C.UTF-8")
             .env("TERM", term)
             .stdin(Stdio::from(slave.try_clone().map_err(|e| e.to_string())?))
             .stderr(Stdio::from(slave))
             .stdout(Stdio::piped());
+        match locale {
+            Locale::Utf8 => cmd.env("LANG", "C.UTF-8").env("LC_ALL", "C.UTF-8"),
+            Locale::C => cmd.env("LANG", "C"),
+        };
         // SAFETY: only async-signal-safe calls between fork and exec.
         unsafe {
             cmd.pre_exec(|| {

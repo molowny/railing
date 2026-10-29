@@ -9,7 +9,7 @@ use cli_kit::flow::{self, Outcome};
 use cli_kit::{CheckRow, CheckStatus, ChecksReport, CliError, Flow, Grid, Gutter, Tone};
 use cli_kit::{prompts, style, ui};
 
-use crate::pty::Session;
+use crate::pty::{Locale, Session};
 use crate::screen;
 
 /// Rows on the pty: more than any scene draws, so nothing scrolls away.
@@ -49,6 +49,10 @@ const NARROW: &[u16] = &[80, 48];
 const WIDE: &[u16] = &[80];
 
 /// The capture of every scene, by fixture path.
+///
+/// Each is captured under `C.UTF-8` and again under `LANG=C`, which must
+/// draw the same screen: the marks never depend on the locale. The second
+/// capture is only compared, never written, so a fixture has one source.
 pub fn all() -> Vec<(String, Result<String, String>)> {
     let mut out = Vec::new();
     for scene in SCENES {
@@ -61,15 +65,31 @@ pub fn all() -> Vec<(String, Result<String, String>)> {
                 };
                 let variant = format!("w{cols}-{}", if color { "color" } else { "plain" });
                 let path = format!("{dir}/{}/{variant}.txt", scene.name);
-                out.push((path, capture(scene, cols, color)));
+                let utf8 = capture(scene, cols, color, Locale::Utf8);
+                if let Ok(want) = &utf8
+                    && !scene.historical
+                {
+                    match capture(scene, cols, color, Locale::C) {
+                        Ok(got) if got == *want => {}
+                        Ok(got) => out.push((
+                            format!("{path} (LANG=C)"),
+                            Err(format!(
+                                "differs from C.UTF-8\n{}",
+                                crate::first_difference(want, &got)
+                            )),
+                        )),
+                        Err(e) => out.push((format!("{path} (LANG=C)"), Err(e))),
+                    }
+                }
+                out.push((path, utf8));
             }
         }
     }
     out
 }
 
-fn capture(scene: &Scene, cols: u16, color: bool) -> Result<String, String> {
-    let mut s = Session::start(scene.name, color, cols, ROWS, scene.term)?;
+fn capture(scene: &Scene, cols: u16, color: bool, locale: Locale) -> Result<String, String> {
+    let mut s = Session::start(scene.name, color, cols, ROWS, scene.term, locale)?;
     let mut out = format!(
         "# {} · {cols}×{ROWS} · {}{}\n# {}\n",
         scene.name,
