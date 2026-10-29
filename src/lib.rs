@@ -40,6 +40,8 @@ pub mod paths;
 mod picker;
 #[cfg(feature = "full")]
 pub mod prompts;
+#[cfg(all(feature = "full", unix))]
+mod surface;
 #[cfg(feature = "full")]
 pub mod ui;
 #[cfg(feature = "full")]
