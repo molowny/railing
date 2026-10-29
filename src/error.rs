@@ -226,9 +226,9 @@ impl CliError {
 // Prompt error mapping
 // ---------------------------------------------------------------------------
 
-/// Convert a `cliclack`/`std::io` error into [`CliError`].
+/// Convert a list prompt's `std::io` error into [`CliError`].
 ///
-/// cliclack signals cancellation (Esc / Ctrl+C) as an `io::Error` with kind
+/// The lists signal cancellation (Esc / Ctrl+C) as an `io::Error` with kind
 /// `Interrupted`. Everything else becomes [`CliError::Internal`].
 pub(crate) fn map_prompt_err(e: std::io::Error) -> CliError {
     if e.kind() == std::io::ErrorKind::Interrupted {

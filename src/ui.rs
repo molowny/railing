@@ -1,10 +1,11 @@
 //! High-level UI primitives: the failure line, spinners, intro/outro.
 //!
-//! Wraps `cliclack` so downstream crates never import it directly.
+//! The group's lines are [`crate::group`]'s, written on stderr in its colours.
 
 use console::style;
 
 use crate::error::CliError;
+use crate::group;
 
 // ---------------------------------------------------------------------------
 // The failure line
@@ -119,40 +120,55 @@ impl Drop for Spinner {
 // Intro / Outro
 // ---------------------------------------------------------------------------
 
+fn write_stderr(text: &str) -> Result<(), CliError> {
+    console::Term::stderr().write_str(text).map_err(io_err)
+}
+
+/// `mark msg`, both in `style`: how a closing line says how it went.
+fn verdict(mark: &str, msg: &str, style: crate::style::Style) -> String {
+    let caps = stderr_caps();
+    format!("{} {}", style.paint(caps, mark), style.paint(caps, msg))
+}
+
 /// Show a styled intro banner.
 pub fn intro(title: &str) -> Result<(), CliError> {
-    cliclack::intro(title.to_string()).map_err(|e| CliError::Internal(anyhow::anyhow!(e)))
+    write_stderr(&group::open(stderr_caps(), title))
 }
 
 /// Show a styled outro message (neutral).
 pub fn outro(msg: &str) -> Result<(), CliError> {
-    cliclack::outro(msg.to_string()).map_err(|e| CliError::Internal(anyhow::anyhow!(e)))
+    write_stderr(&group::close(stderr_caps(), msg))
 }
 
 /// Show a green success outro that closes the prompt group.
 pub fn outro_success(msg: &str) -> Result<(), CliError> {
-    cliclack::outro(format!("{} {}", style("✔").green(), style(msg).green()))
-        .map_err(|e| CliError::Internal(anyhow::anyhow!(e)))
+    let line = verdict("✔", msg, crate::style::Style::new().green());
+    write_stderr(&group::close(stderr_caps(), &line))
 }
 
 /// Show a red error outro that closes the prompt group.
 pub fn outro_error(msg: &str) -> Result<(), CliError> {
-    cliclack::outro_cancel(format!("{} {}", style("✖").red(), style(msg).red()))
-        .map_err(|e| CliError::Internal(anyhow::anyhow!(e)))
+    let line = verdict("✖", msg, crate::style::Style::new().red());
+    write_stderr(&group::close(stderr_caps(), &line))
 }
 
 /// Show a yellow warning outro that closes the prompt group.
 pub fn outro_warning(msg: &str) -> Result<(), CliError> {
-    cliclack::outro(format!("{} {}", style("⚠").yellow(), style(msg).yellow()))
-        .map_err(|e| CliError::Internal(anyhow::anyhow!(e)))
+    let line = verdict("⚠", msg, crate::style::Style::new().yellow());
+    write_stderr(&group::close(stderr_caps(), &line))
+}
+
+/// Close the group as given up: `└  msg`, the message red.
+pub fn outro_cancel(msg: &str) -> Result<(), CliError> {
+    write_stderr(&group::close_cancelled(stderr_caps(), msg))
 }
 
 // ---------------------------------------------------------------------------
 // Inside a prompt group: notes and gutter log lines
 // ---------------------------------------------------------------------------
 //
-// Between `intro` and `outro`, plain `println!` breaks the `│` gutter that
-// cliclack draws. These render inside it: a boxed note for a block of text
+// Between `intro` and `outro`, plain `println!` breaks the group's `│`
+// gutter. These render inside it: a boxed note for a block of text
 // and one-line log entries with the group's own symbols.
 
 fn io_err(e: std::io::Error) -> CliError {
@@ -223,35 +239,41 @@ pub fn wrap_to(text: &str, width: usize) -> String {
     out.join("\n")
 }
 
-/// One-line log entries drawn with the prompt group's gutter.
+/// One-line log entries drawn with the prompt group's gutter
+/// ([`group::log`]).
 pub mod log {
-    use super::{CliError, io_err};
+    use super::{CliError, stderr_caps, write_stderr};
+    use crate::group::{self, Mark};
+
+    fn entry(mark: Mark, msg: &str) -> Result<(), CliError> {
+        write_stderr(&group::log(stderr_caps(), mark, msg))
+    }
 
     /// A completed step (`◇`).
     pub fn step(msg: &str) -> Result<(), CliError> {
-        cliclack::log::step(msg).map_err(io_err)
+        entry(Mark::Step, msg)
     }
 
     /// An informational line (`●`).
     pub fn info(msg: &str) -> Result<(), CliError> {
-        cliclack::log::info(msg).map_err(io_err)
+        entry(Mark::Info, msg)
     }
 
-    /// A dim remark (`│`).
+    /// A remark (`├`).
     pub fn remark(msg: &str) -> Result<(), CliError> {
-        cliclack::log::remark(msg).map_err(io_err)
+        entry(Mark::Remark, msg)
     }
 
     pub fn success(msg: &str) -> Result<(), CliError> {
-        cliclack::log::success(msg).map_err(io_err)
+        entry(Mark::Success, msg)
     }
 
     pub fn warning(msg: &str) -> Result<(), CliError> {
-        cliclack::log::warning(msg).map_err(io_err)
+        entry(Mark::Warning, msg)
     }
 
     pub fn error(msg: &str) -> Result<(), CliError> {
-        cliclack::log::error(msg).map_err(io_err)
+        entry(Mark::Error, msg)
     }
 }
 

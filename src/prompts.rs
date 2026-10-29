@@ -1,7 +1,7 @@
 //! Shared interactive prompt helpers. Text and confirm prompts are the core's
-//! ([`crate::prompt`]) on the terminal the command inherited; the password
-//! prompt and the lists still read keys through cliclack and console until
-//! the rest of the core refactor lands.
+//! ([`crate::prompt`]) on the terminal the command inherited, and so is the
+//! password prompt; the lists (`select`, `pick`, `multiselect`) still read
+//! keys through console until the core refactor's M4.
 //!
 //! All functions here return `Result<T, CliError>` so cancellation (Esc /
 //! Ctrl+C) automatically maps to [`CliError::Cancelled`] and propagates

@@ -12,7 +12,7 @@
 //! └  ✔ 1 item
 //! ```
 //!
-//! A [`Flow`] is either *live* (the frame above, drawn by cliclack on stderr)
+//! A [`Flow`] is either *live* (the frame above, drawn on stderr)
 //! or *plain* (no frame: data on stdout, chatter on stderr) — the app decides
 //! which once, from its own policy (`--json`, `-q`, whether the streams are
 //! terminals). Code that renders a command never branches on it.
@@ -111,7 +111,7 @@ pub fn render_error(err: &CliError) -> ExitCode {
     match err.inner() {
         CliError::Rendered(_) => {}
         CliError::Cancelled => {
-            let _ = cliclack::outro_cancel("Aborted.");
+            let _ = ui::outro_cancel("Aborted.");
         }
         other => {
             tracing::error!(error = %other, "command failed");
@@ -134,7 +134,7 @@ fn outro_text(message: &str) -> String {
     out
 }
 
-/// Gutter log lines are not wrapped by cliclack; wrap them to the box width.
+/// Gutter log lines are not wrapped when drawn; wrap them to the box width.
 fn wrapped(msg: &str) -> String {
     ui::wrap_to(msg, note_width())
 }

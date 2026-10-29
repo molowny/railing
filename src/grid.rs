@@ -4,12 +4,13 @@
 //! box inside a live flow, and *plain*, the bordered table on stdout. Tones
 //! are applied at render time, so each way colours only when its stream does.
 //!
-//! The box is drawn here, not with `cliclack::note`: cliclack dims a note's
-//! whole body, which suits prose and flattens a table to one gray.
+//! The box is the note's frame ([`crate::frame`]), its body left as the
+//! table styled it: a note dims its whole body, which suits prose and would
+//! flatten a table to one grey.
 
 use comfy_table::presets::{NOTHING, UTF8_BORDERS_ONLY};
 use comfy_table::{Attribute, Cell, CellAlignment, Color, ContentArrangement, Table};
-use console::{Emoji, Style};
+use console::Style;
 
 /// What a piece of table text means; the palette maps it to a style.
 ///
@@ -366,21 +367,9 @@ impl Grid {
     }
 }
 
-/// The default cliclack theme, for its bar colour and step symbol — so the
-/// table box matches the notes and log lines around it.
-pub(crate) struct Clack;
-impl cliclack::Theme for Clack {}
-
-const S_BAR: Emoji = Emoji("│", "|");
-
 /// The bare `│`, coloured like the box frames.
 pub(crate) fn gutter_bar() -> String {
-    use cliclack::{Theme, ThemeState};
-    Clack
-        .bar_color(&ThemeState::Submit)
-        .for_stderr()
-        .apply_to(S_BAR)
-        .to_string()
+    crate::glyph::bar(crate::ui::stderr_caps(), crate::glyph::State::Submit)
 }
 
 /// `◇  title ───╮`, the body undimmed between `│` bars, `├───╯`: the box
@@ -527,8 +516,7 @@ mod tests {
         g.row(["a1", "github"]).row(["b22", "a much longer title"]);
         let s = boxed_note("Items", &g.boxed(80));
         assert!(!s.contains("\x1b[2m\x1b[1mID"), "body dimmed: {s:?}");
-        // Every line but the trailing `│` lines up; `Emoji` glyphs fall back
-        // to ASCII off a unicode terminal (CI), so don't match on them.
+        // Every line but the trailing `│` lines up.
         let lines: Vec<_> = s.lines().collect();
         let widths: Vec<_> = lines[..lines.len() - 1]
             .iter()

@@ -10,10 +10,10 @@
 //! ▲  Wrong password       ← step(Error): yellow
 //! ```
 //!
-//! Colours are cliclack's default theme, which the live flow draws with
-//! (`grid::Clack`); a test holds the two together. The marks are always
-//! these Unicode ones: cliclack swaps in ASCII (`o`, `*`) when the locale
-//! is not UTF-8, which would mix with the box rules (`─╮│`) that never do.
+//! Colours are clack's default theme, which the live flow draws with. The
+//! marks are always these Unicode ones, whatever the locale: cliclack, which
+//! drew the flow until M3, swapped in ASCII (`o`, `*`) when the locale was
+//! not UTF-8, which mixed with the box rules (`─╮│`) that never did.
 //! Every function takes the [`Caps`] of the terminal it draws for, so the
 //! marks are coloured for that terminal and no other.
 
@@ -98,42 +98,25 @@ pub fn dim(caps: Caps, text: &str) -> String {
     Style::new().color256(DIM_256).paint(caps, text)
 }
 
-#[cfg(all(test, feature = "full"))]
+#[cfg(test)]
 mod tests {
     use super::*;
-    use cliclack::{Theme, ThemeState};
 
-    /// The live flow draws with cliclack's theme; these strings must be the
-    /// same marks in the same colours, or a step drawn here would not match
-    /// the one above it. The mark is compared through cliclack's colour,
-    /// not its `state_symbol`: that one is locale-dependent (ASCII under
-    /// `LANG=C`, as on CI), ours is not.
+    /// clack's default theme, the colours the flow has always drawn with
+    /// (they were cliclack's until it left, M3): a step drawn here matches
+    /// one drawn by another process.
     #[test]
-    fn marks_match_the_live_flow() {
-        let _g = crate::ui::tests::lock();
-        // cliclack styles follow stdout's flag, these follow stderr's.
-        console::set_colors_enabled(true);
-        console::set_colors_enabled_stderr(true);
-        let theme = crate::grid::Clack;
-        let caps = Caps::COLOR;
-        for (ours, theirs, mark) in [
-            (State::Active, ThemeState::Active, "◆"),
-            (State::Submit, ThemeState::Submit, "◇"),
-            (State::Error, ThemeState::Error(String::new()), "▲"),
-            (State::Cancel, ThemeState::Cancel, "■"),
+    fn marks_in_clacks_colours() {
+        let c = Caps::COLOR;
+        for (state, mark, bar) in [
+            (State::Active, "\x1b[36m◆\x1b[0m", "\x1b[36m│\x1b[0m"),
+            (State::Submit, "\x1b[32m◇\x1b[0m", "\x1b[38;5;8m│\x1b[0m"),
+            (State::Error, "\x1b[33m▲\x1b[0m", "\x1b[33m│\x1b[0m"),
+            (State::Cancel, "\x1b[31m■\x1b[0m", "\x1b[31m│\x1b[0m"),
         ] {
-            assert_eq!(
-                step(caps, ours),
-                theme.state_symbol_color(&theirs).apply_to(mark).to_string(),
-                "{ours:?}"
-            );
-            assert_eq!(
-                bar(caps, ours),
-                theme.bar_color(&theirs).apply_to("│").to_string(),
-                "{ours:?}"
-            );
+            assert_eq!(step(c, state), mark, "{state:?}");
+            assert_eq!(super::bar(c, state), bar, "{state:?}");
         }
-        console::set_colors_enabled(false);
-        console::set_colors_enabled_stderr(false);
+        assert_eq!(step(Caps::PLAIN, State::Active), "◆");
     }
 }
