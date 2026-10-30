@@ -1,7 +1,7 @@
 //! Shared interactive prompt helpers. Text and confirm prompts are the core's
-//! ([`crate::prompt`]) on the terminal the command inherited, and so is the
-//! password prompt; the lists (`select`, `pick`, `multiselect`) still read
-//! keys through console until the core refactor's M4.
+//! ([`crate::prompt`]) on the terminal the command inherited, and so are the
+//! password prompt and the lists (`select`, `pick`, `multiselect`, through
+//! the same surface as the browsed grid).
 //!
 //! All functions here return `Result<T, CliError>` so cancellation (Esc /
 //! Ctrl+C) automatically maps to [`CliError::Cancelled`] and propagates
@@ -34,8 +34,8 @@ use crate::error::CliError;
 /// signal installed through `term::signals` is re-raised. Asking where there
 /// is no terminal to ask on is a usage error naming what to pass instead.
 ///
-/// Colour follows `console`'s stderr flag, like everything else the full
-/// kit draws (until it holds a `Tty` of its own, core refactor M5).
+/// Colour follows stderr's decision ([`crate::color`]), like everything else
+/// the full kit draws on stderr ([`crate::ui::stderr_tty`]).
 #[cfg(unix)]
 fn ask_on_stderr<T>(
     what: &str,
@@ -289,8 +289,8 @@ impl Rows {
     }
 
     fn resolve(self) -> usize {
-        let (height, _) = console::Term::stderr().size();
-        self.for_height(height)
+        let height = crate::ui::stderr_size().0;
+        self.for_height(u16::try_from(height).unwrap_or(u16::MAX))
     }
 }
 

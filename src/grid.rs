@@ -8,9 +8,9 @@
 //! table styled it: a note dims its whole body, which suits prose and would
 //! flatten a table to one grey.
 
+use crate::color::Style;
 use comfy_table::presets::{NOTHING, UTF8_BORDERS_ONLY};
 use comfy_table::{Attribute, Cell, CellAlignment, Color, ContentArrangement, Table};
-use console::Style;
 
 /// What a piece of table text means; the palette maps it to a style.
 ///
@@ -47,7 +47,8 @@ impl Tone {
         }
     }
 
-    /// This tone as a `console` style, for text outside a grid.
+    /// This tone as a style ([`crate::color::Style`]), for text outside a
+    /// grid.
     pub fn style(self) -> Style {
         let s = Style::new();
         match self {
@@ -63,7 +64,7 @@ impl Tone {
 
     /// This tone on a comfy-table cell, for a table built by hand
     /// ([`crate::make_table`]). `Dark*` are comfy-table's names for the base
-    /// ANSI colours, the ones `console` uses; its plain names are the bright
+    /// ANSI colours, the ones [`crate::style`] uses; its plain names are the bright
     /// variants.
     pub fn apply(self, cell: Cell) -> Cell {
         match self {
@@ -244,7 +245,7 @@ impl Grid {
     /// `text` as drawn in `column` of the printed table.
     fn drawn<'t>(&self, column: usize, text: &'t str) -> std::borrow::Cow<'t, str> {
         match self.clip.iter().find(|&&(c, _)| c == column) {
-            Some(&(_, width)) => console::truncate_str(text, width, "…"),
+            Some(&(_, width)) => crate::style::truncate(text, width, "…"),
             None => text.into(),
         }
     }
@@ -343,7 +344,7 @@ impl Grid {
     /// border.
     pub(crate) fn boxed(&self, width: usize) -> String {
         let headers = self.headers.iter().map(|h| h.to_uppercase()).collect();
-        let mut t = self.table(headers, console::colors_enabled_stderr());
+        let mut t = self.table(headers, crate::color::enabled(crate::color::Stream::Stderr));
         t.load_preset(NOTHING)
             .set_content_arrangement(ContentArrangement::Dynamic)
             .set_width(width as u16);
@@ -358,7 +359,10 @@ impl Grid {
 
     /// The bordered table for plain output, coloured only when stdout is.
     pub fn plain(&self) -> String {
-        let mut t = self.table(self.headers.clone(), console::colors_enabled());
+        let mut t = self.table(
+            self.headers.clone(),
+            crate::color::enabled(crate::color::Stream::Stdout),
+        );
         t.load_preset(UTF8_BORDERS_ONLY)
             .set_content_arrangement(ContentArrangement::Dynamic);
         let mut out = self.lead.clone();
@@ -385,8 +389,8 @@ mod tests {
     /// Colour globals are process-wide; hold `ui`'s lock while set.
     fn colors(on: bool) -> std::sync::MutexGuard<'static, ()> {
         let g = crate::ui::tests::lock();
-        console::set_colors_enabled(on);
-        console::set_colors_enabled_stderr(on);
+        crate::color::set_stream(crate::color::Stream::Stdout, on);
+        crate::color::set_stream(crate::color::Stream::Stderr, on);
         g
     }
 
@@ -520,7 +524,7 @@ mod tests {
         let lines: Vec<_> = s.lines().collect();
         let widths: Vec<_> = lines[..lines.len() - 1]
             .iter()
-            .map(|l| console::measure_text_width(l))
+            .map(|l| crate::style::measure(l))
             .collect();
         assert!(widths.windows(2).all(|w| w[0] == w[1]), "{widths:?}\n{s}");
     }

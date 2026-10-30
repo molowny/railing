@@ -27,15 +27,16 @@
 #[cfg(unix)]
 use std::io;
 
+use crate::color::style;
 use crate::glyph::{self, State};
 #[cfg(unix)]
 use crate::prompt::Answer;
+use crate::style as core_style;
 #[cfg(unix)]
 use crate::surface::{Input, Surface};
 use crate::term::Key;
 #[cfg(unix)]
 use crate::term::Tty;
-use console::{measure_text_width, style};
 
 use crate::frame::{self, CHIP_ROOM, Filter, Frame, cut, dim, paint_hits};
 use crate::fuzzy::Fuzzy;
@@ -310,8 +311,8 @@ impl<'a> List<'a> {
         // Sized for every row and the longest status, so the box keeps its
         // width while the person types; the label gives way last.
         let max_inner = frame::max_inner(width);
-        let label_w = self.rows.iter().map(|(l, _)| measure_text_width(l)).max();
-        let hint_w = self.rows.iter().map(|(_, h)| measure_text_width(h)).max();
+        let label_w = self.rows.iter().map(|(l, _)| core_style::measure(l)).max();
+        let hint_w = self.rows.iter().map(|(_, h)| core_style::measure(h)).max();
         let (label_w, hint_w) = (label_w.unwrap_or(0), hint_w.unwrap_or(0));
         // A multiselect's checkbox (`◼ `) sits before the label.
         let check_w = if self.checked.is_some() { 2 } else { 0 };
@@ -328,7 +329,7 @@ impl<'a> List<'a> {
         } else {
             (String::new(), 0)
         };
-        let chrome = measure_text_width(self.prompt) + measure_text_width(&worst) + 3;
+        let chrome = core_style::measure(self.prompt) + core_style::measure(&worst) + 3;
         let inner = table.max(chrome + chip_room).min(max_inner);
         let label_w = label_w.min(inner.saturating_sub(check_w));
         // A hint narrower than this is noise; drop the column instead.
@@ -355,9 +356,9 @@ impl<'a> List<'a> {
             let (label, hint) = self.rows[row.index];
             let label = cut(label, label_w);
             let base = if selected {
-                console::Style::new().bold()
+                crate::color::Style::new().bold()
             } else {
-                console::Style::new()
+                crate::color::Style::new()
             };
             let mut text = match &self.checked {
                 Some(checked) if checked[row.index] => style("◼ ").cyan().for_stderr().to_string(),
@@ -366,7 +367,7 @@ impl<'a> List<'a> {
             };
             text += &paint_hits(&label, 0, &row.hits, &base);
             if hint_w > 0 && !hint.is_empty() {
-                let pad = " ".repeat(label_w - measure_text_width(&label) + GAP);
+                let pad = " ".repeat(label_w - core_style::measure(&label) + GAP);
                 let hint = cut(hint, hint_w);
                 text += &pad;
                 text += &if selected {
@@ -489,7 +490,7 @@ mod tests {
     }
 
     fn plain(l: &List, step: &Step) -> String {
-        console::strip_ansi_codes(&l.render(step, 80)).into_owned()
+        crate::style::strip(&l.render(step, 80)).into_owned()
     }
 
     #[test]
@@ -653,15 +654,15 @@ mod tests {
             "{frame}"
         );
         assert!(lines[14].starts_with("◇  type to filter"), "{frame}");
-        let w = measure_text_width(lines[0]);
+        let w = core_style::measure(lines[0]);
         assert!(
-            lines[..13].iter().all(|x| measure_text_width(x) == w),
+            lines[..13].iter().all(|x| core_style::measure(x) == w),
             "{frame}"
         );
 
-        let narrow = console::strip_ansi_codes(&l.render(&Step::Active, 20)).into_owned();
+        let narrow = crate::style::strip(&l.render(&Step::Active, 20)).into_owned();
         assert!(
-            narrow.lines().all(|line| measure_text_width(line) < 20),
+            narrow.lines().all(|line| core_style::measure(line) < 20),
             "{narrow}"
         );
     }

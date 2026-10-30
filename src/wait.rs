@@ -35,7 +35,7 @@
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use console::style;
+use crate::color::style;
 
 use crate::error::CliError;
 #[cfg(unix)]
@@ -447,7 +447,7 @@ mod tests {
 
     fn plain_rows(rows: &[String]) -> Vec<String> {
         rows.iter()
-            .map(|r| console::strip_ansi_codes(r).into_owned())
+            .map(|r| crate::style::strip(r).into_owned())
             .collect()
     }
 
@@ -529,8 +529,8 @@ mod tests {
     #[test]
     fn the_active_step_glows_and_nothing_else_does() {
         let _g = crate::ui::tests::lock();
-        console::set_colors_enabled(true);
-        console::set_colors_enabled_stderr(true);
+        crate::color::set_stream(crate::color::Stream::Stdout, true);
+        crate::color::set_stream(crate::color::Stream::Stderr, true);
         let view = WaitView {
             steps: vec![
                 (Mark::Done, "code accepted".into()),
@@ -544,15 +544,15 @@ mod tests {
         for _ in 0..4 {
             for r in w.rows(&view, 80, false) {
                 let bright = r.contains("38;5;255");
-                if console::strip_ansi_codes(&r).contains("approval") {
+                if crate::style::strip(&r).contains("approval") {
                     lit |= bright;
                 } else {
                     assert!(!bright, "only the active step glows: {r:?}");
                 }
             }
         }
-        console::set_colors_enabled(false);
-        console::set_colors_enabled_stderr(false);
+        crate::color::set_stream(crate::color::Stream::Stdout, false);
+        crate::color::set_stream(crate::color::Stream::Stderr, false);
         assert!(lit, "the active step glows");
     }
 

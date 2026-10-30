@@ -32,11 +32,12 @@
 
 use std::io;
 
+use crate::color::style;
 use crate::glyph::State;
+use crate::style as core_style;
 #[cfg(unix)]
 use crate::surface::{Input, Surface};
 use crate::term::Key;
-use console::{measure_text_width, style};
 
 use crate::frame::{self, CHIP_ROOM, Filter, Frame, align, cut, dim, paint_hits};
 use crate::fuzzy::Fuzzy;
@@ -153,10 +154,10 @@ impl<'a> Browser<'a> {
                 let head = grid
                     .headers()
                     .get(c)
-                    .map_or(0, |h| measure_text_width(h) + 2);
+                    .map_or(0, |h| core_style::measure(h) + 2);
                 cells
                     .iter()
-                    .map(|r| measure_text_width(&r[c]))
+                    .map(|r| core_style::measure(&r[c]))
                     .fold(head, usize::max)
             })
             .collect();
@@ -361,13 +362,13 @@ impl<'a> Browser<'a> {
         let widths = self.fitted(max_inner);
         let table = widths.iter().sum::<usize>() + GAP * widths.len().saturating_sub(1);
         let n = self.keys.len();
-        let longest_head = self.grid.headers().iter().map(|h| measure_text_width(h));
+        let longest_head = self.grid.headers().iter().map(|h| core_style::measure(h));
         let worst_status = format!(
             "{n} of {n} match · {n}–{n} · {} ▼",
             "x".repeat(longest_head.max().unwrap_or(0))
         );
-        let chrome = measure_text_width(self.title) + measure_text_width(&worst_status) + 3;
-        let lead_w = lead.iter().map(|l| measure_text_width(&one_line(l)));
+        let chrome = core_style::measure(self.title) + core_style::measure(&worst_status) + 3;
+        let lead_w = lead.iter().map(|l| core_style::measure(&one_line(l)));
         let inner = table
             .max(chrome + CHIP_ROOM)
             .max(lead_w.max().unwrap_or(0))
@@ -462,7 +463,7 @@ impl<'a> Browser<'a> {
                 .map_or(Tone::Default, |g| self.grid.tone_of(c, g))
                 .style();
             let painted = paint_hits(&raw, self.starts[row][c], hits, &tone);
-            let pad = " ".repeat(w.saturating_sub(measure_text_width(&raw)));
+            let pad = " ".repeat(w.saturating_sub(core_style::measure(&raw)));
             if self.grid.is_right(c) {
                 text += &pad;
                 text += &painted;
@@ -545,8 +546,8 @@ mod tests {
     /// Colour globals are process-wide; hold `ui`'s lock while they are off.
     fn plain() -> std::sync::MutexGuard<'static, ()> {
         let g = crate::ui::tests::lock();
-        console::set_colors_enabled(false);
-        console::set_colors_enabled_stderr(false);
+        crate::color::set_stream(crate::color::Stream::Stdout, false);
+        crate::color::set_stream(crate::color::Stream::Stderr, false);
         g
     }
 
@@ -740,8 +741,11 @@ mod tests {
             "{frame}"
         );
         // Every line of the box is the same width.
-        let w = measure_text_width(l[0]);
-        assert!(l[..8].iter().all(|x| measure_text_width(x) == w), "{frame}");
+        let w = core_style::measure(l[0]);
+        assert!(
+            l[..8].iter().all(|x| core_style::measure(x) == w),
+            "{frame}"
+        );
     }
 
     #[test]
@@ -797,7 +801,10 @@ mod tests {
         grid.row(["x", &"long ".repeat(30)]);
         let frame = Browser::new("T", &grid).render(40, 40, false);
         assert!(frame.contains('…'), "{frame}");
-        assert!(frame.lines().all(|l| measure_text_width(l) < 40), "{frame}");
+        assert!(
+            frame.lines().all(|l| core_style::measure(l) < 40),
+            "{frame}"
+        );
     }
 
     #[test]

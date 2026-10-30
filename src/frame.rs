@@ -19,7 +19,8 @@
 
 use std::borrow::Cow;
 
-use console::{measure_text_width, style};
+use crate::color::style;
+use crate::style as core_style;
 
 use crate::glyph::{self, State};
 
@@ -80,9 +81,9 @@ impl Frame {
         let status = cut(
             status,
             self.inner
-                .saturating_sub(measure_text_width(&title) + 3 + chip_min),
+                .saturating_sub(core_style::measure(&title) + 3 + chip_min),
         );
-        let used = measure_text_width(&title) + measure_text_width(&status);
+        let used = core_style::measure(&title) + core_style::measure(&status);
         let room = self.inner.saturating_sub(used + 3);
         let chip = match filter {
             Filter::Applied if query.is_empty() => String::new(),
@@ -102,8 +103,9 @@ impl Frame {
         let title = style(title).bold().for_stderr();
         if status.is_empty() {
             // `◇  title ─────╮`: the rule runs to the corner.
-            let rule = (self.inner + 1)
-                .saturating_sub(measure_text_width(&title.to_string()) + measure_text_width(&chip));
+            let rule = (self.inner + 1).saturating_sub(
+                core_style::measure(&title.to_string()) + core_style::measure(&chip),
+            );
             return format!(
                 "{symbol}  {title}{chip} {}\n",
                 self.paint(&format!("{}╮", "─".repeat(rule.max(1))))
@@ -111,7 +113,7 @@ impl Frame {
         }
         let rule = self
             .inner
-            .saturating_sub(used + 2 + measure_text_width(&chip));
+            .saturating_sub(used + 2 + core_style::measure(&chip));
         format!(
             "{symbol}  {title}{chip} {} {} {}\n",
             self.paint(&"─".repeat(rule.max(1))),
@@ -126,8 +128,8 @@ impl Frame {
     pub(crate) fn boxed(title: &str, body: &str) -> String {
         let inner = body
             .lines()
-            .map(measure_text_width)
-            .chain(std::iter::once(measure_text_width(title)))
+            .map(core_style::measure)
+            .chain(std::iter::once(core_style::measure(title)))
             .max()
             .unwrap_or(0);
         let frame = Frame::new(inner, State::Submit);
@@ -147,7 +149,7 @@ impl Frame {
     /// `│ › content │`: a one-column `marker` (a cursor) before the content.
     pub(crate) fn marked(&self, marker: &str, content: &str) -> String {
         let bar = self.paint("│");
-        let pad = self.inner.saturating_sub(measure_text_width(content));
+        let pad = self.inner.saturating_sub(core_style::measure(content));
         format!("{bar} {marker} {content}{} {bar}\n", " ".repeat(pad))
     }
 
@@ -193,7 +195,7 @@ fn search(s: &str) -> String {
 
 /// `s` padded to `w` columns, on the right or the left.
 pub(crate) fn align(s: &str, w: usize, right: bool) -> String {
-    let pad = " ".repeat(w.saturating_sub(measure_text_width(s)));
+    let pad = " ".repeat(w.saturating_sub(core_style::measure(s)));
     if right {
         format!("{pad}{s}")
     } else {
@@ -203,24 +205,24 @@ pub(crate) fn align(s: &str, w: usize, right: bool) -> String {
 
 /// `s` if it fits in `width` columns, else as much as fits followed by `…`.
 pub(crate) fn cut(s: &str, width: usize) -> Cow<'_, str> {
-    if measure_text_width(s) <= width {
+    if core_style::measure(s) <= width {
         return s.into();
     }
     if width == 0 {
         return "".into();
     }
-    console::truncate_str(s, width, "…")
+    crate::style::truncate(s, width, "…")
 }
 
 /// The end of `s` when it does not fit: a query being typed shows its tail.
 pub(crate) fn cut_start(s: &str, width: usize) -> String {
-    if measure_text_width(s) <= width {
+    if core_style::measure(s) <= width {
         return s.to_string();
     }
     let mut tail: Vec<char> = Vec::new();
     let mut used = 1;
     for c in s.chars().rev() {
-        let w = measure_text_width(c.encode_utf8(&mut [0; 4]));
+        let w = core_style::measure(c.encode_utf8(&mut [0; 4]));
         if used + w > width {
             break;
         }
@@ -232,8 +234,13 @@ pub(crate) fn cut_start(s: &str, width: usize) -> String {
 
 /// `text` with the chars at `hits` (char offsets from `start`) underlined in
 /// cyan — the filter's matches — over `base`; runs are styled once each.
-pub(crate) fn paint_hits(text: &str, start: u32, hits: &[u32], base: &console::Style) -> String {
-    let base = base.clone().for_stderr();
+pub(crate) fn paint_hits(
+    text: &str,
+    start: u32,
+    hits: &[u32],
+    base: &crate::color::Style,
+) -> String {
+    let base = base.for_stderr();
     let mut out = String::new();
     let mut run = String::new();
     let mut in_hit = false;
@@ -263,8 +270,8 @@ mod tests {
 
     fn plain() -> std::sync::MutexGuard<'static, ()> {
         let g = crate::ui::tests::lock();
-        console::set_colors_enabled(false);
-        console::set_colors_enabled_stderr(false);
+        crate::color::set_stream(crate::color::Stream::Stdout, false);
+        crate::color::set_stream(crate::color::Stream::Stderr, false);
         g
     }
 
@@ -278,11 +285,11 @@ mod tests {
             f.head("Items", "git", Filter::Applied, "1 of 9 match · 1–1"),
             f.head("Items", &"x".repeat(80), Filter::Typing, "1–4 of 9"),
         ] {
-            assert_eq!(measure_text_width(head.trim_end()), 36, "{head}");
+            assert_eq!(core_style::measure(head.trim_end()), 36, "{head}");
         }
-        assert_eq!(measure_text_width(f.line("abc").trim_end()), 36);
-        assert_eq!(measure_text_width(f.marked("›", "abc").trim_end()), 36);
-        assert_eq!(measure_text_width(f.close().lines().next().unwrap()), 36);
+        assert_eq!(core_style::measure(f.line("abc").trim_end()), 36);
+        assert_eq!(core_style::measure(f.marked("›", "abc").trim_end()), 36);
+        assert_eq!(core_style::measure(f.close().lines().next().unwrap()), 36);
     }
 
     #[test]
@@ -317,13 +324,13 @@ mod tests {
         assert_eq!(l[3], "│   a1  github │", "{s}");
         assert!(l[4].starts_with("├") && l[4].ends_with("╯"), "{s}");
         assert_eq!(l[5], "│");
-        let w = measure_text_width(l[0]);
-        assert!(l[..5].iter().all(|x| measure_text_width(x) == w), "{s}");
+        let w = core_style::measure(l[0]);
+        assert!(l[..5].iter().all(|x| core_style::measure(x) == w), "{s}");
         // A title wider than the body widens the box.
         let wide = Frame::boxed("A much longer title", "x");
-        let w = measure_text_width(wide.lines().next().unwrap());
+        let w = core_style::measure(wide.lines().next().unwrap());
         assert_eq!(
-            measure_text_width(wide.lines().nth(2).unwrap()),
+            core_style::measure(wide.lines().nth(2).unwrap()),
             w,
             "{wide}"
         );

@@ -24,7 +24,7 @@
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-use console::style;
+use crate::color::style;
 
 use crate::error::CliError;
 pub use crate::grid::Grid;
@@ -166,7 +166,7 @@ pub fn box_width() -> usize {
 
 /// Width available inside a note box on this terminal.
 fn note_width() -> usize {
-    let cols = console::Term::stderr().size().1 as usize;
+    let cols = ui::stderr_size().1;
     cols.saturating_sub(8).clamp(40, 160)
 }
 
@@ -401,7 +401,7 @@ impl Flow {
     /// rest of the report.
     pub fn table(&self, title: &str, grid: &Grid) {
         if self.live {
-            let _ = console::Term::stderr().write_str(&table_box(title, grid));
+            let _ = ui::stderr_write(&table_box(title, grid));
         } else if self.plain == Plain::Split {
             self.write(To::Out, &format!("{}\n", grid.plain()));
         } else {
@@ -444,7 +444,7 @@ impl Flow {
     /// the grid cannot start, the table is printed as if it had never been
     /// asked for.
     pub fn browse_table(&self, title: &str, grid: &Grid) -> Result<Browsed, CliError> {
-        let rows = || console::Term::stderr().size().0 as usize;
+        let rows = || ui::stderr_size().0;
         if grid.is_empty()
             || !opens_grid(self.browse, self.can_ask(), || {
                 fits(&table_box(title, grid), rows())
@@ -485,7 +485,7 @@ impl Flow {
                 };
                 g.row([icon.to_string(), row.name.clone(), row.detail.clone()]);
             }
-            let _ = console::Term::stderr().write_str(&boxed_note(title, &g.boxed(note_width())));
+            let _ = ui::stderr_write(&boxed_note(title, &g.boxed(note_width())));
         } else {
             report.render_pretty();
         }
@@ -703,9 +703,7 @@ fn plain_block(title: &str, body: &str) -> String {
 /// The columns beside the 3-column gutter on stderr, where a live block
 /// draws. A terminal that reports no width gets 100.
 fn gutter_width() -> usize {
-    let cols = console::Term::stderr()
-        .size_checked()
-        .map_or(0, |(_, c)| usize::from(c));
+    let cols = ui::stderr_size_checked().map_or(0, |(_, c)| c);
     let cols = if cols == 0 { 100 } else { cols };
     cols.saturating_sub(3).max(40)
 }
