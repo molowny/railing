@@ -20,10 +20,22 @@
 //! [`List::select`] is the same list as `prompts::select`: a short, fixed set
 //! of choices with no filter, in a box sized to its rows.
 
+// Off Unix nothing is drawn; the list and its rendering stay compiled and
+// tested.
+#![cfg_attr(not(unix), allow(dead_code))]
+
+#[cfg(unix)]
 use std::io;
 
 use crate::glyph::{self, State};
-use console::{Key, Term, measure_text_width, style};
+#[cfg(unix)]
+use crate::prompt::Answer;
+#[cfg(unix)]
+use crate::surface::{Input, Surface};
+use crate::term::Key;
+#[cfg(unix)]
+use crate::term::Tty;
+use console::{measure_text_width, style};
 
 use crate::frame::{self, CHIP_ROOM, Filter, Frame, cut, dim, paint_hits};
 use crate::fuzzy::Fuzzy;
@@ -161,11 +173,11 @@ impl<'a> List<'a> {
         if !self.filterable {
             match key {
                 Key::Enter => return Step::Submit(self.shown[self.cursor].index),
-                Key::Escape | Key::CtrlC => return Step::Cancel,
-                Key::ArrowUp | Key::BackTab | Key::Char('k') => {
+                Key::Esc | Key::Ctrl('c') => return Step::Cancel,
+                Key::Up | Key::BackTab | Key::Char('k') => {
                     self.move_to(self.cursor.saturating_sub(1))
                 }
-                Key::ArrowDown | Key::Tab | Key::Char('j') => self.move_to(self.cursor + 1),
+                Key::Down | Key::Tab | Key::Char('j') => self.move_to(self.cursor + 1),
                 Key::PageUp => self.move_to(self.cursor.saturating_sub(self.height)),
                 Key::PageDown => self.move_to(self.cursor + self.height),
                 Key::Home => self.move_to(0),
@@ -180,15 +192,13 @@ impl<'a> List<'a> {
                 None => self.error = Some(format!("nothing matches '{}'", self.query)),
             },
             // Esc first clears what was typed, then leaves.
-            Key::Escape if !self.query.is_empty() => {
+            Key::Esc if !self.query.is_empty() => {
                 self.query.clear();
                 self.filter();
             }
-            Key::Escape | Key::CtrlC => return Step::Cancel,
-            Key::ArrowUp | Key::BackTab | Key::Char('\u{10}') => {
-                self.move_to(self.cursor.saturating_sub(1))
-            }
-            Key::ArrowDown | Key::Tab | Key::Char('\u{e}') => self.move_to(self.cursor + 1),
+            Key::Esc | Key::Ctrl('c') => return Step::Cancel,
+            Key::Up | Key::BackTab | Key::Ctrl('p') => self.move_to(self.cursor.saturating_sub(1)),
+            Key::Down | Key::Tab | Key::Ctrl('n') => self.move_to(self.cursor + 1),
             Key::PageUp => self.move_to(self.cursor.saturating_sub(self.height)),
             Key::PageDown => self.move_to(self.cursor + self.height),
             Key::Home => self.move_to(0),
@@ -199,11 +209,11 @@ impl<'a> List<'a> {
                 }
             }
             // Ctrl-U clears the query, Ctrl-W drops its last word.
-            Key::Char('\u{15}') => {
+            Key::Ctrl('u') => {
                 self.query.clear();
                 self.filter();
             }
-            Key::Char('\u{17}') => {
+            Key::Ctrl('w') => {
                 let kept = self.query.trim_end().rfind(' ').map_or(0, |i| i + 1);
                 self.query.truncate(kept);
                 self.filter();
@@ -393,59 +403,69 @@ impl<'a> List<'a> {
     }
 }
 
-/// Draw `list` on stderr until a row is chosen (its index) or the person
-/// cancels (`Interrupted`, which [`crate::error`] maps to `Cancelled`).
-pub(crate) fn run(list: List<'_>) -> io::Result<usize> {
-    match drive(list)? {
-        Step::Submit(i) => Ok(i),
-        _ => Err(io::ErrorKind::InvalidInput.into()),
-    }
+/// Draw `list` on `tty` until a row is chosen (its index in the rows given)
+/// or the person cancels.
+#[cfg(unix)]
+pub(crate) fn run(tty: &mut Tty, list: List<'_>) -> io::Result<Answer<usize>> {
+    Ok(match drive(tty, list)? {
+        Answer::Submitted(Step::Submit(i)) => Answer::Submitted(i),
+        other => other.map(|_| unreachable!("a single pick ends in Submit")),
+    })
 }
 
 /// [`run`] for a [`List::multi`]: the checked rows, in the order given.
-pub(crate) fn run_multi(list: List<'_>) -> io::Result<Vec<usize>> {
-    match drive(list)? {
-        Step::Chosen(rows) => Ok(rows),
-        _ => Err(io::ErrorKind::InvalidInput.into()),
-    }
+#[cfg(unix)]
+pub(crate) fn run_multi(tty: &mut Tty, list: List<'_>) -> io::Result<Answer<Vec<usize>>> {
+    Ok(match drive(tty, list)? {
+        Answer::Submitted(Step::Chosen(rows)) => Answer::Submitted(rows),
+        other => other.map(|_| unreachable!("a multiselect ends in Chosen")),
+    })
 }
 
-/// Draw `list` until it ends: the final [`Step`] (never `Active` or
-/// `Cancel` — a cancel is `Interrupted`).
-fn drive(mut list: List<'_>) -> io::Result<Step> {
+/// Draw `list` until it ends, through the shared [`Surface`]: the final
+/// [`Step`] (a `Submit` or `Chosen`), drawn as the collapsed answer, or
+/// cancelled, drawn as such. A terminal that cannot redraw has no list
+/// ([`io::ErrorKind::Unsupported`]).
+#[cfg(unix)]
+fn drive(tty: &mut Tty, mut list: List<'_>) -> io::Result<Answer<Step>> {
     if list.rows.is_empty() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             "nothing to pick from",
         ));
     }
-    let term = Term::stderr();
-    if !term.is_term() {
-        return Err(io::ErrorKind::NotConnected.into());
-    }
-    term.hide_cursor()?;
-    let result = (|| {
-        let mut step = Step::Active;
-        let mut drawn = 0;
-        loop {
-            let frame = list.render(&step, usize::from(term.size().1));
-            term.clear_last_lines(drawn)?;
-            term.write_str(&frame)?;
-            drawn = frame.lines().count();
-            match step {
-                Step::Active => {}
-                Step::Cancel => return Err(io::ErrorKind::Interrupted.into()),
-                done => return Ok(done),
+    let mut surface = Surface::new(tty)?;
+    let mut raw = surface.raw()?;
+    let mut step = Step::Active;
+    loop {
+        surface.draw(&list.render(&step, surface.cols()))?;
+        match step {
+            Step::Active => {}
+            Step::Cancel => {
+                raw.restore()?;
+                surface.keep()?;
+                return Ok(Answer::Cancelled);
             }
-            step = match term.read_key() {
-                Ok(key) => list.on(key),
-                Err(e) if e.kind() == io::ErrorKind::Interrupted => Step::Cancel,
-                Err(e) => return Err(e),
-            };
+            done => {
+                raw.restore()?;
+                surface.keep()?;
+                return Ok(Answer::Submitted(done));
+            }
         }
-    })();
-    term.show_cursor()?;
-    result
+        step = match surface.read(&mut raw, None)? {
+            Input::Key(key) => list.on(key),
+            Input::Resized | Input::Timeout => Step::Active,
+            Input::Hangup => {
+                raw.restore()?;
+                surface.keep()?;
+                return Ok(Answer::Hangup);
+            }
+            Input::Interrupted(sig) => {
+                surface.erase()?;
+                return Ok(Answer::Interrupted(sig));
+            }
+        };
+    }
 }
 
 #[cfg(test)]
@@ -537,7 +557,7 @@ mod tests {
         typed(&mut l, "jb");
         assert_eq!(l.query, "", "letters do not filter");
         assert_eq!(l.on(Key::Enter), Step::Submit(1), "j moved down");
-        assert_eq!(l.on(Key::Escape), Step::Cancel, "esc leaves at once");
+        assert_eq!(l.on(Key::Esc), Step::Cancel, "esc leaves at once");
     }
 
     #[test]
@@ -581,29 +601,29 @@ mod tests {
         assert_eq!(l.on(Key::Enter), Step::Chosen(vec![]), "a again clears all");
         let done = plain(&l, &Step::Chosen(vec![0, 2]));
         assert!(done.contains("Cheese, Ham"), "{done}");
-        assert_eq!(l.on(Key::Escape), Step::Cancel);
+        assert_eq!(l.on(Key::Esc), Step::Cancel);
     }
 
     #[test]
     fn esc_clears_the_query_before_cancelling() {
         let mut l = list(5, 10);
         typed(&mut l, "item-3");
-        assert_eq!(l.on(Key::Escape), Step::Active);
+        assert_eq!(l.on(Key::Esc), Step::Active);
         assert_eq!(l.status(), "1–5 of 5");
-        assert_eq!(l.on(Key::Escape), Step::Cancel);
+        assert_eq!(l.on(Key::Esc), Step::Cancel);
     }
 
     #[test]
     fn the_cursor_scrolls_the_window() {
         let mut l = list(20, 5);
         for _ in 0..6 {
-            l.on(Key::ArrowDown);
+            l.on(Key::Down);
         }
         assert_eq!((l.cursor, l.start), (6, 2));
         l.on(Key::PageUp);
         assert_eq!((l.cursor, l.start), (1, 1));
-        l.on(Key::ArrowUp);
-        l.on(Key::ArrowUp);
+        l.on(Key::Up);
+        l.on(Key::Up);
         assert_eq!((l.cursor, l.start), (0, 0), "stops at the top");
         assert_eq!(l.on(Key::Enter), Step::Submit(0));
     }
@@ -611,7 +631,7 @@ mod tests {
     #[test]
     fn the_box_has_the_count_the_cursor_and_the_controls() {
         let mut l = list(40, 10);
-        l.on(Key::ArrowDown);
+        l.on(Key::Down);
         let frame = plain(&l, &Step::Active);
         let lines: Vec<&str> = frame.lines().collect();
         // head, blank, 10 rows, bottom rule, bar, controls

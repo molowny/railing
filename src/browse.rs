@@ -13,7 +13,7 @@
 //! ```
 //!
 //! It is drawn on stderr below the flow's gutter and redrawn in place, the
-//! way the picker is (`clear_last_lines` + `read_key`) — never on the
+//! way the picker is (through `crate::surface`) — never on the
 //! alternate screen. When the person finishes, the frame freezes where it is,
 //! like a submitted clack prompt: the window they ended on, the filter and
 //! sort in its title. Ctrl-C clears it.
@@ -26,10 +26,17 @@
 //! re-ranked by relevance the way a picker's are. The keys and what they mean
 //! are `docs/cli.md` §8.1.1.
 
+// Off Unix nothing is drawn; the list and its rendering stay compiled and
+// tested.
+#![cfg_attr(not(unix), allow(dead_code))]
+
 use std::io;
 
 use crate::glyph::State;
-use console::{Key, Term, measure_text_width, style};
+#[cfg(unix)]
+use crate::surface::{Input, Surface};
+use crate::term::Key;
+use console::{measure_text_width, style};
 
 use crate::frame::{self, CHIP_ROOM, Filter, Frame, align, cut, dim, paint_hits};
 use crate::fuzzy::Fuzzy;
@@ -230,7 +237,7 @@ impl<'a> Browser<'a> {
     }
 
     pub(crate) fn on(&mut self, key: Key) -> Step {
-        if matches!(key, Key::CtrlC | Key::Char('\u{3}')) {
+        if matches!(key, Key::Ctrl('c')) {
             return Step::Cancel;
         }
         let top = self.top as isize;
@@ -238,7 +245,7 @@ impl<'a> Browser<'a> {
         if self.editing {
             match key {
                 Key::Enter => self.editing = false,
-                Key::Escape => {
+                Key::Esc => {
                     self.editing = false;
                     self.query.clear();
                     self.refilter();
@@ -247,8 +254,8 @@ impl<'a> Browser<'a> {
                     self.query.pop();
                     self.refilter();
                 }
-                Key::ArrowUp => self.scroll_to(top - 1),
-                Key::ArrowDown => self.scroll_to(top + 1),
+                Key::Up => self.scroll_to(top - 1),
+                Key::Down => self.scroll_to(top + 1),
                 Key::Char(ch) if !ch.is_control() => {
                     self.query.push(ch);
                     self.top = 0;
@@ -260,14 +267,14 @@ impl<'a> Browser<'a> {
         }
         match key {
             Key::Char('q') | Key::Enter => return Step::Done,
-            Key::Escape if self.query.is_empty() => return Step::Done,
-            Key::Escape => {
+            Key::Esc if self.query.is_empty() => return Step::Done,
+            Key::Esc => {
                 self.query.clear();
                 self.refilter();
             }
             Key::Char('/') => self.editing = true,
-            Key::ArrowUp | Key::Char('k') => self.scroll_to(top - 1),
-            Key::ArrowDown | Key::Char('j') => self.scroll_to(top + 1),
+            Key::Up | Key::Char('k') => self.scroll_to(top - 1),
+            Key::Down | Key::Char('j') => self.scroll_to(top + 1),
             Key::PageUp => self.scroll_to(top - page),
             Key::PageDown | Key::Char(' ') => self.scroll_to(top + page),
             Key::Home | Key::Char('g') => self.scroll_to(0),
@@ -488,44 +495,46 @@ fn one_line(text: &str) -> String {
 }
 
 /// Draw `browser` on stderr until the person finishes (`Some`, the frame
-/// left frozen in place) or cancels (`None`, the frame cleared).
+/// left frozen in place) or cancels (`None`, the frame cleared). A terminal
+/// that cannot redraw is an error ([`io::ErrorKind::Unsupported`]): the
+/// caller prints the table instead. A signal installed through
+/// `term::signals` erases the frame and is re-raised.
+#[cfg(unix)]
 pub(crate) fn run(mut browser: Browser<'_>) -> io::Result<Option<View>> {
-    let term = Term::stderr();
-    if !term.is_term() {
-        return Err(io::ErrorKind::NotConnected.into());
-    }
-    term.hide_cursor()?;
-    let result = crate::prompts::without_sigint(|| {
-        let mut drawn = 0;
-        loop {
-            let (rows, cols) = term.size();
-            let frame = browser.render(cols as usize, rows as usize, false);
-            term.clear_last_lines(drawn)?;
-            term.write_str(&frame)?;
-            drawn = frame.lines().count();
-            let step = match term.read_key() {
-                Ok(key) => browser.on(key),
-                Err(e) if e.kind() == io::ErrorKind::Interrupted => Step::Cancel,
-                Err(e) => return Err(e),
-            };
-            match step {
-                Step::Active => {}
-                Step::Done => {
-                    let (rows, cols) = term.size();
-                    let frame = browser.render(cols as usize, rows as usize, true);
-                    term.clear_last_lines(drawn)?;
-                    term.write_str(&frame)?;
-                    return Ok(Some(browser.view()));
-                }
-                Step::Cancel => {
-                    term.clear_last_lines(drawn)?;
-                    return Ok(None);
-                }
+    let mut surface = Surface::new(crate::ui::stderr_tty()?)?;
+    let mut raw = surface.raw()?;
+    loop {
+        surface.draw(&browser.render(surface.cols(), surface.rows(), false))?;
+        let step = match surface.read(&mut raw, None)? {
+            Input::Key(key) => browser.on(key),
+            Input::Resized | Input::Timeout => Step::Active,
+            Input::Hangup => Step::Cancel,
+            Input::Interrupted(sig) => {
+                surface.erase()?;
+                crate::term::signals::reraise(sig);
+            }
+        };
+        match step {
+            Step::Active => {}
+            Step::Done => {
+                surface.draw(&browser.render(surface.cols(), surface.rows(), true))?;
+                raw.restore()?;
+                surface.keep()?;
+                return Ok(Some(browser.view()));
+            }
+            Step::Cancel => {
+                raw.restore()?;
+                surface.erase()?;
+                return Ok(None);
             }
         }
-    });
-    term.show_cursor()?;
-    result
+    }
+}
+
+/// Off Unix there is no terminal to browse on: the caller prints the table.
+#[cfg(not(unix))]
+pub(crate) fn run(_: Browser<'_>) -> io::Result<Option<View>> {
+    Err(io::ErrorKind::Unsupported.into())
 }
 
 #[cfg(test)]
@@ -569,7 +578,7 @@ mod tests {
     fn keys(b: &mut Browser, keys: &[Key]) -> Step {
         let mut last = Step::Active;
         for k in keys {
-            last = b.on(k.clone());
+            last = b.on(*k);
         }
         last
     }
@@ -645,7 +654,7 @@ mod tests {
         let mut b = Browser::new("T", &grid);
         keys(&mut b, &[Key::Char('/')]);
         assert_eq!(keys(&mut b, &typed("q")), Step::Active);
-        assert_eq!(keys(&mut b, &[Key::Escape]), Step::Active);
+        assert_eq!(keys(&mut b, &[Key::Esc]), Step::Active);
         assert_eq!(b.view().rows.len(), 4);
         assert_eq!(b.view().query, None);
     }
@@ -658,9 +667,9 @@ mod tests {
         keys(&mut b, &typed("gamma"));
         keys(&mut b, &[Key::Enter]);
         assert_eq!(b.view().rows.len(), 1);
-        assert_eq!(keys(&mut b, &[Key::Escape]), Step::Active);
+        assert_eq!(keys(&mut b, &[Key::Esc]), Step::Active);
         assert_eq!(b.view().rows.len(), 4);
-        assert_eq!(keys(&mut b, &[Key::Escape]), Step::Done);
+        assert_eq!(keys(&mut b, &[Key::Esc]), Step::Done);
     }
 
     #[test]
@@ -669,12 +678,11 @@ mod tests {
         for k in [Key::Char('q'), Key::Enter] {
             assert_eq!(Browser::new("T", &grid).on(k), Step::Done);
         }
-        for k in [Key::CtrlC, Key::Char('\u{3}')] {
-            assert_eq!(Browser::new("T", &grid).on(k.clone()), Step::Cancel);
-            let mut editing = Browser::new("T", &grid);
-            editing.on(Key::Char('/'));
-            assert_eq!(editing.on(k), Step::Cancel);
-        }
+        let ctrl_c = Key::Ctrl('c');
+        assert_eq!(Browser::new("T", &grid).on(ctrl_c), Step::Cancel);
+        let mut editing = Browser::new("T", &grid);
+        editing.on(Key::Char('/'));
+        assert_eq!(editing.on(ctrl_c), Step::Cancel);
     }
 
     #[test]
@@ -688,7 +696,7 @@ mod tests {
         // 3 rows: a terminal just tall enough for the smallest window.
         let frame = b.render(80, 3, false);
         assert!(frame.contains("1–3 of 50"), "{frame}");
-        keys(&mut b, &[Key::ArrowDown, Key::Char('j')]);
+        keys(&mut b, &[Key::Down, Key::Char('j')]);
         let frame = b.render(80, 3, false);
         assert!(
             frame.contains("3–5 of 50") && frame.contains("row02"),
@@ -696,13 +704,13 @@ mod tests {
         );
         keys(&mut b, &[Key::PageDown]);
         assert!(b.render(80, 3, false).contains("6–8 of 50"));
-        keys(&mut b, &[Key::Char('G'), Key::ArrowDown]);
+        keys(&mut b, &[Key::Char('G'), Key::Down]);
         let frame = b.render(80, 3, false);
         assert!(
             frame.contains("48–50 of 50") && frame.contains("row49"),
             "{frame}"
         );
-        keys(&mut b, &[Key::Char('g'), Key::ArrowUp]);
+        keys(&mut b, &[Key::Char('g'), Key::Up]);
         assert!(b.render(80, 3, false).contains("1–3 of 50"));
     }
 

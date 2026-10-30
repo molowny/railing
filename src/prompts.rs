@@ -17,56 +17,12 @@
 //! if prompts::confirm("Are you sure?", false)? { … }
 //! ```
 
+#[cfg(unix)]
 use std::io;
 
 use zeroize::Zeroizing;
 
-use crate::error::{CliError, map_prompt_err};
-
-/// Run one prompt with SIGINT ignored. console's key reader answers Ctrl-C by
-/// raising SIGINT at the process, which kills it mid-frame with the cursor
-/// still hidden; ignored, the read fails as interrupted instead, the prompt
-/// draws itself cancelled, and the caller gets [`CliError::Cancelled`]
-/// (exit 130). Whatever handler was there before is put back. A cancelled
-/// prompt's footer ends the gutter, so the open groups are marked closed
-/// ([`crate::flow::closed_by_prompt`]) and nothing draws a second `└`.
-///
-/// Off Unix there is no terminal to ask on ([`crate::term::SUPPORTED`]): the
-/// prompt is a usage error naming what to pass instead, the same exit a
-/// missing argument gets where it cannot be asked for.
-fn quiet_ctrl_c<T>(what: &str, prompt: impl FnOnce() -> io::Result<T>) -> Result<T, CliError> {
-    if !crate::term::SUPPORTED {
-        return Err(CliError::Usage(format!(
-            "interactive prompts need a Unix terminal; pass {} as an argument",
-            what.trim_end_matches(['?', ':']).trim()
-        )));
-    }
-    let result = without_sigint(prompt).map_err(map_prompt_err);
-    if matches!(result, Err(CliError::Cancelled)) {
-        crate::flow::prompt_cancelled();
-    }
-    result
-}
-
-/// Run `f` with SIGINT ignored, putting back whatever handler was there: a
-/// key reader then sees Ctrl-C as a key or an interrupted read instead of the
-/// process dying mid-frame.
-pub(crate) fn without_sigint<T>(f: impl FnOnce() -> T) -> T {
-    #[cfg(unix)]
-    let previous = unsafe {
-        let mut ignore: libc::sigaction = std::mem::zeroed();
-        ignore.sa_sigaction = libc::SIG_IGN;
-        let mut previous: libc::sigaction = std::mem::zeroed();
-        libc::sigaction(libc::SIGINT, &ignore, &mut previous);
-        previous
-    };
-    let result = f();
-    #[cfg(unix)]
-    unsafe {
-        libc::sigaction(libc::SIGINT, &previous, std::ptr::null_mut());
-    }
-    result
-}
+use crate::error::CliError;
 
 // ---------------------------------------------------------------------------
 // Asking through the core
@@ -86,12 +42,7 @@ fn ask_on_stderr<T>(
     ask: impl FnOnce(&mut crate::term::Tty) -> io::Result<crate::prompt::Answer<T>>,
 ) -> Result<T, CliError> {
     use crate::prompt::Answer;
-    let tty = crate::term::Tty::stderr().map_err(|e| CliError::Internal(anyhow::anyhow!(e)))?;
-    let caps = crate::style::Caps {
-        color: crate::ui::stderr_caps().color,
-        ..tty.caps()
-    };
-    let mut tty = tty.with_caps(caps);
+    let mut tty = crate::ui::stderr_tty().map_err(|e| CliError::Internal(anyhow::anyhow!(e)))?;
     match ask(&mut tty) {
         Ok(Answer::Submitted(v)) => Ok(v),
         Ok(Answer::Cancelled) => {
@@ -102,6 +53,11 @@ fn ask_on_stderr<T>(
         Ok(Answer::Interrupted(sig)) => crate::term::signals::reraise(sig),
         Err(e) if e.raw_os_error() == Some(libc::ENOTTY) => Err(CliError::Usage(format!(
             "interactive prompts need a terminal; pass {} as an argument",
+            what_to_pass(what)
+        ))),
+        // A list on a terminal that cannot redraw (`TERM=dumb`).
+        Err(e) if e.kind() == io::ErrorKind::Unsupported => Err(CliError::Usage(format!(
+            "this terminal cannot show a list to choose from; pass {} as an argument",
             what_to_pass(what)
         ))),
         Err(e) => Err(CliError::Internal(anyhow::anyhow!(e))),
@@ -270,8 +226,16 @@ pub fn select<T: Clone + Eq>(prompt: &str, items: &[(T, &str, &str)]) -> Result<
         Rows::Auto.resolve(),
     )
     .select();
-    let chosen = quiet_ctrl_c(prompt, || crate::picker::run(list))?;
-    Ok(items[chosen].0.clone())
+    #[cfg(unix)]
+    {
+        let chosen = ask_on_stderr(prompt, |tty| crate::picker::run(tty, list))?;
+        Ok(items[chosen].0.clone())
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = list;
+        Err(no_terminal_here(prompt))
+    }
 }
 
 /// [`select`] for a list that may be long: typing narrows it, at most `rows`
@@ -290,8 +254,16 @@ pub fn select_filtered<T: Clone>(
             .collect(),
         rows,
     );
-    let chosen = quiet_ctrl_c(prompt, || crate::picker::run(list))?;
-    Ok(items[chosen].0.clone())
+    #[cfg(unix)]
+    {
+        let chosen = ask_on_stderr(prompt, |tty| crate::picker::run(tty, list))?;
+        Ok(items[chosen].0.clone())
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = list;
+        Err(no_terminal_here(prompt))
+    }
 }
 
 /// How many rows a [`Picker`] shows at once; typing narrows the rest.
@@ -389,37 +361,21 @@ pub fn multiselect<T: Clone + Eq>(
         Rows::Auto.resolve(),
     )
     .multi(vec![true; items.len()]);
-    let chosen = quiet_ctrl_c(prompt, || crate::picker::run_multi(list))?;
-    Ok(chosen.into_iter().map(|i| items[i].0.clone()).collect())
+    #[cfg(unix)]
+    {
+        let chosen = ask_on_stderr(prompt, |tty| crate::picker::run_multi(tty, list))?;
+        Ok(chosen.into_iter().map(|i| items[i].0.clone()).collect())
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = list;
+        Err(no_terminal_here(prompt))
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Rows, quiet_ctrl_c};
-
-    #[cfg(unix)]
-    fn sigint_handler() -> libc::sighandler_t {
-        unsafe {
-            let mut now: libc::sigaction = std::mem::zeroed();
-            libc::sigaction(libc::SIGINT, std::ptr::null(), &mut now);
-            now.sa_sigaction
-        }
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn ctrl_c_is_ignored_only_while_asking() {
-        let before = sigint_handler();
-        let during = quiet_ctrl_c("a value", || Ok(sigint_handler())).unwrap();
-        assert_eq!(during, libc::SIG_IGN);
-        assert_eq!(sigint_handler(), before, "the old handler is back");
-        let err = quiet_ctrl_c::<()>("a value", || Err(std::io::ErrorKind::Interrupted.into()));
-        assert!(matches!(err, Err(crate::CliError::Cancelled)));
-        assert!(
-            crate::flow::closed_by_prompt(),
-            "the prompt's footer closed the gutter"
-        );
-    }
+    use super::Rows;
 
     #[test]
     fn auto_rows_are_half_the_terminal_within_bounds() {

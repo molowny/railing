@@ -18,26 +18,30 @@
 //! without steps. [`Wait::freeze`] leaves the last state in place, grey and
 //! without controls, as a finished grid does.
 //!
-//! **Interactive** (a live [`Flow`](crate::Flow), stdin and stderr terminals,
-//! the `tui` feature): drawn in place on stderr and redrawn each
-//! [`Wait::tick`]. Raw mode is on only inside a tick, so a prompt the app
-//! shows between ticks works as usual; [`Wait::clear`] (and dropping the
-//! [`Wait`]) erases the block and restores the terminal. In raw mode Ctrl‑C
-//! arrives as a key: it is [`Tick::Detach`], like Esc, when a detach label is
-//! set.
+//! **Interactive** (a live [`Flow`](crate::Flow), stdin and stderr the same
+//! terminal, one that can redraw; Unix): drawn in place on stderr and redrawn
+//! each [`Wait::tick`], through the surface the picker and the grid use
+//! (`crate::surface`). Raw mode is on only inside a tick, so a prompt the
+//! app shows between ticks works as usual; [`Wait::clear`] (and dropping the
+//! [`Wait`]) erases the block. In raw mode Ctrl‑C arrives as a key: it is
+//! [`Tick::Detach`], like Esc, when a detach label is set.
 //!
 //! **Plain**: one line whenever the status or the minutes left change. Keys
 //! cannot be read, so an app asks its questions before it starts waiting.
 
-// Without `tui` nothing is drawn in place; the drawing code stays compiled
-// and tested.
-#![cfg_attr(not(feature = "tui"), allow(dead_code))]
+// Off Unix nothing is drawn in place; the drawing code stays compiled and
+// tested.
+#![cfg_attr(not(unix), allow(dead_code))]
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use console::style;
 
 use crate::error::CliError;
+#[cfg(unix)]
+use crate::surface::{Input, Surface};
+#[cfg(unix)]
+use crate::term::{Key, Tty};
 use crate::ui;
 
 /// How a checklist row is marked.
@@ -84,8 +88,10 @@ pub struct Wait {
     said: String,
     /// The active step's spinner.
     spin: crate::spin::Spin,
-    /// Interactive: lines drawn by the last tick, to redraw over.
-    drawn: usize,
+    /// Interactive: where the last tick drew, to redraw over; `None` until
+    /// the first tick and after [`Wait::clear`].
+    #[cfg(unix)]
+    surface: Option<Surface<Tty>>,
     /// The box's content width so far: it only grows, so the box does not
     /// jitter as a step's text changes.
     inner: usize,
@@ -101,7 +107,8 @@ impl Wait {
             said: String::new(),
             // `·` marks a pending step here, so the diamond skips its dot.
             spin: crate::spin::Spin::new().without_dot(),
-            drawn: 0,
+            #[cfg(unix)]
+            surface: None,
             inner: 0,
         }
     }
@@ -162,26 +169,24 @@ impl Wait {
     /// Erases what the last tick drew and gives the terminal back, for a
     /// prompt or for what comes after the wait. The next tick draws again.
     pub fn clear(&mut self) {
-        #[cfg(feature = "tui")]
-        if self.interactive {
-            interactive::erase(self.drawn);
+        #[cfg(unix)]
+        if let Some(surface) = self.surface.take() {
+            let _ = surface.erase();
         }
-        self.drawn = 0;
     }
 
     /// Leaves `view` in place as the wait's last word — grey, without the
     /// controls — instead of erasing it; nothing to do off a terminal, where
     /// the plain lines already said it. The wait is done drawing after this.
     pub fn freeze(&mut self, view: &WaitView) {
-        #[cfg(feature = "tui")]
-        if self.interactive {
-            let rows = self.rows(view, interactive::columns(), true);
-            let _ = interactive::draw(self.drawn, &rows);
-            interactive::erase(0);
+        #[cfg(unix)]
+        if let Some(mut surface) = self.surface.take() {
+            let rows = self.rows(view, surface.cols(), true);
+            let _ = surface.draw(&frame_text(&rows));
+            let _ = surface.keep();
         }
-        #[cfg(not(feature = "tui"))]
+        #[cfg(not(unix))]
         let _ = view;
-        self.drawn = 0;
     }
 
     /// The box for `view` on a terminal `cols` wide; `frozen` is the grey,
@@ -266,46 +271,58 @@ impl Wait {
         out.lines().map(str::to_owned).collect()
     }
 
-    #[cfg(feature = "tui")]
+    #[cfg(unix)]
     fn tick_interactive(&mut self, view: &WaitView, timeout: Duration) -> Result<Tick, CliError> {
         let io = |e: std::io::Error| CliError::Internal(anyhow::anyhow!(e));
+        let mut surface = match self.surface.take() {
+            Some(s) => s,
+            None => Surface::new(ui::stderr_tty().map_err(io)?).map_err(io)?,
+        };
+        // Raw mode for this tick only.
+        let mut raw = surface.raw().map_err(io)?;
         // Redrawn at the spinner's pace whatever the caller's tick, so the
         // diamond pulses and the glow moves as fast as every other spinner's.
         let end = std::time::Instant::now() + timeout;
-        loop {
-            let rows = self.rows(view, interactive::columns(), false);
-            interactive::draw(self.drawn, &rows).map_err(io)?;
-            self.drawn = rows.len();
+        let tick = loop {
+            let rows = self.rows(view, surface.cols(), false);
+            surface.draw(&frame_text(&rows)).map_err(io)?;
             let left = end.saturating_duration_since(std::time::Instant::now());
             let slice = left.min(crate::spin::PACE);
-            match interactive::read_key(slice).map_err(io)? {
-                Some(interactive::Key::Detach | interactive::Key::Interrupt)
-                    if self.detach.is_some() =>
-                {
-                    return Ok(Tick::Detach);
+            match surface.read(&mut raw, Some(slice)).map_err(io)? {
+                Input::Key(Key::Esc | Key::Ctrl('c')) if self.detach.is_some() => {
+                    break Ok(Tick::Detach);
                 }
-                Some(interactive::Key::Interrupt) => {
-                    // No detach offered: Ctrl‑C interrupts, as it would outside raw mode.
-                    self.clear();
+                Input::Key(Key::Ctrl('c')) | Input::Hangup => {
+                    // No detach offered: Ctrl‑C interrupts, as it would
+                    // outside raw mode; a terminal gone ends the wait too.
+                    let _ = raw.restore();
+                    let _ = surface.erase();
                     return Err(CliError::Cancelled);
                 }
-                Some(interactive::Key::Char(c)) => {
+                Input::Interrupted(sig) => {
+                    let _ = surface.erase();
+                    crate::term::signals::reraise(sig);
+                }
+                Input::Key(Key::Char(c)) => {
                     let c = c.to_ascii_lowercase();
                     if let Some((k, _)) = self.keys.iter().find(|(k, _)| *k == c) {
-                        return Ok(Tick::Key(*k));
+                        break Ok(Tick::Key(*k));
                     }
                 }
-                Some(interactive::Key::Detach) | None => {}
+                Input::Key(_) | Input::Resized | Input::Timeout => {}
             }
             if left <= slice {
-                return Ok(Tick::Idle);
+                break Ok(Tick::Idle);
             }
-        }
+        };
+        raw.restore().map_err(io)?;
+        self.surface = Some(surface);
+        tick
     }
 
-    #[cfg(not(feature = "tui"))]
+    #[cfg(not(unix))]
     fn tick_interactive(&mut self, _: &WaitView, _: Duration) -> Result<Tick, CliError> {
-        unreachable!("interactive only with the tui feature")
+        unreachable!("interactive only on Unix")
     }
 }
 
@@ -315,14 +332,27 @@ impl Drop for Wait {
     }
 }
 
+/// Keys can be read and the box redrawn: stdin and stderr the same terminal,
+/// one that can move the cursor.
 fn can_read_keys() -> bool {
-    #[cfg(feature = "tui")]
+    #[cfg(unix)]
     {
         use std::io::IsTerminal;
-        std::io::stdin().is_terminal() && std::io::stderr().is_terminal()
+        std::io::stdin().is_terminal()
+            && ui::stderr_tty().is_ok_and(|t| t.is_terminal() && t.caps().redraw)
     }
-    #[cfg(not(feature = "tui"))]
+    #[cfg(not(unix))]
     false
+}
+
+/// Rows as a frame for the surface: each ending in a newline.
+fn frame_text(rows: &[String]) -> String {
+    let mut out = String::new();
+    for r in rows {
+        out += r;
+        out.push('\n');
+    }
+    out
 }
 
 fn unix_now() -> u64 {
@@ -358,12 +388,7 @@ fn plain_line(view: &WaitView, now: u64) -> String {
 }
 
 fn width(s: &str) -> usize {
-    #[cfg(feature = "tui")]
-    {
-        unicode_width::UnicodeWidthStr::width(s)
-    }
-    #[cfg(not(feature = "tui"))]
-    s.chars().count()
+    crate::style::measure(s)
 }
 
 /// `s` cut to `cols` columns, ending in `…` when cut: a row that wrapped
@@ -384,89 +409,6 @@ fn fit(s: &str, cols: usize) -> String {
     }
     out.push('…');
     out
-}
-
-#[cfg(feature = "tui")]
-mod interactive {
-    use std::io::Write;
-    use std::time::{Duration, Instant};
-
-    use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
-    use crossterm::{cursor, execute, queue, terminal};
-
-    pub(super) enum Key {
-        Char(char),
-        Detach,
-        Interrupt,
-    }
-
-    pub(super) fn columns() -> usize {
-        // A pty nobody sized reports 0.
-        match terminal::size() {
-            Ok((c, _)) if c > 0 => c as usize,
-            _ => 80,
-        }
-    }
-
-    /// Draws `rows` over the `drawn` rows the last tick left.
-    pub(super) fn draw(drawn: usize, rows: &[String]) -> std::io::Result<()> {
-        let mut err = std::io::stderr().lock();
-        if drawn > 0 {
-            queue!(err, cursor::MoveToPreviousLine(drawn as u16))?;
-        }
-        queue!(
-            err,
-            cursor::Hide,
-            cursor::MoveToColumn(0),
-            terminal::Clear(terminal::ClearType::FromCursorDown)
-        )?;
-        for r in rows {
-            write!(err, "{r}\r\n")?;
-        }
-        err.flush()
-    }
-
-    pub(super) fn erase(drawn: usize) {
-        let mut err = std::io::stderr().lock();
-        if drawn > 0 {
-            let _ = queue!(
-                err,
-                cursor::MoveToPreviousLine(drawn as u16),
-                terminal::Clear(terminal::ClearType::FromCursorDown)
-            );
-        }
-        let _ = execute!(err, cursor::Show);
-    }
-
-    /// The next key within `timeout`, in raw mode for that long only.
-    pub(super) fn read_key(timeout: Duration) -> std::io::Result<Option<Key>> {
-        terminal::enable_raw_mode()?;
-        let got = next_key(timeout);
-        let _ = terminal::disable_raw_mode();
-        got
-    }
-
-    fn next_key(timeout: Duration) -> std::io::Result<Option<Key>> {
-        let end = Instant::now() + timeout;
-        loop {
-            let left = end.saturating_duration_since(Instant::now());
-            if left.is_zero() || !event::poll(left)? {
-                return Ok(None);
-            }
-            let Event::Key(k) = event::read()? else {
-                continue;
-            };
-            if k.kind != KeyEventKind::Press {
-                continue;
-            }
-            return Ok(Some(match k.code {
-                KeyCode::Char('c') if k.modifiers.contains(KeyModifiers::CONTROL) => Key::Interrupt,
-                KeyCode::Esc => Key::Detach,
-                KeyCode::Char(c) => Key::Char(c),
-                _ => continue,
-            }));
-        }
-    }
 }
 
 #[cfg(test)]

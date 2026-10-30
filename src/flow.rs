@@ -48,7 +48,8 @@ pub fn closed_by_prompt() -> bool {
 }
 
 /// A prompt was cancelled and drew its own closing line: every open group is
-/// over.
+/// over. (Only a terminal prompt draws one: there are none off Unix.)
+#[cfg(unix)]
 pub(crate) fn prompt_cancelled() {
     DEPTH.store(0, Ordering::SeqCst);
     CLOSED_BY_PROMPT.store(true, Ordering::SeqCst);

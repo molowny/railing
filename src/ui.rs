@@ -374,6 +374,19 @@ pub(crate) fn stderr_caps() -> crate::style::Caps {
     }
 }
 
+/// The terminal this command inherited ([`crate::term::Tty::stderr`]), its
+/// colour as [`stderr_caps`] decides: what every prompt and list the full
+/// kit draws asks on, until M5.
+#[cfg(unix)]
+pub(crate) fn stderr_tty() -> std::io::Result<crate::term::Tty> {
+    let tty = crate::term::Tty::stderr()?;
+    let caps = crate::style::Caps {
+        color: stderr_caps().color,
+        ..tty.caps()
+    };
+    Ok(tty.with_caps(caps))
+}
+
 /// Style for dim text: [`DIM_256`]. Add `.for_stderr()` for stderr-bound
 /// output, so colour follows that stream's flag.
 pub fn dim() -> console::Style {
