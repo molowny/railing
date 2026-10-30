@@ -19,6 +19,8 @@ pub mod args;
 #[cfg(feature = "full")]
 mod browse;
 #[cfg(feature = "full")]
+pub mod color;
+#[cfg(feature = "full")]
 pub mod completion;
 #[cfg(feature = "full")]
 pub mod error;
@@ -53,9 +55,9 @@ pub mod workspace;
 pub mod tui;
 
 #[cfg(feature = "full")]
-pub use comfy_table::Table;
+pub use color::style;
 #[cfg(feature = "full")]
-pub use console::style;
+pub use comfy_table::Table;
 #[cfg(feature = "full")]
 pub use error::CliError;
 #[cfg(feature = "full")]
