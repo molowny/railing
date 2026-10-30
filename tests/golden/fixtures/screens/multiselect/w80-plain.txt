@@ -1,0 +1,40 @@
+# multiselect · 80×60 · no colour
+# prompts::multiselect: the first unchecked, the cursor moved, done
+
+── open ──
+cursor 11:1 hidden
+┌  Setup
+│
+◆  Fields ─────── 3 of 3 selected ─╮
+│                                  │
+│ › ◼ login  a site's password     │
+│   ◼ note   text only             │
+│   ◼ card                         │
+├──────────────────────────────────╯
+│
+◇  ↑↓ move · space toggle · a all · enter done · esc cancel
+
+── toggled ──
+cursor 11:1 hidden
+┌  Setup
+│
+◆  Fields ─────── 2 of 3 selected ─╮
+│                                  │
+│   ◻ login  a site's password     │
+│ › ◼ note   text only             │
+│   ◼ card                         │
+├──────────────────────────────────╯
+│
+◇  ↑↓ move · space toggle · a all · enter done · esc cancel
+
+── end ──
+cursor 7:1 shown
+┌  Setup
+│
+◇  Fields
+│  note, card
+│
+└  ✔ Saved
+exit 0
+stdout:
+[2, 3]

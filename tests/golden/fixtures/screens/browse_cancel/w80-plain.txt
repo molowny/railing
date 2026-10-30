@@ -1,0 +1,11 @@
+# browse_cancel · 80×60 · no colour
+# Flow::browse_table cancelled with Ctrl-C: the grid erased, the command cancelled
+
+── end ──
+cursor 4:1 shown
+┌  Items
+│
+└  Aborted.
+exit 130
+stdout:
+Err(cancelled)

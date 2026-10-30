@@ -654,4 +654,219 @@ static SCENES: &[Scene] = &[
             Keys(b"\x1b"),
         ],
     },
+    // ── Lists, the browsed grid and the wait (M4) ──────────────────────
+    Scene {
+        name: "select",
+        about: "prompts::select: moved down one, picked; the box collapses to the answer",
+        widths: WIDE,
+        historical: false,
+        term: XTERM,
+        run: || asked(|| prompts::select("Kind", KINDS)),
+        script: &[
+            Expect("enter pick"),
+            Snap("open"),
+            Keys(b"\x1b[B"),
+            Settle,
+            Snap("moved"),
+            Keys(b"\r"),
+        ],
+    },
+    Scene {
+        name: "select_cancel",
+        about: "prompts::select cancelled with Esc",
+        widths: WIDE,
+        historical: false,
+        term: XTERM,
+        run: || asked(|| prompts::select("Kind", KINDS)),
+        script: &[Expect("enter pick"), Keys(b"\x1b")],
+    },
+    Scene {
+        name: "pick",
+        about: "prompts::Picker, five rows of thirty: filtered by typing, moved with ^n, picked",
+        widths: NARROW,
+        historical: false,
+        term: XTERM,
+        run: || {
+            asked(|| {
+                prompts::Picker::new("Service")
+                    .rows(prompts::Rows::Fixed(5))
+                    .pick(&services())
+            })
+        },
+        script: &[
+            Expect("type to filter"),
+            Snap("open"),
+            Keys(b"srv-1"),
+            Settle,
+            Snap("filtered"),
+            Keys(b"\x0e"),
+            Settle,
+            Snap("moved"),
+            Keys(b"\r"),
+        ],
+    },
+    Scene {
+        name: "multiselect",
+        about: "prompts::multiselect: the first unchecked, the cursor moved, done",
+        widths: WIDE,
+        historical: false,
+        term: XTERM,
+        run: || asked(|| prompts::multiselect("Fields", KINDS)),
+        script: &[
+            Expect("space toggle"),
+            Snap("open"),
+            Keys(b" "),
+            Settle,
+            Keys(b"\x1b[B"),
+            Settle,
+            Snap("toggled"),
+            Keys(b"\r"),
+        ],
+    },
+    Scene {
+        name: "browse",
+        about: "Flow::browse_table: sorted by the second column, filtered, done; the rows shown go to stdout",
+        widths: NARROW,
+        historical: false,
+        term: XTERM,
+        run: || browsed(),
+        script: &[
+            Expect("of 30"),
+            Snap("open"),
+            Keys(b"2"),
+            Settle,
+            Snap("sorted"),
+            Keys(b"/srv-1"),
+            Settle,
+            Snap("filtering"),
+            Keys(b"\r"),
+            Settle,
+            Keys(b"q"),
+        ],
+    },
+    Scene {
+        name: "browse_cancel",
+        about: "Flow::browse_table cancelled with Ctrl-C: the grid erased, the command cancelled",
+        widths: WIDE,
+        historical: false,
+        term: XTERM,
+        run: || browsed(),
+        script: &[Expect("q done"), Keys(b"\x03")],
+    },
+    Scene {
+        name: "wait",
+        about: "Flow::wait with a key and a detach: k pressed, the box frozen",
+        widths: WIDE,
+        historical: false,
+        term: XTERM,
+        run: || {
+            let f = Flow::begin("Pair", true);
+            let mut w = f
+                .wait()
+                .key('k', "enter recovery kit")
+                .detach("finish later");
+            let view = cli_kit::WaitView {
+                title: "Joining".into(),
+                status: "waiting for approval".into(),
+                steps: vec![
+                    (cli_kit::Mark::Done, "code accepted".into()),
+                    (cli_kit::Mark::Active, "approval".into()),
+                    (cli_kit::Mark::Pending, "make the store".into()),
+                ],
+                deadline: None,
+            };
+            let tick = loop {
+                match w.tick(&view, std::time::Duration::from_millis(100)) {
+                    Ok(cli_kit::Tick::Idle) => continue,
+                    other => break other,
+                }
+            };
+            w.freeze(&view);
+            println!("{tick:?}");
+            f.done("Paired");
+            0
+        },
+        script: &[Expect("finish later"), Keys(b"k")],
+    },
+    Scene {
+        name: "select_ctrl_c",
+        about: "prompts::select cancelled with Ctrl-C: a key in raw mode, no signal, drawn as cancelled",
+        widths: WIDE,
+        historical: false,
+        term: XTERM,
+        run: || asked(|| prompts::select("Kind", KINDS)),
+        script: &[Expect("enter pick"), Keys(b"\x03")],
+    },
+    Scene {
+        name: "pick_resize",
+        about: "the picker narrowed from 80 to 48 columns: redrawn at the new width (avt keeps the cursor row when reflowing, so ┌ scrolls into history)",
+        widths: WIDE,
+        historical: false,
+        term: XTERM,
+        run: || {
+            asked(|| {
+                prompts::Picker::new("Service")
+                    .rows(prompts::Rows::Fixed(5))
+                    .pick(&services())
+            })
+        },
+        script: &[
+            Expect("type to filter"),
+            Resize(48),
+            Snap("narrowed"),
+            Keys(b"\r"),
+        ],
+    },
+    Scene {
+        name: "lists_dumb",
+        about: "a list on TERM=dumb cannot be drawn: a usage error naming what to pass; a browsed grid prints its table",
+        widths: WIDE,
+        historical: false,
+        term: "dumb",
+        run: || {
+            let code = asked(|| prompts::select("Kind", KINDS));
+            let _ = browsed();
+            code
+        },
+        script: &[],
+    },
 ];
+
+const KINDS: &[(u8, &str, &str)] = &[
+    (1, "login", "a site's password"),
+    (2, "note", "text only"),
+    (3, "card", ""),
+];
+
+fn services() -> Vec<(usize, String, String)> {
+    (0..30)
+        .map(|i| {
+            (
+                i,
+                format!("srv-{i:02}"),
+                if i % 3 == 0 { "web" } else { "db" }.into(),
+            )
+        })
+        .collect()
+}
+
+/// A browsed grid of thirty rows, the rows the person ended on to stdout.
+fn browsed() -> i32 {
+    let f = Flow::begin("Items", true).browse(flow::Browse::Always);
+    let mut g = Grid::new(&["Name", "Kind", "Size"]).right(&[2]);
+    for (i, name, kind) in services() {
+        g.row([name, kind, format!("{} KB", (i * 37) % 100)]);
+    }
+    match f.browse_table("Services", &g) {
+        Ok(b) => {
+            println!("{:?}", b.rows);
+            f.done("Browsed");
+            0
+        }
+        Err(e) => {
+            println!("Err({})", e.kind());
+            let _ = flow::render_error(&e);
+            i32::from(e.code())
+        }
+    }
+}

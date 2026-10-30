@@ -1,0 +1,59 @@
+# pick · 80×60 · colour
+# prompts::Picker, five rows of thirty: filtered by typing, moved with ^n, picked
+
+── open ──
+cursor 13:1 hidden
+⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦cyan⟧◆⟦⟧  ⟦bold⟧Service⟦⟧ ⟦c246⟧▸⟦⟧ ⟦yellow bold⟧/⟦inverse⟧ ⟦⟧ ⟦cyan⟧───────────────────────⟦⟧ ⟦c246⟧1–5⟦⟧ ⟦c246⟧of⟦⟧ ⟦c246⟧30⟦⟧ ⟦cyan⟧─╮⟦⟧
+⟦cyan⟧│⟦⟧                                                  ⟦cyan⟧│⟦⟧
+⟦cyan⟧│⟦⟧ ⟦cyan⟧›⟦⟧ ⟦bold⟧srv-00⟦⟧                                         ⟦cyan⟧│⟦⟧
+⟦cyan⟧│⟦⟧   srv-01                                         ⟦cyan⟧│⟦⟧
+⟦cyan⟧│⟦⟧   srv-02                                         ⟦cyan⟧│⟦⟧
+⟦cyan⟧│⟦⟧   srv-03                                         ⟦cyan⟧│⟦⟧
+⟦cyan⟧│⟦⟧   srv-04                                         ⟦cyan⟧│⟦⟧
+⟦cyan⟧├──────────────────────────────────────────────────╯⟦⟧
+⟦cyan⟧│⟦⟧
+⟦cyan⟧◇⟦⟧  ⟦c246⟧type⟦⟧ ⟦c246⟧to⟦⟧ ⟦c246⟧filter⟦⟧ ⟦c246⟧·⟦⟧ ⟦c246⟧↑↓⟦⟧ ⟦c246⟧move⟦⟧ ⟦c246⟧·⟦⟧ ⟦c246⟧enter⟦⟧ ⟦c246⟧pick⟦⟧ ⟦c246⟧·⟦⟧ ⟦c246⟧esc⟦⟧ ⟦c246⟧cancel⟦⟧
+
+── filtered ──
+cursor 13:1 hidden
+⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦cyan⟧◆⟦⟧  ⟦bold⟧Service⟦⟧ ⟦c246⟧▸⟦⟧ ⟦yellow bold⟧/srv-1⟦inverse⟧ ⟦⟧ ⟦cyan⟧───────⟦⟧ ⟦c246⟧12⟦⟧ ⟦c246⟧of⟦⟧ ⟦c246⟧30⟦⟧ ⟦c246⟧match⟦⟧ ⟦c246⟧·⟦⟧ ⟦c246⟧1–5⟦⟧ ⟦cyan⟧─╮⟦⟧
+⟦cyan⟧│⟦⟧                                                  ⟦cyan⟧│⟦⟧
+⟦cyan⟧│⟦⟧ ⟦cyan⟧›⟦⟧ ⟦cyan bold underline⟧srv-1⟦bold⟧0⟦⟧                                         ⟦cyan⟧│⟦⟧
+⟦cyan⟧│⟦⟧   ⟦cyan underline⟧srv-1⟦⟧1                                         ⟦cyan⟧│⟦⟧
+⟦cyan⟧│⟦⟧   ⟦cyan underline⟧srv-1⟦⟧2                                         ⟦cyan⟧│⟦⟧
+⟦cyan⟧│⟦⟧   ⟦cyan underline⟧srv-1⟦⟧3                                         ⟦cyan⟧│⟦⟧
+⟦cyan⟧│⟦⟧   ⟦cyan underline⟧srv-1⟦⟧4                                         ⟦cyan⟧│⟦⟧
+⟦cyan⟧├──────────────────────────────────────────────────╯⟦⟧
+⟦cyan⟧│⟦⟧
+⟦cyan⟧◇⟦⟧  ⟦c246⟧↑↓⟦⟧ ⟦c246⟧move⟦⟧ ⟦c246⟧·⟦⟧ ⟦c246⟧enter⟦⟧ ⟦c246⟧pick⟦⟧ ⟦c246⟧·⟦⟧ ⟦c246⟧esc⟦⟧ ⟦c246⟧clear⟦⟧
+
+── moved ──
+cursor 13:1 hidden
+⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦cyan⟧◆⟦⟧  ⟦bold⟧Service⟦⟧ ⟦c246⟧▸⟦⟧ ⟦yellow bold⟧/srv-1⟦inverse⟧ ⟦⟧ ⟦cyan⟧───────⟦⟧ ⟦c246⟧12⟦⟧ ⟦c246⟧of⟦⟧ ⟦c246⟧30⟦⟧ ⟦c246⟧match⟦⟧ ⟦c246⟧·⟦⟧ ⟦c246⟧1–5⟦⟧ ⟦cyan⟧─╮⟦⟧
+⟦cyan⟧│⟦⟧                                                  ⟦cyan⟧│⟦⟧
+⟦cyan⟧│⟦⟧   ⟦cyan underline⟧srv-1⟦⟧0                                         ⟦cyan⟧│⟦⟧
+⟦cyan⟧│⟦⟧ ⟦cyan⟧›⟦⟧ ⟦cyan bold underline⟧srv-1⟦bold⟧1⟦⟧                                         ⟦cyan⟧│⟦⟧
+⟦cyan⟧│⟦⟧   ⟦cyan underline⟧srv-1⟦⟧2                                         ⟦cyan⟧│⟦⟧
+⟦cyan⟧│⟦⟧   ⟦cyan underline⟧srv-1⟦⟧3                                         ⟦cyan⟧│⟦⟧
+⟦cyan⟧│⟦⟧   ⟦cyan underline⟧srv-1⟦⟧4                                         ⟦cyan⟧│⟦⟧
+⟦cyan⟧├──────────────────────────────────────────────────╯⟦⟧
+⟦cyan⟧│⟦⟧
+⟦cyan⟧◇⟦⟧  ⟦c246⟧↑↓⟦⟧ ⟦c246⟧move⟦⟧ ⟦c246⟧·⟦⟧ ⟦c246⟧enter⟦⟧ ⟦c246⟧pick⟦⟧ ⟦c246⟧·⟦⟧ ⟦c246⟧esc⟦⟧ ⟦c246⟧clear⟦⟧
+
+── end ──
+cursor 7:1 shown
+⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦green⟧◇⟦⟧  Service
+⟦bright-black⟧│⟦⟧  ⟦dim⟧srv-11⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦bright-black⟧└⟦⟧  ⟦green⟧✔⟦⟧ ⟦green⟧Saved⟦⟧
+exit 0
+stdout:
+11

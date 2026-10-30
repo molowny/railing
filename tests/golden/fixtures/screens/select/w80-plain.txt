@@ -1,0 +1,40 @@
+# select · 80×60 · no colour
+# prompts::select: moved down one, picked; the box collapses to the answer
+
+── open ──
+cursor 11:1 hidden
+┌  Setup
+│
+◆  Kind ─────────────────────╮
+│                            │
+│ › login  a site's password │
+│   note   text only         │
+│   card                     │
+├────────────────────────────╯
+│
+◇  ↑↓ move · enter pick · esc cancel
+
+── moved ──
+cursor 11:1 hidden
+┌  Setup
+│
+◆  Kind ─────────────────────╮
+│                            │
+│   login  a site's password │
+│ › note   text only         │
+│   card                     │
+├────────────────────────────╯
+│
+◇  ↑↓ move · enter pick · esc cancel
+
+── end ──
+cursor 7:1 shown
+┌  Setup
+│
+◇  Kind
+│  note
+│
+└  ✔ Saved
+exit 0
+stdout:
+2

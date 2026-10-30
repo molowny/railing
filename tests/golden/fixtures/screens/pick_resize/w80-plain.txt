@@ -1,0 +1,25 @@
+# pick_resize · 80×60 · no colour
+# the picker narrowed from 80 to 48 columns: redrawn at the new width (avt keeps the cursor row when reflowing, so ┌ scrolls into history)
+
+── narrowed ──
+cursor 11:1 hidden
+◆  Service ▸ /  ────────────────── 1–5 of 30 ─╮
+│                                             │
+│ › srv-00                                    │
+│   srv-01                                    │
+│   srv-02                                    │
+│   srv-03                                    │
+│   srv-04                                    │
+├─────────────────────────────────────────────╯
+│
+◇  type to filter · ↑↓ move · enter pick · esc…
+
+── end ──
+cursor 5:1 shown
+◇  Service
+│  srv-00
+│
+└  ✔ Saved
+exit 0
+stdout:
+0

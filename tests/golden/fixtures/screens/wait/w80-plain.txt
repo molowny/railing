@@ -1,0 +1,18 @@
+# wait · 80×60 · no colour
+# Flow::wait with a key and a detach: k pressed, the box frozen
+
+── end ──
+cursor 11:1 shown
+┌  Pair
+│
+◇  Joining ──────────╮
+│                    │
+│   ✓ code accepted  │
+│   · approval       │
+│   · make the store │
+├────────────────────╯
+│
+└  ✔ Paired
+exit 0
+stdout:
+Ok(Key('k'))
