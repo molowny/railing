@@ -38,6 +38,18 @@ pub enum Answer<T> {
     Interrupted(i32),
 }
 
+impl<T> Answer<T> {
+    /// The submitted value through `f`; every other ending as it is.
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Answer<U> {
+        match self {
+            Answer::Submitted(v) => Answer::Submitted(f(v)),
+            Answer::Cancelled => Answer::Cancelled,
+            Answer::Hangup => Answer::Hangup,
+            Answer::Interrupted(sig) => Answer::Interrupted(sig),
+        }
+    }
+}
+
 /// What a key did to a prompt.
 pub(crate) enum Next<T> {
     Stay,

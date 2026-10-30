@@ -32,7 +32,8 @@
 mod alt;
 #[cfg(unix)]
 mod cooked;
-#[cfg(unix)]
+// The key types (and their decoder, which is pure) everywhere, so code that
+// handles keys builds off Unix; only reading them needs a terminal.
 mod keys;
 #[cfg(unix)]
 mod raw;
@@ -43,7 +44,6 @@ pub mod signals;
 pub use alt::AltScreen;
 #[cfg(unix)]
 pub use cooked::Line;
-#[cfg(unix)]
 pub use keys::{ESC_WAIT, Event, Key};
 #[cfg(unix)]
 pub use raw::Raw;

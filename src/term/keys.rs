@@ -5,6 +5,10 @@
 //! consumed whole (CSI to its final byte, SS3, the kitty keyboard protocol's
 //! `CSI … u`), so a key the caller does not handle never leaks its tail as
 //! typed text, into the prompt or the shell after it.
+//!
+//! Off Unix the types build (code that handles keys builds everywhere) but
+//! nothing reads them.
+#![cfg_attr(not(unix), allow(dead_code))]
 
 use std::io;
 use std::time::Duration;
