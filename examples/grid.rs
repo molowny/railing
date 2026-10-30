@@ -11,7 +11,9 @@ use cli_kit::{Flow, Grid, Tone};
 fn main() {
     cli_kit::ui::init_colors();
     let plain = std::env::args().any(|a| a == "plain");
-    let live = !plain && console::user_attended_stderr() && console::user_attended();
+    let live = !plain
+        && std::io::IsTerminal::is_terminal(&std::io::stderr())
+        && std::io::IsTerminal::is_terminal(&std::io::stdout());
 
     let flow = Flow::begin("grid example", live);
 

@@ -134,8 +134,8 @@ fn capture(scene: &Scene, cols: u16, color: bool, locale: Locale) -> Result<Stri
 
 /// In the child: run the scene and exit with its code.
 pub fn run_child(name: &str, color: bool) -> ExitCode {
-    console::set_colors_enabled(color);
-    console::set_colors_enabled_stderr(color);
+    cli_kit::color::set_stream(cli_kit::color::Stream::Stdout, color);
+    cli_kit::color::set_stream(cli_kit::color::Stream::Stderr, color);
     let Some(scene) = SCENES.iter().find(|s| s.name == name) else {
         eprintln!("no scene {name}");
         return ExitCode::from(99);

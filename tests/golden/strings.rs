@@ -24,8 +24,8 @@ pub fn all() -> Vec<(String, Result<String, String>)> {
 }
 
 fn colors(on: bool) {
-    console::set_colors_enabled(on);
-    console::set_colors_enabled_stderr(on);
+    cli_kit::color::set_stream(cli_kit::color::Stream::Stdout, on);
+    cli_kit::color::set_stream(cli_kit::color::Stream::Stderr, on);
 }
 
 fn visible(s: &str) -> String {

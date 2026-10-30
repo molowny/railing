@@ -29,7 +29,7 @@ fn main() {
         chosen
     };
 
-    let live = console::user_attended_stderr();
+    let live = std::io::IsTerminal::is_terminal(&std::io::stderr());
     let flow = Flow::begin("spinner example", live);
 
     for &style in &styles {

@@ -48,7 +48,7 @@ cli-kit = { version = "0.1", features = ["tui"] }
 
 | Flag | Enables | Extra dependencies |
 |------|---------|-------------------|
-| `full` (default) | Everything but the core: flows, prompts, output, errors, logging, completion | `cliclack`, `clap`, `comfy-table`, `console`, `tracing`, `serde`, … |
+| `full` (default) | Everything but the core: flows, prompts, output, errors, logging, completion | `clap`, `comfy-table`, `nucleo-matcher`, `tracing`, `serde`, … |
 | `tui` | TUI components and layout system | `ratatui`, `crossterm` |
 
 Without `full` (`default-features = false`) cli-kit is only its core, `style`,
@@ -57,8 +57,10 @@ the caller names, raw mode and keys, and the flow's look as strings, for a
 process that draws on a terminal it did not inherit and must keep its
 dependency tree small. `sealward-askpass` reads the unlock prompt's keys and
 draws it as a step of the client's flow this way. Colour is decided per
-terminal (`Caps`); the full kit still follows `console`'s stderr flag until
-it moves onto `term` too ([docs/core-refactor.md](docs/core-refactor.md)).
+terminal (`Caps`); the full kit adds the process's decision for its own
+stdout and stderr (`color`, with `style("x").green().for_stderr()`), and
+draws its prompts and lists through `term` as well
+([docs/core-refactor.md](docs/core-refactor.md)).
 
 ## Examples
 

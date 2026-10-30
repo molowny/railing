@@ -18,7 +18,8 @@ fn main() -> std::process::ExitCode {
         Some("always") => Browse::Always,
         _ => Browse::Auto,
     };
-    let live = console::user_attended_stderr() && console::user_attended();
+    let live = std::io::IsTerminal::is_terminal(&std::io::stderr())
+        && std::io::IsTerminal::is_terminal(&std::io::stdout());
     match run(Flow::begin("data_grid example", live).browse(policy), n) {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(e) => cli_kit::flow::render_error(&e),

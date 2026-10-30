@@ -58,7 +58,8 @@ fn run(flow: &Flow, grid: bool) -> Result<(), CliError> {
 fn main() -> std::process::ExitCode {
     cli_kit::ui::init_colors();
     let grid = !std::env::args().any(|a| a == "no-grid");
-    let live = console::user_attended_stderr() && console::user_attended();
+    let live = std::io::IsTerminal::is_terminal(&std::io::stderr())
+        && std::io::IsTerminal::is_terminal(&std::io::stdout());
     let flow = Flow::begin("boxes example", live).browse(Browse::Always);
     match run(&flow, grid) {
         Ok(()) => {
