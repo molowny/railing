@@ -198,7 +198,7 @@ pub fn outro_cancel(msg: &str) -> Result<(), CliError> {
 // and one-line log entries with the group's own symbols.
 
 fn io_err(e: std::io::Error) -> CliError {
-    CliError::Internal(anyhow::anyhow!(e))
+    CliError::internal(e)
 }
 
 /// A titled box of prose inside the prompt group (`◇ title ─╮ … ├─╯`), its

@@ -273,7 +273,7 @@ impl Wait {
 
     #[cfg(unix)]
     fn tick_interactive(&mut self, view: &WaitView, timeout: Duration) -> Result<Tick, CliError> {
-        let io = |e: std::io::Error| CliError::Internal(anyhow::anyhow!(e));
+        let io = |e: std::io::Error| CliError::internal(e);
         let mut surface = match self.surface.take() {
             Some(s) => s,
             None => Surface::new(ui::stderr_tty().map_err(io)?).map_err(io)?,

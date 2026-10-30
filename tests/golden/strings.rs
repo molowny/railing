@@ -115,23 +115,23 @@ fn errors() -> String {
         ("external", CliError::External("503".into())),
         (
             "internal",
-            CliError::Internal(anyhow::anyhow!("plain message")),
+            CliError::internal(anyhow::anyhow!("plain message")),
         ),
         (
             "internal with context",
-            CliError::Internal(anyhow::Error::new(io()).context("saving the vault")),
+            CliError::internal(anyhow::Error::new(io()).context("saving the vault")),
         ),
         (
             "internal, two contexts",
-            CliError::Internal(
+            CliError::internal(
                 anyhow::Error::new(io())
                     .context("writing vault.db")
                     .context("saving the vault"),
             ),
         ),
         (
-            "from_anyhow",
-            CliError::from_anyhow(anyhow::anyhow!("converted")),
+            "internal() from anyhow",
+            CliError::internal(anyhow::anyhow!("converted")),
         ),
         ("rendered", CliError::Rendered("already said".into())),
         (

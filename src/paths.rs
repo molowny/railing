@@ -34,36 +34,28 @@ impl AppDirs {
     /// `$XDG_CONFIG_HOME/<app>` (typically `~/.config/<app>`).
     pub fn config_dir(&self) -> Result<PathBuf, CliError> {
         Ok(dirs::config_dir()
-            .ok_or_else(|| {
-                CliError::Internal(anyhow::anyhow!("unable to determine XDG config directory"))
-            })?
+            .ok_or_else(|| CliError::internal("unable to determine XDG config directory"))?
             .join(self.app))
     }
 
     /// `$XDG_STATE_HOME/<app>` (typically `~/.local/state/<app>`).
     pub fn state_dir(&self) -> Result<PathBuf, CliError> {
         Ok(dirs::state_dir()
-            .ok_or_else(|| {
-                CliError::Internal(anyhow::anyhow!("unable to determine XDG state directory"))
-            })?
+            .ok_or_else(|| CliError::internal("unable to determine XDG state directory"))?
             .join(self.app))
     }
 
     /// `$XDG_DATA_HOME/<app>` (typically `~/.local/share/<app>`).
     pub fn data_dir(&self) -> Result<PathBuf, CliError> {
         Ok(dirs::data_dir()
-            .ok_or_else(|| {
-                CliError::Internal(anyhow::anyhow!("unable to determine XDG data directory"))
-            })?
+            .ok_or_else(|| CliError::internal("unable to determine XDG data directory"))?
             .join(self.app))
     }
 
     /// `$XDG_CACHE_HOME/<app>` (typically `~/.cache/<app>`).
     pub fn cache_dir(&self) -> Result<PathBuf, CliError> {
         Ok(dirs::cache_dir()
-            .ok_or_else(|| {
-                CliError::Internal(anyhow::anyhow!("unable to determine XDG cache directory"))
-            })?
+            .ok_or_else(|| CliError::internal("unable to determine XDG cache directory"))?
             .join(self.app))
     }
 
@@ -75,9 +67,7 @@ impl AppDirs {
     /// sealward's agent socket enforces secure IPC).
     pub fn runtime_dir(&self) -> Result<PathBuf, CliError> {
         let base = std::env::var_os("XDG_RUNTIME_DIR").ok_or_else(|| {
-            CliError::Internal(anyhow::anyhow!(
-                "XDG_RUNTIME_DIR not set — required for secure runtime paths"
-            ))
+            CliError::internal("XDG_RUNTIME_DIR not set — required for secure runtime paths")
         })?;
         Ok(PathBuf::from(base).join(self.app))
     }
@@ -103,8 +93,13 @@ impl AppDirs {
 /// On non-Unix platforms these fall back to the standard library equivalents
 /// (Windows manages access through ACLs, not mode bits).
 pub mod fs {
-    use anyhow::{Context, Result};
     use std::path::Path;
+
+    use crate::error::{Context, WithContext};
+
+    /// What these return: the failure, saying which file and what was being
+    /// done to it, with the I/O error as its source.
+    pub type Result<T> = std::result::Result<T, WithContext>;
 
     /// Write `data` to `path` with owner-only permissions (`0o600` on Unix).
     pub fn write_private_file(path: &Path, data: impl AsRef<[u8]>) -> Result<()> {
@@ -123,18 +118,17 @@ pub mod fs {
             .truncate(true)
             .mode(0o600)
             .open(path)
-            .with_context(|| format!("Failed to open file for writing: {}", path.display()))?;
+            .context(|| format!("Failed to open file for writing: {}", path.display()))?;
 
         file.write_all(data)
-            .with_context(|| format!("Failed to write file: {}", path.display()))?;
+            .context(|| format!("Failed to write file: {}", path.display()))?;
 
         Ok(())
     }
 
     #[cfg(not(unix))]
     fn _write_private_file(path: &Path, data: &[u8]) -> Result<()> {
-        std::fs::write(path, data)
-            .with_context(|| format!("Failed to write file: {}", path.display()))
+        std::fs::write(path, data).context(|| format!("Failed to write file: {}", path.display()))
     }
 
     /// Write `data` to `path` atomically, with owner-only permissions
@@ -171,17 +165,15 @@ pub mod fs {
                 .create_new(true)
                 .mode(0o600)
                 .open(&tmp_path)
-                .with_context(|| {
-                    format!("Failed to create temporary file: {}", tmp_path.display())
-                })?;
+                .context(|| format!("Failed to create temporary file: {}", tmp_path.display()))?;
 
             file.write_all(data)
-                .with_context(|| format!("Failed to write file: {}", tmp_path.display()))?;
+                .context(|| format!("Failed to write file: {}", tmp_path.display()))?;
 
             // Flush to disk before the rename so a crash cannot leave the
             // renamed file present but empty.
             file.sync_all()
-                .with_context(|| format!("Failed to flush file: {}", tmp_path.display()))
+                .context(|| format!("Failed to flush file: {}", tmp_path.display()))
         };
 
         if let Err(e) = write_tmp() {
@@ -191,7 +183,7 @@ pub mod fs {
 
         std::fs::rename(&tmp_path, path).map_err(|e| {
             let _ = std::fs::remove_file(&tmp_path);
-            anyhow::Error::new(e).context(format!("Failed to replace file: {}", path.display()))
+            WithContext::new(format!("Failed to replace file: {}", path.display()), e)
         })
     }
 
@@ -200,7 +192,7 @@ pub mod fs {
         let tmp_path = temp_sibling(path);
 
         if let Err(e) = std::fs::write(&tmp_path, data)
-            .with_context(|| format!("Failed to write file: {}", tmp_path.display()))
+            .context(|| format!("Failed to write file: {}", tmp_path.display()))
         {
             let _ = std::fs::remove_file(&tmp_path);
             return Err(e);
@@ -210,7 +202,7 @@ pub mod fs {
         let _ = std::fs::remove_file(path);
         std::fs::rename(&tmp_path, path).map_err(|e| {
             let _ = std::fs::remove_file(&tmp_path);
-            anyhow::Error::new(e).context(format!("Failed to replace file: {}", path.display()))
+            WithContext::new(format!("Failed to replace file: {}", path.display()), e)
         })
     }
 
@@ -239,13 +231,13 @@ pub mod fs {
             .recursive(true)
             .mode(0o700)
             .create(dir)
-            .with_context(|| format!("Failed to create directory: {}", dir.display()))
+            .context(|| format!("Failed to create directory: {}", dir.display()))
     }
 
     #[cfg(not(unix))]
     fn _create_private_dir_all(dir: &Path) -> Result<()> {
         std::fs::create_dir_all(dir)
-            .with_context(|| format!("Failed to create directory: {}", dir.display()))
+            .context(|| format!("Failed to create directory: {}", dir.display()))
     }
 
     /// Check whether `path` has owner-only permissions (`0o600` for files,
@@ -259,7 +251,7 @@ pub mod fs {
         use std::os::unix::fs::PermissionsExt;
 
         let meta = std::fs::metadata(path)
-            .with_context(|| format!("Failed to read metadata for: {}", path.display()))?;
+            .context(|| format!("Failed to read metadata for: {}", path.display()))?;
         let mode = meta.permissions().mode() & 0o777;
 
         let expected = if meta.is_dir() { 0o700 } else { 0o600 };

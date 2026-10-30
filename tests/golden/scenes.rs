@@ -273,7 +273,7 @@ static SCENES: &[Scene] = &[
             let f = Flow::begin("Sync", true);
             f.step("Fetched");
             let io = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "permission denied");
-            let e = CliError::Internal(anyhow::Error::new(io).context("writing the index"));
+            let e = CliError::internal(anyhow::Error::new(io).context("writing the index"));
             let _ = flow::render_error(&e);
             let g = Flow::begin("Push", true);
             g.step("Packed");
@@ -391,7 +391,7 @@ static SCENES: &[Scene] = &[
                 CliError::Auth("token expired".into()),
                 CliError::Config("missing [server] url".into()),
                 CliError::External("503 Service Unavailable".into()),
-                CliError::Internal(anyhow::Error::new(io).context("saving the vault")),
+                CliError::internal(anyhow::Error::new(io).context("saving the vault")),
                 CliError::Rendered("already said".into()),
                 CliError::Cancelled,
                 CliError::Config("bad value".into())

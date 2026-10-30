@@ -100,7 +100,7 @@ json     {
              "message": "saving the vault: writing vault.db: disk full"
            }
          }
-[from_anyhow]
+[internal() from anyhow]
 kind     internal (exit 1)
 display  converted
 chain    converted

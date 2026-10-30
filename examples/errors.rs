@@ -13,7 +13,7 @@ fn do_work(kind: &str) -> Result<(), CliError> {
         "config" => Err(CliError::Config("~/.config/app.toml not found".into())),
         "external" => Err(CliError::External("API returned 503".into())),
         "cancelled" => Err(CliError::Cancelled),
-        "internal" => Err(CliError::from_anyhow(
+        "internal" => Err(CliError::internal(
             anyhow::anyhow!("disk offline").context("while writing state"),
         )),
         _ => Ok(()),

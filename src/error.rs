@@ -31,56 +31,130 @@
 //! mode stdout holds exactly one document either way and the exit code says
 //! which it is.
 
+use std::fmt;
 use std::process::ExitCode;
 
-use thiserror::Error;
 use tracing::error;
 
+/// Any error, boxed: what [`CliError::Internal`] holds. An app's own error
+/// types, `std::io::Error`, a `String`, and `anyhow::Error` (which converts
+/// into it, keeping its chain) all go in through [`CliError::internal`].
+pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
+
 /// The shared application-level CLI error type.
-#[derive(Debug, Error)]
+#[derive(Debug)]
 pub enum CliError {
     /// Invalid user input or failed validation.
-    #[error("{0}")]
     Usage(String),
 
     /// The user cancelled an interactive prompt or confirmation.
-    #[error("Aborted.")]
     Cancelled,
 
     /// Authentication or token failure.
-    #[error("Authentication error: {0}")]
     Auth(String),
 
     /// Config or local state I/O failure.
-    #[error("Config error: {0}")]
     Config(String),
 
     /// Remote API or network failure.
-    #[error("API error: {0}")]
     External(String),
 
-    /// Unexpected internal failure (bug / invariant violation / I/O).
-    #[error("{0}")]
-    Internal(#[from] anyhow::Error),
+    /// Unexpected internal failure (bug / invariant violation / I/O). Its
+    /// causes are the error's [`source`](std::error::Error::source) chain.
+    Internal(BoxError),
 
     /// Error already displayed (e.g. via outro_error). Just set exit code.
-    #[error("{0}")]
     Rendered(String),
 
     /// Another error plus structured data for JSON mode
     /// ([`CliError::with_details`]). Displays, exits and renders as text
     /// exactly like the error it wraps.
-    #[error("{error}")]
     Detailed {
         error: Box<CliError>,
         details: serde_json::Value,
     },
 }
 
+impl fmt::Display for CliError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CliError::Usage(m) | CliError::Rendered(m) => f.write_str(m),
+            CliError::Cancelled => f.write_str("Aborted."),
+            CliError::Auth(m) => write!(f, "Authentication error: {m}"),
+            CliError::Config(m) => write!(f, "Config error: {m}"),
+            CliError::External(m) => write!(f, "API error: {m}"),
+            CliError::Internal(e) => write!(f, "{e}"),
+            CliError::Detailed { error, .. } => write!(f, "{error}"),
+        }
+    }
+}
+
+impl std::error::Error for CliError {
+    /// An internal error is the source of its `CliError`, so a caller
+    /// walking the chain finds the original error and its causes.
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            CliError::Internal(e) => Some(e.as_ref()),
+            _ => None,
+        }
+    }
+}
+
+/// A message and the error that caused it: what the kit used
+/// `anyhow::Context` for. Displays as the message; the cause is its
+/// [`source`](std::error::Error::source), so a chain renders as
+/// `message: cause`.
+#[derive(Debug)]
+pub struct WithContext {
+    message: String,
+    source: BoxError,
+}
+
+impl WithContext {
+    pub fn new(message: impl Into<String>, source: impl Into<BoxError>) -> Self {
+        WithContext {
+            message: message.into(),
+            source: source.into(),
+        }
+    }
+}
+
+impl fmt::Display for WithContext {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for WithContext {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(self.source.as_ref())
+    }
+}
+
+/// `.context(|| ...)` for the kit's own results, giving a [`WithContext`].
+pub(crate) trait Context<T> {
+    fn context(self, message: impl FnOnce() -> String) -> Result<T, WithContext>;
+}
+
+impl<T, E: Into<BoxError>> Context<T> for Result<T, E> {
+    fn context(self, message: impl FnOnce() -> String) -> Result<T, WithContext> {
+        self.map_err(|e| WithContext::new(message(), e))
+    }
+}
+
+/// `error` and each of its causes, outermost first.
+fn causes<'a>(
+    error: &'a (dyn std::error::Error + 'static),
+) -> impl Iterator<Item = &'a (dyn std::error::Error + 'static)> {
+    std::iter::successors(Some(error), |e| e.source())
+}
+
 impl CliError {
-    /// Wrap any `anyhow::Error` as a `CliError::Internal`.
-    pub fn from_anyhow(e: anyhow::Error) -> Self {
-        CliError::Internal(e)
+    /// Any error as a [`CliError::Internal`]: an app's error type, an
+    /// `std::io::Error`, a message (`&str`, `String`), or an `anyhow::Error`,
+    /// whose context chain comes along as the boxed error's sources.
+    pub fn internal(error: impl Into<BoxError>) -> Self {
+        CliError::Internal(error.into())
     }
 
     /// The usage error for a left-out argument where no prompt can be shown
@@ -151,8 +225,8 @@ impl CliError {
             | CliError::Config(m)
             | CliError::External(m)
             | CliError::Rendered(m) => m.clone(),
-            // The whole context chain: a client has no `-v` to ask for it.
-            CliError::Internal(e) => format!("{e:#}"),
+            // The whole chain: a client has no `-v` to ask for it.
+            CliError::Internal(_) => self.chain_line(),
             other => other.to_string(),
         };
         let mut error = serde_json::json!({
@@ -204,16 +278,31 @@ impl CliError {
         }
     }
 
+    /// The message and every cause on one line, `outer: cause: root`, as JSON
+    /// mode reports it: for an app that shows the whole chain where the
+    /// default text shows only the outermost message. Read through
+    /// [`source`](std::error::Error::source), never alternate formatting.
+    pub fn chain_line(&self) -> String {
+        match self.inner() {
+            CliError::Internal(e) => causes(e.as_ref())
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(": "),
+            other => other.to_string(),
+        }
+    }
+
     /// Return a multi-line string with the full error chain, suitable for
     /// verbose / debug output.
     pub fn chain(&self) -> String {
         match self.inner() {
             CliError::Internal(e) => {
-                let mut out = format!("{}", e);
-                let mut source = e.source();
-                while let Some(s) = source {
-                    out.push_str(&format!("\n  caused by: {}", s));
-                    source = std::error::Error::source(s);
+                let mut out = String::new();
+                for (i, cause) in causes(e.as_ref()).enumerate() {
+                    if i > 0 {
+                        out += "\n  caused by: ";
+                    }
+                    out += &cause.to_string();
                 }
                 out
             }
@@ -281,7 +370,7 @@ mod tests {
 
     #[test]
     fn internal_renders_exit_failure() {
-        let e = CliError::from_anyhow(anyhow::anyhow!("unexpected bug"));
+        let e = CliError::internal(anyhow::anyhow!("unexpected bug"));
         let code = e.render();
         assert_eq!(code, ExitCode::FAILURE);
     }
@@ -327,7 +416,7 @@ mod tests {
     fn chain_internal_shows_root_cause() {
         let inner = anyhow::anyhow!("root cause");
         let outer = anyhow::anyhow!(inner).context("outer context");
-        let e = CliError::from_anyhow(outer);
+        let e = CliError::internal(outer);
         let chain = e.chain();
         assert!(chain.contains("outer context"), "chain: {chain}");
         assert!(chain.contains("root cause"), "chain: {chain}");
@@ -336,7 +425,7 @@ mod tests {
 
     #[test]
     fn chain_internal_single_error_no_caused_by() {
-        let e = CliError::from_anyhow(anyhow::anyhow!("solo error"));
+        let e = CliError::internal(anyhow::anyhow!("solo error"));
         let chain = e.chain();
         assert!(chain.contains("solo error"));
         assert!(!chain.contains("caused by"));
@@ -362,7 +451,7 @@ mod tests {
 
     #[test]
     fn json_internal_message_has_the_chain() {
-        let e = CliError::from_anyhow(anyhow::anyhow!("root cause").context("outer"));
+        let e = CliError::internal(anyhow::anyhow!("root cause").context("outer"));
         let msg = e.to_json()["error"]["message"]
             .as_str()
             .unwrap()
@@ -381,8 +470,30 @@ mod tests {
     }
 
     #[test]
-    fn from_anyhow_wraps_as_internal() {
-        let e = CliError::from_anyhow(anyhow::anyhow!("something"));
+    fn internal_takes_any_error_and_a_message() {
+        let e = CliError::internal(anyhow::anyhow!("something"));
         assert!(matches!(e, CliError::Internal(_)));
+        assert_eq!(CliError::internal("a message").to_string(), "a message");
+        let io = std::io::Error::other("disk full");
+        assert_eq!(CliError::internal(io).to_string(), "disk full");
+    }
+
+    /// A chain from the kit's own context type reads like anyhow's did.
+    #[test]
+    fn a_context_chain_renders_through_its_sources() {
+        let io = std::io::Error::other("disk full");
+        let e = CliError::internal(WithContext::new(
+            "saving the vault",
+            WithContext::new("writing vault.db", io),
+        ));
+        assert_eq!(e.to_string(), "saving the vault");
+        assert_eq!(
+            e.chain(),
+            "saving the vault\n  caused by: writing vault.db\n  caused by: disk full"
+        );
+        assert_eq!(
+            e.to_json()["error"]["message"],
+            "saving the vault: writing vault.db: disk full"
+        );
     }
 }

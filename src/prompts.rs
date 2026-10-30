@@ -42,7 +42,7 @@ fn ask_on_stderr<T>(
     ask: impl FnOnce(&mut crate::term::Tty) -> io::Result<crate::prompt::Answer<T>>,
 ) -> Result<T, CliError> {
     use crate::prompt::Answer;
-    let mut tty = crate::ui::stderr_tty().map_err(|e| CliError::Internal(anyhow::anyhow!(e)))?;
+    let mut tty = crate::ui::stderr_tty().map_err(CliError::internal)?;
     match ask(&mut tty) {
         Ok(Answer::Submitted(v)) => Ok(v),
         Ok(Answer::Cancelled) => {
@@ -60,7 +60,7 @@ fn ask_on_stderr<T>(
             "this terminal cannot show a list to choose from; pass {} as an argument",
             what_to_pass(what)
         ))),
-        Err(e) => Err(CliError::Internal(anyhow::anyhow!(e))),
+        Err(e) => Err(CliError::internal(e)),
     }
 }
 

@@ -6,7 +6,11 @@
 //! walks ancestor directories for a named file and parses it into any
 //! `serde::Deserialize` type.
 
-use anyhow::{Context, Result};
+use crate::error::{Context, WithContext};
+
+/// A failure to read or parse the file found, naming it, with the cause as
+/// its source.
+pub type Result<T> = std::result::Result<T, WithContext>;
 use serde::de::DeserializeOwned;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -23,9 +27,9 @@ pub fn find<T: DeserializeOwned>(filename: &str, start_dir: &Path) -> Result<Opt
         let candidate = current.join(filename);
         if candidate.is_file() {
             let content = fs::read_to_string(&candidate)
-                .with_context(|| format!("failed to read {}", candidate.display()))?;
+                .context(|| format!("failed to read {}", candidate.display()))?;
             let cfg: T = toml::from_str(&content)
-                .with_context(|| format!("failed to parse {}", candidate.display()))?;
+                .context(|| format!("failed to parse {}", candidate.display()))?;
             return Ok(Some((cfg, current.to_path_buf())));
         }
         match current.parent() {
