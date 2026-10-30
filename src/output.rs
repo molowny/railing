@@ -87,7 +87,7 @@ pub fn make_table(headers: &[&str], no_header: bool) -> Table {
     table
         .load_preset(UTF8_BORDERS_ONLY)
         .set_content_arrangement(ContentArrangement::Dynamic);
-    if console::colors_enabled() {
+    if crate::color::enabled(crate::color::Stream::Stdout) {
         table.enforce_styling();
     } else {
         table.force_no_tty();
@@ -208,7 +208,7 @@ impl ChecksReport {
 
 impl Renderable for ChecksReport {
     fn render_pretty(&self) {
-        use console::style;
+        use crate::color::style;
         for row in &self.0 {
             let icon = match row.status {
                 CheckStatus::Pass => style("→").green(),

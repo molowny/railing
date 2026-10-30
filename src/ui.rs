@@ -2,7 +2,7 @@
 //!
 //! The group's lines are [`crate::group`]'s, written on stderr in its colours.
 
-use console::style;
+use crate::color::style;
 
 use crate::error::CliError;
 use crate::group;
@@ -53,23 +53,22 @@ impl Spinner {
             msg: std::sync::Mutex::new(msg.to_owned()),
             done: AtomicBool::new(false),
         });
-        let term = console::Term::stderr();
-        let animator = term.is_term().then(|| {
+        let on_terminal = std::io::IsTerminal::is_terminal(&std::io::stderr());
+        let animator = on_terminal.then(|| {
             let state = Arc::clone(&state);
             std::thread::spawn(move || {
-                let _ = term.hide_cursor();
+                let _ = stderr_write("\x1b[?25l");
                 let spin = crate::spin::Spin::new();
                 while !state.done.load(Ordering::SeqCst) {
                     let msg = state.msg.lock().map(|m| m.clone()).unwrap_or_default();
-                    let cols = usize::from(term.size().1);
-                    let _ = term.write_str(&format!(
+                    let cols = stderr_size().1;
+                    let _ = stderr_write(&format!(
                         "\r\x1b[2K{}",
                         spin.line(stderr_caps(), &msg, cols)
                     ));
                     std::thread::sleep(crate::spin::PACE);
                 }
-                let _ = term.write_str("\r\x1b[2K");
-                let _ = term.show_cursor();
+                let _ = stderr_write("\r\x1b[2K\x1b[?25h");
             })
         });
         Self { state, animator }
@@ -86,7 +85,7 @@ impl Spinner {
     pub fn stop(mut self, msg: &str) {
         use crate::glyph::{self, State};
         self.halt();
-        let _ = console::Term::stderr().write_str(&format!(
+        let _ = stderr_write(&format!(
             "{}  {msg}\n{}\n",
             glyph::step(stderr_caps(), State::Submit),
             glyph::bar(stderr_caps(), State::Submit)
@@ -121,7 +120,34 @@ impl Drop for Spinner {
 // ---------------------------------------------------------------------------
 
 fn write_stderr(text: &str) -> Result<(), CliError> {
-    console::Term::stderr().write_str(text).map_err(io_err)
+    stderr_write(text).map_err(io_err)
+}
+
+/// Write `text` on stderr, whole, and flush it.
+pub(crate) fn stderr_write(text: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut err = std::io::stderr().lock();
+    err.write_all(text.as_bytes())?;
+    err.flush()
+}
+
+/// stderr's size as `(rows, cols)`, when it is a terminal that says.
+pub(crate) fn stderr_size_checked() -> Option<(usize, usize)> {
+    #[cfg(unix)]
+    {
+        crate::term::Tty::stderr()
+            .ok()
+            .and_then(|t| t.size())
+            .map(|s| (usize::from(s.rows), usize::from(s.cols)))
+    }
+    #[cfg(not(unix))]
+    None
+}
+
+/// stderr's size as `(rows, cols)`; 24×79 when it cannot say, the fallback
+/// console had, kept so that nothing drawn off a terminal changes.
+pub fn stderr_size() -> (usize, usize) {
+    stderr_size_checked().unwrap_or((24, 79))
 }
 
 /// `mark msg`, both in `style`: how a closing line says how it went.
@@ -179,16 +205,14 @@ fn io_err(e: std::io::Error) -> CliError {
 /// body dimmed — the same frame as every table and list. Lines longer than
 /// the terminal are word-wrapped so the box always fits.
 pub fn note(title: &str, body: &str) -> Result<(), CliError> {
-    let cols = console::Term::stderr().size().1 as usize;
+    let cols = stderr_size().1;
     let width = cols.saturating_sub(8).clamp(40, 120);
     let body = wrap_to(body, width)
         .lines()
         .map(|l| dim().for_stderr().apply_to(l).to_string())
         .collect::<Vec<_>>()
         .join("\n");
-    console::Term::stderr()
-        .write_str(&crate::frame::Frame::boxed(title, &body))
-        .map_err(io_err)
+    write_stderr(&crate::frame::Frame::boxed(title, &body))
 }
 
 /// Word-wrap every line of `text` to `width` visible columns (ANSI styling is
@@ -200,17 +224,17 @@ pub fn note(title: &str, body: &str) -> Result<(), CliError> {
 pub fn wrap_to(text: &str, width: usize) -> String {
     let mut out = Vec::new();
     for line in text.lines() {
-        if console::measure_text_width(line) <= width {
+        if crate::style::measure(line) <= width {
             out.push(line.to_string());
             continue;
         }
         let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
         let mut cur = indent.clone();
-        let mut cur_w = console::measure_text_width(&cur);
+        let mut cur_w = crate::style::measure(&cur);
         let room = width.saturating_sub(indent.len()).max(1);
         let words = line.split_whitespace().flat_map(|word| {
             let plain = !word.contains('\x1b');
-            if plain && console::measure_text_width(word) > room {
+            if plain && crate::style::measure(word) > room {
                 let chars: Vec<char> = word.chars().collect();
                 chars
                     .chunks(room)
@@ -222,7 +246,7 @@ pub fn wrap_to(text: &str, width: usize) -> String {
         });
         for word in words {
             let word = word.as_str();
-            let w = console::measure_text_width(word);
+            let w = crate::style::measure(word);
             if cur_w > indent.len() && cur_w + 1 + w > width {
                 out.push(std::mem::replace(&mut cur, indent.clone()));
                 cur_w = indent.len();
@@ -334,23 +358,24 @@ impl Gutter {
 // Color detection
 // ---------------------------------------------------------------------------
 
-/// Configure `console`'s color globals based on our own `IsTerminal` check.
+/// Decide colour for stdout and stderr ([`crate::color`]) from a direct
+/// `IsTerminal` check on each, off when `NO_COLOR` is set at all.
 ///
-/// The upstream `console` crate's auto-detection has been observed to
-/// misfire inside shell hook contexts (notably fish `--on-event` /
-/// `--on-variable` handlers, where stderr inheritance is non-obvious),
-/// silently dropping color from error renders, ambient notices, and
-/// table output. Calling this once early in `main()` overrides
-/// console's inference with a direct `IsTerminal` check on stdout/stderr,
-/// honoring `NO_COLOR` when set.
+/// console's auto-detection, which the kit used until the core refactor's
+/// M5, was observed to misfire inside shell hook contexts (fish
+/// `--on-event` / `--on-variable` handlers, where stderr inheritance is
+/// non-obvious), silently dropping colour from error renders, ambient
+/// notices and tables. Calling this once early in `main()` makes the
+/// decision explicit; without it each stream detects on first use.
 ///
 /// `cli_kit::logging::init` calls this automatically — most binaries
 /// don't need to invoke it explicitly.
 pub fn init_colors() {
+    use crate::color::{Stream, set_stream};
     use std::io::IsTerminal;
     let no_color = std::env::var_os("NO_COLOR").is_some();
-    console::set_colors_enabled(std::io::stdout().is_terminal() && !no_color);
-    console::set_colors_enabled_stderr(std::io::stderr().is_terminal() && !no_color);
+    set_stream(Stream::Stdout, std::io::stdout().is_terminal() && !no_color);
+    set_stream(Stream::Stderr, std::io::stderr().is_terminal() && !no_color);
 }
 
 // ---------------------------------------------------------------------------
@@ -359,24 +384,21 @@ pub fn init_colors() {
 //
 // For tools that emit "what just happened" status lines around shell hooks
 // or background activity. Output goes to **stderr** so it never interferes
-// with `eval`/`source` of stdout. Color codes are gated by `console`'s
-// stderr-color global, which `init_colors` configures correctly at startup.
+// with `eval`/`source` of stdout. Colour follows stderr's decision
+// (`crate::color`), which `init_colors` makes at startup.
 
 pub use crate::glyph::DIM_256;
 
-/// The caps the full kit draws on stderr with, until it holds a
-/// [`crate::term::Tty`] of its own (core refactor M5): colour as
-/// `console`'s stderr flag decides ([`init_colors`]), cursor movement on.
+/// The caps the full kit draws on stderr with: colour as stderr's decision
+/// says ([`crate::color`], [`init_colors`]), cursor movement on.
 pub(crate) fn stderr_caps() -> crate::style::Caps {
-    crate::style::Caps {
-        color: console::colors_enabled_stderr(),
-        redraw: true,
-    }
+    crate::color::caps(crate::color::Stream::Stderr)
 }
 
 /// The terminal this command inherited ([`crate::term::Tty::stderr`]), its
-/// colour as [`stderr_caps`] decides: what every prompt and list the full
-/// kit draws asks on, until M5.
+/// colour as stderr's decision says ([`stderr_caps`]) rather than its own
+/// detection, so a prompt agrees with the flow around it: what every prompt
+/// and list the full kit draws asks on.
 #[cfg(unix)]
 pub(crate) fn stderr_tty() -> std::io::Result<crate::term::Tty> {
     let tty = crate::term::Tty::stderr()?;
@@ -388,9 +410,9 @@ pub(crate) fn stderr_tty() -> std::io::Result<crate::term::Tty> {
 }
 
 /// Style for dim text: [`DIM_256`]. Add `.for_stderr()` for stderr-bound
-/// output, so colour follows that stream's flag.
-pub fn dim() -> console::Style {
-    console::Style::new().color256(DIM_256)
+/// output, so colour follows that stream's decision.
+pub fn dim() -> crate::color::Style {
+    crate::color::Style::new().color256(DIM_256)
 }
 
 /// Emit a tagged status line to stderr: `{tag}: {body}`.
@@ -475,16 +497,11 @@ pub fn notice_warn(tag: &str, body: &str) {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use std::sync::Mutex;
 
-    /// Tests here and in `grid` mutate `console`'s global color flags and
-    /// `NO_COLOR`. Serialize them through this lock so parallel `cargo test`
-    /// can't observe inconsistent state. Poisoning is ignored — once one
-    /// test panics, the others might double-fail but that's strictly
-    /// better than masking the original failure.
+    /// Tests here and elsewhere set the process's colour decision and
+    /// `NO_COLOR`: one lock for all of them ([`crate::color`]'s).
     pub(crate) fn lock() -> std::sync::MutexGuard<'static, ()> {
-        static M: Mutex<()> = Mutex::new(());
-        M.lock().unwrap_or_else(|e| e.into_inner())
+        crate::color::tests::lock()
     }
 
     /// ANSI Control Sequence Introducer (ESC `[`). Reliable marker that
@@ -496,8 +513,8 @@ pub(crate) mod tests {
     #[test]
     fn warn_body_emits_yellow_when_stderr_color_on() {
         let _g = lock();
-        console::set_colors_enabled(false); // hook-env case: stdout piped
-        console::set_colors_enabled_stderr(true);
+        crate::color::set_stream(crate::color::Stream::Stdout, false); // hook-env case: stdout piped
+        crate::color::set_stream(crate::color::Stream::Stderr, true);
         let out = warn_body("ONLY_HERE: field not found — skipping");
         assert!(out.contains(CSI), "got: {out:?}");
         assert!(out.contains("ONLY_HERE"), "body content preserved: {out:?}");
@@ -506,8 +523,8 @@ pub(crate) mod tests {
     #[test]
     fn warn_body_is_plain_when_stderr_color_off() {
         let _g = lock();
-        console::set_colors_enabled(false);
-        console::set_colors_enabled_stderr(false);
+        crate::color::set_stream(crate::color::Stream::Stdout, false);
+        crate::color::set_stream(crate::color::Stream::Stderr, false);
         assert_eq!(warn_body("hello"), "hello");
     }
 
@@ -515,7 +532,7 @@ pub(crate) mod tests {
     fn notice_warn_does_not_panic_in_either_color_state() {
         let _g = lock();
         for &on in &[true, false] {
-            console::set_colors_enabled_stderr(on);
+            crate::color::set_stream(crate::color::Stream::Stderr, on);
             notice_warn("sealward", "FOO: skipping");
         }
     }
@@ -525,8 +542,8 @@ pub(crate) mod tests {
     #[test]
     fn diff_added_emits_ansi_when_colors_on() {
         let _g = lock();
-        console::set_colors_enabled(true);
-        console::set_colors_enabled_stderr(true);
+        crate::color::set_stream(crate::color::Stream::Stdout, true);
+        crate::color::set_stream(crate::color::Stream::Stderr, true);
         let out = diff_added("FOO");
         assert!(out.contains(CSI), "should contain CSI: {out:?}");
         assert!(out.contains('+'));
@@ -543,8 +560,8 @@ pub(crate) mod tests {
     #[test]
     fn diff_added_respects_stderr_flag_when_stdout_piped() {
         let _g = lock();
-        console::set_colors_enabled(false); // stdout: piped, no color
-        console::set_colors_enabled_stderr(true); // stderr: TTY, should color
+        crate::color::set_stream(crate::color::Stream::Stdout, false); // stdout: piped, no color
+        crate::color::set_stream(crate::color::Stream::Stderr, true); // stderr: TTY, should color
         let out = diff_added("FOO");
         assert!(
             out.contains(CSI),
@@ -555,8 +572,8 @@ pub(crate) mod tests {
     #[test]
     fn diff_removed_respects_stderr_flag_when_stdout_piped() {
         let _g = lock();
-        console::set_colors_enabled(false);
-        console::set_colors_enabled_stderr(true);
+        crate::color::set_stream(crate::color::Stream::Stdout, false);
+        crate::color::set_stream(crate::color::Stream::Stderr, true);
         let out = diff_removed("FOO");
         assert!(out.contains(CSI), "got: {out:?}");
     }
@@ -564,8 +581,8 @@ pub(crate) mod tests {
     #[test]
     fn dim_hint_respects_stderr_flag_when_stdout_piped() {
         let _g = lock();
-        console::set_colors_enabled(false);
-        console::set_colors_enabled_stderr(true);
+        crate::color::set_stream(crate::color::Stream::Stdout, false);
+        crate::color::set_stream(crate::color::Stream::Stderr, true);
         let out = dim_hint("~/p");
         assert!(out.contains(CSI), "got: {out:?}");
     }
@@ -573,8 +590,8 @@ pub(crate) mod tests {
     #[test]
     fn diff_added_is_plain_when_colors_off() {
         let _g = lock();
-        console::set_colors_enabled(false);
-        console::set_colors_enabled_stderr(false);
+        crate::color::set_stream(crate::color::Stream::Stdout, false);
+        crate::color::set_stream(crate::color::Stream::Stderr, false);
         let out = diff_added("FOO");
         assert_eq!(out, "+FOO", "no ANSI when disabled: {out:?}");
     }
@@ -582,8 +599,8 @@ pub(crate) mod tests {
     #[test]
     fn diff_removed_emits_ansi_when_colors_on() {
         let _g = lock();
-        console::set_colors_enabled(true);
-        console::set_colors_enabled_stderr(true);
+        crate::color::set_stream(crate::color::Stream::Stdout, true);
+        crate::color::set_stream(crate::color::Stream::Stderr, true);
         let out = diff_removed("BAR");
         assert!(out.contains(CSI), "{out:?}");
         assert!(out.contains('-'));
@@ -593,16 +610,16 @@ pub(crate) mod tests {
     #[test]
     fn diff_removed_is_plain_when_colors_off() {
         let _g = lock();
-        console::set_colors_enabled(false);
-        console::set_colors_enabled_stderr(false);
+        crate::color::set_stream(crate::color::Stream::Stdout, false);
+        crate::color::set_stream(crate::color::Stream::Stderr, false);
         assert_eq!(diff_removed("BAR"), "-BAR");
     }
 
     #[test]
     fn dim_hint_emits_ansi_when_colors_on() {
         let _g = lock();
-        console::set_colors_enabled(true);
-        console::set_colors_enabled_stderr(true);
+        crate::color::set_stream(crate::color::Stream::Stdout, true);
+        crate::color::set_stream(crate::color::Stream::Stderr, true);
         let out = dim_hint("~/p");
         assert!(out.contains(CSI), "{out:?}");
         assert!(out.contains("(~/p)"));
@@ -611,8 +628,8 @@ pub(crate) mod tests {
     #[test]
     fn dim_hint_is_plain_when_colors_off() {
         let _g = lock();
-        console::set_colors_enabled(false);
-        console::set_colors_enabled_stderr(false);
+        crate::color::set_stream(crate::color::Stream::Stdout, false);
+        crate::color::set_stream(crate::color::Stream::Stderr, false);
         assert_eq!(dim_hint("~/p"), "(~/p)");
     }
 
@@ -627,8 +644,8 @@ pub(crate) mod tests {
         }
         init_colors();
         // Whatever stdout/stderr is in the test harness, NO_COLOR forces off.
-        assert!(!console::colors_enabled());
-        assert!(!console::colors_enabled_stderr());
+        assert!(!crate::color::enabled(crate::color::Stream::Stdout));
+        assert!(!crate::color::enabled(crate::color::Stream::Stderr));
         unsafe {
             std::env::remove_var("NO_COLOR");
         }
@@ -638,14 +655,14 @@ pub(crate) mod tests {
     fn init_colors_no_color_takes_priority_over_tty() {
         let _g = lock();
         // Even if we pre-force colors on, NO_COLOR must turn them off.
-        console::set_colors_enabled(true);
-        console::set_colors_enabled_stderr(true);
+        crate::color::set_stream(crate::color::Stream::Stdout, true);
+        crate::color::set_stream(crate::color::Stream::Stderr, true);
         unsafe {
             std::env::set_var("NO_COLOR", "anything");
         }
         init_colors();
-        assert!(!console::colors_enabled());
-        assert!(!console::colors_enabled_stderr());
+        assert!(!crate::color::enabled(crate::color::Stream::Stdout));
+        assert!(!crate::color::enabled(crate::color::Stream::Stderr));
         unsafe {
             std::env::remove_var("NO_COLOR");
         }
@@ -661,9 +678,12 @@ pub(crate) mod tests {
         init_colors();
         // After init_colors, the global flags equal what we'd compute from
         // IsTerminal — which is what `style()` callers depend on.
-        assert_eq!(console::colors_enabled(), std::io::stdout().is_terminal());
         assert_eq!(
-            console::colors_enabled_stderr(),
+            crate::color::enabled(crate::color::Stream::Stdout),
+            std::io::stdout().is_terminal()
+        );
+        assert_eq!(
+            crate::color::enabled(crate::color::Stream::Stderr),
             std::io::stderr().is_terminal()
         );
     }
@@ -678,9 +698,9 @@ pub(crate) mod tests {
     #[test]
     fn notice_does_not_panic_in_either_color_state() {
         let _g = lock();
-        console::set_colors_enabled_stderr(true);
+        crate::color::set_stream(crate::color::Stream::Stderr, true);
         notice("test", "with color");
-        console::set_colors_enabled_stderr(false);
+        crate::color::set_stream(crate::color::Stream::Stderr, false);
         notice("test", "without color");
     }
 
@@ -688,7 +708,7 @@ pub(crate) mod tests {
     fn the_failure_line_does_not_panic_in_either_color_state() {
         let _g = lock();
         for &on in &[true, false] {
-            console::set_colors_enabled_stderr(on);
+            crate::color::set_stream(crate::color::Stream::Stderr, on);
             error("fail");
         }
     }

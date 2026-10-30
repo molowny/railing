@@ -22,10 +22,10 @@ use tracing_subscriber::{EnvFilter, fmt};
 /// The subscriber writes to **stderr** only, keeping stdout clean for
 /// structured (JSON) command output.
 ///
-/// **Side effect**: also calls [`crate::ui::init_colors`] to configure
-/// `console` color output based on our own `IsTerminal` check, fixing a
-/// class of "no colors in shell hook" bugs caused by `console`'s
-/// auto-detection misfiring under unusual stderr inheritance.
+/// **Side effect**: also calls [`crate::ui::init_colors`], which decides
+/// colour for stdout and stderr ([`crate::color`]) from a direct
+/// `IsTerminal` check on each (see there for the shell-hook bugs this
+/// fixed).
 pub fn init(verbosity: u8) {
     init_with_floor(verbosity, "off");
 }

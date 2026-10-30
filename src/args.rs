@@ -40,7 +40,7 @@ fn is_failure(kind: ErrorKind) -> bool {
 
 /// clap's message without its `error: ` prefix, colors or usage footer.
 fn clap_message(e: &clap::Error) -> String {
-    let text = console::strip_ansi_codes(&e.render().to_string()).to_string();
+    let text = crate::style::strip(&e.render().to_string()).to_string();
     let first = text
         .split("\n\n")
         .next()

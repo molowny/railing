@@ -15,10 +15,10 @@
 //! assert_eq!(cyan.paint(Caps::PLAIN, "◆"), "◆");
 //! ```
 //!
-//! The bytes are the ones `console` writes for the same style (foreground,
-//! background, then each attribute in order, one reset at the end), so text
-//! styled here and text styled through `console` read the same and the
-//! golden fixtures hold both to it.
+//! The bytes are the ones `console` wrote for the same style (foreground,
+//! background, then each attribute in order, one reset at the end), which
+//! the kit drew with until M5: the golden fixtures hold every surface to
+//! them.
 
 use std::borrow::Cow;
 use std::fmt::{Display, Write as _};
@@ -419,17 +419,11 @@ mod tests {
         );
         assert_eq!(Style::new().paint(c, "x"), "x");
         assert_eq!(Style::new().red().bold().paint(Caps::PLAIN, "x"), "x");
-        // The same as console's, byte for byte.
-        #[cfg(feature = "full")]
+        // What console wrote for the same style, byte for byte (compared
+        // against console itself until it left, core refactor M5).
         assert_eq!(
             Style::new().yellow().bold().italic().paint(c, "w"),
-            console::Style::new()
-                .yellow()
-                .bold()
-                .italic()
-                .force_styling(true)
-                .apply_to("w")
-                .to_string()
+            "\x1b[33m\x1b[1m\x1b[3mw\x1b[0m"
         );
     }
 
