@@ -46,21 +46,30 @@ cli-kit = { version = "0.1", features = ["tui"] }
 
 ## Feature flags
 
+The default is the core alone; an app lists the features it uses
+(`cli-kit = { workspace = true, features = ["output", "args"] }`).
+
 | Flag | Enables | Extra dependencies |
 |------|---------|-------------------|
-| `full` (default) | Everything but the core: flows, prompts, output, errors, logging, completion | `clap`, `comfy-table`, `nucleo-matcher`, `tracing`, `serde`, … |
-| `tui` | TUI components and layout system | `ratatui`, `crossterm` |
+| (core) | `style`, `term`, `render`, `step`, `glyph`, `group`, `spin`, `prompt`: a terminal the caller names, raw mode and keys, the flow's look as strings | libc, unicode-width, zeroize |
+| `flow` | the live flow, `prompts` and lists, `CliError`, `color`, `wait` | — |
+| `fuzzy` | ranked matching in the picker and the grid's filter (substring without it) | `nucleo-matcher` |
+| `table` | `Grid`, `Flow::table`, the browsed grid, `make_table` (+`flow`) | `comfy-table` |
+| `output` | JSON: `Renderable`, the report types, `CliError::to_json` (+`table`) | `serde`, `serde_json` |
+| `args` | `args::parse`, shell completion (+`flow`) | `clap`, `clap_complete` |
+| `logging` | the tracing subscriber; errors also logged (+`flow`) | `tracing`, `tracing-subscriber` |
+| `paths` | XDG paths, private files, `workspace::find` (+`flow`) | `dirs`, `toml`, `serde` |
+| `tui` | TUI components and layout system (+`fuzzy`) | `ratatui`, `crossterm` |
+| `full` | all of the above but `tui` | |
 
-Without `full` (`default-features = false`) cli-kit is only its core, `style`,
-`term`, `glyph` and `spin`, over libc, unicode-width and zeroize: a terminal
-the caller names, raw mode and keys, and the flow's look as strings, for a
-process that draws on a terminal it did not inherit and must keep its
-dependency tree small. `sealward-askpass` reads the unlock prompt's keys and
-draws it as a step of the client's flow this way. Colour is decided per
-terminal (`Caps`); the full kit adds the process's decision for its own
-stdout and stderr (`color`, with `style("x").green().for_stderr()`), and
-draws its prompts and lists through `term` as well
-([docs/core-refactor.md](docs/core-refactor.md)).
+The core is what `sealward-askpass` builds: it reads the unlock prompt's keys
+and draws it as a step of the client's flow on a terminal it did not
+inherit, and must keep its dependency tree small. Colour is decided per
+terminal (`Caps`); `flow` adds the process's decision for its own stdout and
+stderr (`color`, with `style("x").green().for_stderr()`), and draws its
+prompts and lists through `term` as well
+([docs/core-refactor.md](docs/core-refactor.md)). `mise run
+cli-kit:check:features` builds and tests each feature on its own.
 
 ## Examples
 
