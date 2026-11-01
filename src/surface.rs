@@ -75,6 +75,7 @@ impl<T: BorrowMut<Tty>> Surface<T> {
     }
 
     /// The terminal's height; 24 when it cannot say.
+    #[cfg(feature = "table")]
     pub(crate) fn rows(&self) -> usize {
         self.size.map_or(24, |s| usize::from(s.rows))
     }

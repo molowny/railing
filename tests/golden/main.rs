@@ -28,9 +28,9 @@
 //! written): the flow's marks do not depend on the locale.
 //!
 //! ```text
-//! cargo test -p cli-kit --test golden                         # compare
-//! CLI_KIT_GOLDEN_UPDATE=1 cargo test -p cli-kit --test golden # rewrite
-//! cargo test -p cli-kit --test golden -- input                # scenes matching
+//! cargo test -p cli-kit --features full --test golden                         # compare
+//! CLI_KIT_GOLDEN_UPDATE=1 cargo test -p cli-kit --features full --test golden # rewrite
+//! cargo test -p cli-kit --features full --test golden -- input                # scenes matching
 //! ```
 
 mod pty;

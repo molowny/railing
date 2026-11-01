@@ -194,6 +194,7 @@ fn search(s: &str) -> String {
 }
 
 /// `s` padded to `w` columns, on the right or the left.
+#[cfg(feature = "table")]
 pub(crate) fn align(s: &str, w: usize, right: bool) -> String {
     let pad = " ".repeat(w.saturating_sub(core_style::measure(s)));
     if right {

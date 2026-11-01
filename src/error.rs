@@ -34,7 +34,25 @@
 use std::fmt;
 use std::process::ExitCode;
 
-use tracing::error;
+/// `tracing::error!` with the `logging` feature, nothing without it.
+macro_rules! log_error {
+    ($($t:tt)*) => {{
+        #[cfg(feature = "logging")]
+        tracing::error!($($t)*);
+    }};
+}
+pub(crate) use log_error;
+
+/// `tracing::warn!` with the `logging` feature, nothing without it.
+#[cfg(feature = "table")]
+macro_rules! log_warn {
+    ($($t:tt)*) => {{
+        #[cfg(feature = "logging")]
+        tracing::warn!($($t)*);
+    }};
+}
+#[cfg(feature = "table")]
+pub(crate) use log_warn;
 
 /// Any error, boxed: what [`CliError::Internal`] holds. An app's own error
 /// types, `std::io::Error`, a `String`, and `anyhow::Error` (which converts
@@ -71,9 +89,14 @@ pub enum CliError {
     /// exactly like the error it wraps.
     Detailed {
         error: Box<CliError>,
-        details: serde_json::Value,
+        details: Details,
     },
 }
+
+/// Structured data an error carries for JSON mode: what
+/// [`CliError::with_details`] attached (feature `output`).
+#[derive(Clone, Debug)]
+pub struct Details(#[cfg(feature = "output")] serde_json::Value);
 
 impl fmt::Display for CliError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -132,10 +155,12 @@ impl std::error::Error for WithContext {
 }
 
 /// `.context(|| ...)` for the kit's own results, giving a [`WithContext`].
+#[cfg(feature = "paths")]
 pub(crate) trait Context<T> {
     fn context(self, message: impl FnOnce() -> String) -> Result<T, WithContext>;
 }
 
+#[cfg(feature = "paths")]
 impl<T, E: Into<BoxError>> Context<T> for Result<T, E> {
     fn context(self, message: impl FnOnce() -> String) -> Result<T, WithContext> {
         self.map_err(|e| WithContext::new(message(), e))
@@ -169,10 +194,11 @@ impl CliError {
     }
 
     /// Attach structured data that JSON mode reports as `error.details`.
+    #[cfg(feature = "output")]
     pub fn with_details(self, details: serde_json::Value) -> Self {
         CliError::Detailed {
             error: Box::new(self),
-            details,
+            details: Details(details),
         }
     }
 
@@ -216,6 +242,7 @@ impl CliError {
     }
 
     /// The JSON-mode document for this error (see the module docs).
+    #[cfg(feature = "output")]
     pub fn to_json(&self) -> serde_json::Value {
         // The bare message: `kind` already says what the text prefix
         // ("API error: ") would.
@@ -235,22 +262,23 @@ impl CliError {
             "exit_code": self.code(),
         });
         if let CliError::Detailed { details, .. } = self {
-            error["details"] = details.clone();
+            error["details"] = details.0.clone();
         }
         serde_json::json!({ "error": error })
     }
 
     /// Render this error and return the appropriate exit code: as JSON on
-    /// stdout in JSON mode ([`crate::output::set_format`]), otherwise to
-    /// stderr in the shared style.
+    /// stdout in JSON mode ([`crate::output::set_format`], with the `output`
+    /// feature, which writes JSON), otherwise to stderr in the shared style.
     ///
-    /// Internal details are also emitted at `tracing::error` level so they
-    /// appear when verbosity is enabled.
+    /// With the `logging` feature, internal details are also emitted at
+    /// `tracing::error` level so they appear when verbosity is enabled.
     #[allow(clippy::print_stdout)]
     pub fn render(&self) -> ExitCode {
+        #[cfg(feature = "output")]
         if crate::output::is_json() {
             if !matches!(self.inner(), CliError::Cancelled) {
-                error!(error = %self, "command failed");
+                log_error!(error = %self, "command failed");
             }
             println!("{}", serde_json::to_string_pretty(&self.to_json()).unwrap());
             return self.exit_code();
@@ -266,12 +294,12 @@ impl CliError {
                 ExitCode::from(2) // conventional usage-error code
             }
             CliError::Auth(msg) => {
-                error!(error = %self, "command failed");
+                log_error!(error = %self, "command failed");
                 crate::ui::error(&format!("Authentication error: {msg}"));
                 ExitCode::FAILURE
             }
             other => {
-                error!(error = %other, "command failed");
+                log_error!(error = %other, "command failed");
                 crate::ui::error(&other.to_string());
                 ExitCode::FAILURE
             }
@@ -431,6 +459,7 @@ mod tests {
         assert!(!chain.contains("caused by"));
     }
 
+    #[cfg(feature = "output")]
     #[test]
     fn json_document_shape() {
         let v = CliError::Usage("bad input".into()).to_json();
@@ -449,6 +478,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "output")]
     #[test]
     fn json_internal_message_has_the_chain() {
         let e = CliError::internal(anyhow::anyhow!("root cause").context("outer"));
@@ -459,6 +489,7 @@ mod tests {
         assert!(msg.contains("outer") && msg.contains("root cause"), "{msg}");
     }
 
+    #[cfg(feature = "output")]
     #[test]
     fn details_wrap_without_changing_the_error() {
         let e = CliError::Usage("ambiguous".into())
@@ -479,6 +510,7 @@ mod tests {
     }
 
     /// A chain from the kit's own context type reads like anyhow's did.
+    #[cfg(feature = "output")]
     #[test]
     fn a_context_chain_renders_through_its_sources() {
         let io = std::io::Error::other("disk full");

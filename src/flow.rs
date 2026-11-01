@@ -27,8 +27,12 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use crate::color::style;
 
 use crate::error::CliError;
+use crate::error::log_error;
+#[cfg(feature = "table")]
+use crate::error::log_warn;
+#[cfg(feature = "table")]
 pub use crate::grid::Grid;
-use crate::grid::boxed_note;
+#[cfg(feature = "output")]
 use crate::output::{CheckStatus, ChecksReport, Renderable};
 use crate::ui;
 
@@ -115,7 +119,7 @@ pub fn render_error(err: &CliError) -> ExitCode {
             let _ = ui::outro_cancel("Aborted.");
         }
         other => {
-            tracing::error!(error = %other, "command failed");
+            log_error!(error = %other, "command failed");
             let _ = ui::outro_error(&outro_text(&other.to_string()));
         }
     }
@@ -140,9 +144,16 @@ fn wrapped(msg: &str) -> String {
     ui::wrap_to(msg, note_width())
 }
 
+/// `◇  title ───╮`, the body undimmed between `│` bars, `├───╯`: the box
+/// every interactive list draws in too ([`crate::frame`]).
+fn boxed_note(title: &str, body: &str) -> String {
+    crate::frame::Frame::boxed(title, body)
+}
+
 /// A grid in its own titled box (`◇ Title ───╮ … ├──╯`), fitted to this
 /// terminal, ready to write to stderr. What [`Flow::table`] draws live; for
 /// an app that keeps its own gutter but wants the same table box.
+#[cfg(feature = "table")]
 pub fn table_box(title: &str, grid: &Grid) -> String {
     boxed_note(title, &grid.boxed(note_width()))
 }
@@ -156,7 +167,7 @@ pub fn text_box(title: &str, body: &str) -> String {
 /// The gutter's `│` in the group's bar colour, for an app that draws its own
 /// lines inside the group (a live panel).
 pub fn bar() -> String {
-    crate::grid::gutter_bar()
+    crate::glyph::bar(ui::stderr_caps(), crate::glyph::State::Submit)
 }
 
 /// Columns available inside a box on this terminal.
@@ -186,15 +197,18 @@ pub enum Browse {
 
 /// Lines of frame around a table box in a one-table command: `┌ title`, the
 /// blank bar under it, and the closing `└` with the bar above it.
+#[cfg(feature = "table")]
 const FRAME_LINES: usize = 4;
 
 /// Whether a table box drawn as `rendered` fits a terminal `rows` high along
 /// with the frame around it.
+#[cfg(feature = "table")]
 fn fits(rendered: &str, rows: usize) -> bool {
     rendered.lines().count() + FRAME_LINES <= rows
 }
 
 /// The [`Browse`] decision, given the gate and the fit.
+#[cfg(feature = "table")]
 fn opens_grid(policy: Browse, can_ask: bool, fits: impl FnOnce() -> bool) -> bool {
     can_ask
         && match policy {
@@ -206,6 +220,7 @@ fn opens_grid(policy: Browse, can_ask: bool, fits: impl FnOnce() -> bool) -> boo
 
 /// What [`Flow::browse_table`] showed: the rows the person ended on, or every
 /// row when the table was printed without the grid.
+#[cfg(feature = "table")]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Browsed {
     /// Indices into the grid's rows, in the order shown.
@@ -220,6 +235,7 @@ pub struct Browsed {
     pub browsed: bool,
 }
 
+#[cfg(feature = "table")]
 impl Browsed {
     fn all(total: usize) -> Self {
         Self {
@@ -399,6 +415,7 @@ impl Flow {
     /// Plain, a [`Plain::Split`] table is the bare data; in a report
     /// ([`Plain::Stdout`], [`Plain::Stderr`]) it is a titled block like the
     /// rest of the report.
+    #[cfg(feature = "table")]
     pub fn table(&self, title: &str, grid: &Grid) {
         if self.live {
             let _ = ui::stderr_write(&table_box(title, grid));
@@ -443,6 +460,7 @@ impl Flow {
     /// else is printed. Ctrl-C clears it and is [`CliError::Cancelled`]. If
     /// the grid cannot start, the table is printed as if it had never been
     /// asked for.
+    #[cfg(feature = "table")]
     pub fn browse_table(&self, title: &str, grid: &Grid) -> Result<Browsed, CliError> {
         let rows = || ui::stderr_size().0;
         if grid.is_empty()
@@ -457,7 +475,9 @@ impl Flow {
             Ok(Some(view)) => view,
             Ok(None) => return Err(CliError::Cancelled),
             Err(error) => {
-                tracing::warn!(%error, "cannot open the data grid; printing the table");
+                log_warn!(%error, "cannot open the data grid; printing the table");
+                // Read by the log line only, with the `logging` feature.
+                let _ = &error;
                 self.table(title, grid);
                 return Ok(Browsed::all(grid.len()));
             }
@@ -474,6 +494,7 @@ impl Flow {
     /// Health checks as `✔ name  detail` rows in a titled box (live), or the
     /// report's own pretty rendering (plain). Returns the outcome the
     /// command should close with: the worst status seen.
+    #[cfg(feature = "output")]
     pub fn checks(&self, title: &str, report: &ChecksReport) -> Outcome {
         if self.live {
             let mut g = Grid::new(&["", "Check", "Detail"]).no_header(true);
@@ -755,6 +776,7 @@ mod tests {
         f.done("nor this");
     }
 
+    #[cfg(feature = "table")]
     #[test]
     fn the_grid_never_opens_where_a_prompt_could_not() {
         for policy in [Browse::Auto, Browse::Always, Browse::Never] {
@@ -762,6 +784,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "table")]
     #[test]
     fn auto_opens_only_when_the_table_does_not_fit() {
         assert!(opens_grid(Browse::Auto, true, || false));
@@ -770,6 +793,7 @@ mod tests {
         assert!(!opens_grid(Browse::Never, true, || false));
     }
 
+    #[cfg(feature = "table")]
     #[test]
     fn fit_counts_the_rendered_box_and_the_frame() {
         let _c = crate::ui::tests::lock();
@@ -789,6 +813,7 @@ mod tests {
         assert!(boxed_note("Items", &wide.boxed(40)).lines().count() > 6);
     }
 
+    #[cfg(feature = "table")]
     #[test]
     fn browsed_all_is_every_row_in_order() {
         let b = Browsed::all(3);

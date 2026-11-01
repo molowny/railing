@@ -502,6 +502,7 @@ mod tests {
         assert_eq!(list(3, 10).status(), "1–3 of 3");
     }
 
+    #[cfg(feature = "fuzzy")]
     #[test]
     fn typing_filters_and_counts_matches() {
         let mut l = list(40, 5);
@@ -515,6 +516,21 @@ mod tests {
         assert_eq!(l.on(Key::Enter), Step::Active, "no match is not a choice");
         let frame = plain(&l, &Step::Active);
         assert!(frame.contains("▲  nothing matches"), "{frame}");
+    }
+
+    /// Without the `fuzzy` feature the filter matches substrings, in the
+    /// order the rows came in; the rest of the list behaves the same.
+    #[cfg(not(feature = "fuzzy"))]
+    #[test]
+    fn without_fuzzy_typing_filters_by_substring() {
+        let mut l = list(40, 5);
+        typed(&mut l, "/item-1");
+        assert_eq!(l.query, "item-1", "a leading slash is dropped");
+        assert_eq!(l.status(), "10 of 40 match · 1–5");
+        typed(&mut l, "7");
+        assert_eq!(l.on(Key::Enter), Step::Submit(17));
+        typed(&mut l, "zz");
+        assert_eq!(l.status(), "no match of 40");
     }
 
     #[test]
@@ -533,6 +549,7 @@ mod tests {
         assert_eq!(l.on(Key::Enter), Step::Submit(0));
     }
 
+    #[cfg(feature = "fuzzy")]
     #[test]
     fn the_filter_is_open_from_the_start_and_a_leading_slash_is_dropped() {
         let mut l = List::new("Item", vec![("Private/aws", ""), ("Work/aws", "")], 10);

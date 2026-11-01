@@ -371,17 +371,6 @@ impl Grid {
     }
 }
 
-/// The bare `│`, coloured like the box frames.
-pub(crate) fn gutter_bar() -> String {
-    crate::glyph::bar(crate::ui::stderr_caps(), crate::glyph::State::Submit)
-}
-
-/// `◇  title ───╮`, the body undimmed between `│` bars, `├───╯`: the box
-/// every interactive list draws in too ([`crate::frame`]).
-pub(crate) fn boxed_note(title: &str, body: &str) -> String {
-    crate::frame::Frame::boxed(title, body)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -429,7 +418,11 @@ mod tests {
         let _c = colors(false);
         let mut g = Grid::new(&["Id", "State"]).tones([Tone::Muted]).right(&[1]);
         g.row(["a1".into(), Tone::Danger.cell("failed")]);
-        for s in [g.boxed(80), g.plain(), boxed_note("T", &g.boxed(80))] {
+        for s in [
+            g.boxed(80),
+            g.plain(),
+            crate::frame::Frame::boxed("T", &g.boxed(80)),
+        ] {
             assert!(!s.contains('\x1b'), "{s:?}");
         }
     }
@@ -518,7 +511,7 @@ mod tests {
         let _c = colors(true);
         let mut g = Grid::new(&["Id", "Title"]).tones([Tone::Muted, Tone::Strong]);
         g.row(["a1", "github"]).row(["b22", "a much longer title"]);
-        let s = boxed_note("Items", &g.boxed(80));
+        let s = crate::frame::Frame::boxed("Items", &g.boxed(80));
         assert!(!s.contains("\x1b[2m\x1b[1mID"), "body dimmed: {s:?}");
         // Every line but the trailing `│` lines up.
         let lines: Vec<_> = s.lines().collect();
