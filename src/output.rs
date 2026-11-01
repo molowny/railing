@@ -8,13 +8,8 @@
 //! - `Renderable` is the trait every output type implements for pretty and
 //!   JSON rendering; `DiagnosticsOutput` (`config show`) and `ChecksReport`
 //!   are its report types (feature `output`).
-//! - `make_table` builds comfy-table tables with a consistent style
-//!   (feature `table`).
 
 use std::sync::atomic::{AtomicBool, Ordering};
-
-#[cfg(feature = "table")]
-use comfy_table::{Attribute, Cell, ContentArrangement, Table, presets::UTF8_BORDERS_ONLY};
 
 // ---------------------------------------------------------------------------
 // OutputFormat
@@ -65,35 +60,6 @@ pub struct GlobalOpts {
 }
 
 // ---------------------------------------------------------------------------
-// Table helper
-// ---------------------------------------------------------------------------
-
-/// Build a [`comfy_table::Table`] with the shared CLI preset: bold header,
-/// styled only when stdout has colour. Prefer [`crate::Grid`], which also
-/// draws inside a live flow and takes [`crate::Tone`]s.
-#[cfg(feature = "table")]
-pub fn make_table(headers: &[&str], no_header: bool) -> Table {
-    let mut table = Table::new();
-    table
-        .load_preset(UTF8_BORDERS_ONLY)
-        .set_content_arrangement(ContentArrangement::Dynamic);
-    if crate::color::enabled(crate::color::Stream::Stdout) {
-        table.enforce_styling();
-    } else {
-        table.force_no_tty();
-    }
-    if !no_header {
-        table.set_header(
-            headers
-                .iter()
-                .map(|h| Cell::new(h).add_attribute(Attribute::Bold))
-                .collect::<Vec<_>>(),
-        );
-    }
-    table
-}
-
-// ---------------------------------------------------------------------------
 // Reports (feature `output`)
 // ---------------------------------------------------------------------------
 
@@ -130,10 +96,11 @@ mod reports {
 
     impl Renderable for DiagnosticsOutput {
         fn render_pretty(&self) {
-            let mut kv = make_table(&["Setting", "Value"], false);
+            let mut kv = crate::Grid::new(&["Setting", "Value"]);
             for (k, v) in &self.0 {
-                kv.add_row([k.as_str(), v.as_str()]);
+                kv.row([k.as_str(), v.as_str()]);
             }
+            let kv = kv.plain();
             println!("{kv}");
         }
 

@@ -11,7 +11,7 @@
 //! |---|---|---|
 //! | `flow` | the live flow, `prompts`, `CliError`, `color`, `wait` | — |
 //! | `fuzzy` | ranked matching in the picker and the grid's filter | nucleo-matcher |
-//! | `table` | `Grid`, `Flow::table`, the browsed grid, `make_table` | comfy-table |
+//! | `table` | `Grid`, `Flow::table`, the browsed grid | — |
 //! | `output` | JSON: `Renderable`, reports, `CliError::to_json` | serde, serde_json |
 //! | `args` | `args::parse`, completion | clap |
 //! | `logging` | the tracing subscriber | tracing |
@@ -69,8 +69,6 @@ pub mod tui;
 
 #[cfg(feature = "flow")]
 pub use color::style;
-#[cfg(feature = "table")]
-pub use comfy_table::Table;
 #[cfg(feature = "flow")]
 pub use error::CliError;
 #[cfg(feature = "table")]
@@ -79,8 +77,6 @@ pub use flow::{Browse, Browsed};
 pub use flow::{Flow, Gutter, Plain, Task};
 #[cfg(feature = "table")]
 pub use grid::{Grid, GridCell, SortKey, Tone};
-#[cfg(feature = "table")]
-pub use output::make_table;
 #[cfg(feature = "output")]
 pub use output::{CheckRow, CheckStatus, ChecksReport, DiagnosticsOutput, Renderable};
 #[cfg(feature = "flow")]

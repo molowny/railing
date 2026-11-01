@@ -131,6 +131,24 @@ pub(crate) fn stderr_write(text: &str) -> std::io::Result<()> {
     err.flush()
 }
 
+/// stdout's width, when it is a terminal that says: what a plain table is
+/// fitted to.
+#[cfg(feature = "table")]
+pub(crate) fn stdout_cols() -> Option<usize> {
+    #[cfg(unix)]
+    {
+        use std::os::fd::AsFd;
+        let fd = std::io::stdout().as_fd().try_clone_to_owned().ok()?;
+        let tty = crate::term::Tty::from_fd(fd, &crate::style::TermEnv::default());
+        tty.is_terminal()
+            .then(|| tty.size())
+            .flatten()
+            .map(|s| usize::from(s.cols))
+    }
+    #[cfg(not(unix))]
+    None
+}
+
 /// stderr's size as `(rows, cols)`, when it is a terminal that says.
 pub(crate) fn stderr_size_checked() -> Option<(usize, usize)> {
     #[cfg(unix)]

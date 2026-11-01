@@ -4,7 +4,7 @@
 //!   cargo run --example output
 //!   cargo run --example output -- json
 
-use cli_kit::{DiagnosticsOutput, OutputFormat, Renderable, make_table};
+use cli_kit::{DiagnosticsOutput, Grid, OutputFormat, Renderable};
 
 struct User {
     name: String,
@@ -16,15 +16,15 @@ struct UserList(Vec<User>);
 
 impl Renderable for UserList {
     fn render_pretty(&self) {
-        let mut table = make_table(&["Name", "Email", "Role"], false);
+        let mut table = Grid::new(&["Name", "Email", "Role"]);
         for u in &self.0 {
-            table.add_row([
+            table.row([
                 u.name.as_str(),
                 u.email.as_str(),
                 if u.admin { "admin" } else { "user" },
             ]);
         }
-        println!("{table}");
+        println!("{}", table.plain());
     }
 
     fn render_json(&self) {

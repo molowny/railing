@@ -4,13 +4,28 @@
 //! box inside a live flow, and *plain*, the bordered table on stdout. Tones
 //! are applied at render time, so each way colours only when its stream does.
 //!
+//! The layout is the kit's own (core refactor M7; it was comfy-table's, and
+//! draws the same bytes): each column as wide as its widest line, measured
+//! without escapes; every cell padded by a space each side (the boxed
+//! table's first column has none on the left, the box gives the margin); a
+//! cell's lines, `\n`-separated, take as many rows as they need. When the
+//! table is wider than it may be, the widest column gives way a column at a
+//! time and its cells wrap at words.
+//!
+//! ```text
+//! ┌──────────────────────┐     NAME   KIND   SIZE     ← boxed: no rules
+//! │ Name    Kind    Size │     alpha  file  12 KB
+//! ╞══════════════════════╡
+//! │ alpha   file   12 KB │     ← plain: the bordered table
+//! └──────────────────────┘
+//! ```
+//!
 //! The box is the note's frame ([`crate::frame`]), its body left as the
 //! table styled it: a note dims its whole body, which suits prose and would
 //! flatten a table to one grey.
 
 use crate::color::Style;
-use comfy_table::presets::{NOTHING, UTF8_BORDERS_ONLY};
-use comfy_table::{Attribute, Cell, CellAlignment, Color, ContentArrangement, Table};
+use crate::style::measure;
 
 /// What a piece of table text means; the palette maps it to a style.
 ///
@@ -62,21 +77,39 @@ impl Tone {
         }
     }
 
-    /// This tone on a comfy-table cell, for a table built by hand
-    /// ([`crate::make_table`]). `Dark*` are comfy-table's names for the base
-    /// ANSI colours, the ones [`crate::style`] uses; its plain names are the bright
-    /// variants.
-    pub fn apply(self, cell: Cell) -> Cell {
+    /// A whole padded cell in this tone, as a table draws it: bold reset
+    /// with `0m`, a colour with `39m` (the foreground only), each as the 256
+    /// palette index of the base ANSI colour, as comfy-table wrote them.
+    fn paint_cell(self, text: &str) -> String {
+        let fg = |n: u8| format!("\x1b[38;5;{n}m{text}\x1b[39m");
         match self {
-            Tone::Default => cell,
-            Tone::Strong => cell.add_attribute(Attribute::Bold),
-            Tone::Muted => cell.fg(Color::AnsiValue(crate::ui::DIM_256)),
-            Tone::Accent => cell.fg(Color::DarkCyan),
-            Tone::Success => cell.fg(Color::DarkGreen),
-            Tone::Warn => cell.fg(Color::DarkYellow),
-            Tone::Danger => cell.fg(Color::DarkRed),
+            Tone::Default => text.to_string(),
+            Tone::Strong => format!("\x1b[1m{text}\x1b[0m"),
+            Tone::Muted => fg(crate::glyph::DIM_256),
+            Tone::Accent => fg(6),
+            Tone::Success => fg(2),
+            Tone::Warn => fg(3),
+            Tone::Danger => fg(1),
         }
     }
+}
+
+/// How a table is drawn.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Look {
+    /// The bordered table: `┌─┐`, a `╞═╡` under the header, `└─┘`, a space
+    /// between columns.
+    Bordered,
+    /// No rules and no space between columns (the box is the border); the
+    /// first column unpadded on the left.
+    Bare,
+}
+
+/// A laid-out cell: its lines (cut to its column), how it is drawn.
+struct Laid {
+    lines: Vec<String>,
+    tone: Tone,
+    right: bool,
 }
 
 /// What a cell sorts by when a person sorts its column in a browsed grid.
@@ -310,65 +343,174 @@ impl Grid {
             .unwrap_or_else(|| self.tones.get(column).copied().unwrap_or_default())
     }
 
-    /// The comfy table with tones applied, or none when `color` is off.
-    fn table(&self, headers: Vec<String>, color: bool) -> Table {
-        let mut t = Table::new();
-        if color {
-            t.enforce_styling();
-        } else {
-            t.force_no_tty();
-        }
+    /// The table's rows as text: the header (when shown) and every row, each
+    /// cell with its tone, laid out by [`Look`], no wider than `max` columns
+    /// when one is given.
+    fn render(
+        &self,
+        look: Look,
+        headers: Vec<String>,
+        color: bool,
+        max: Option<usize>,
+    ) -> Vec<String> {
+        let mut rows: Vec<Vec<(String, Tone)>> = Vec::new();
         if !self.no_header {
-            t.set_header(
-                headers
-                    .into_iter()
-                    .map(|h| self.header_tone.apply(Cell::new(h))),
-            );
+            rows.push(headers.into_iter().map(|h| (h, self.header_tone)).collect());
         }
         for r in &self.rows {
-            t.add_row(
+            rows.push(
                 r.iter()
                     .enumerate()
-                    .map(|(i, c)| self.tone_of(i, c).apply(Cell::new(self.drawn(i, &c.text)))),
+                    .map(|(i, c)| (self.drawn(i, &c.text).into_owned(), self.tone_of(i, c)))
+                    .collect(),
             );
         }
-        for &i in &self.right {
-            if let Some(col) = t.column_mut(i) {
-                col.set_cell_alignment(CellAlignment::Right);
+        let columns = rows.iter().map(Vec::len).max().unwrap_or(0);
+        if columns == 0 {
+            return Vec::new();
+        }
+        let pad = |c: usize| match (look, c) {
+            (Look::Bare, 0) => (0, 1),
+            _ => (1, 1),
+        };
+        let mut widths = vec![0; columns];
+        for row in &rows {
+            for (c, (text, _)) in row.iter().enumerate() {
+                for line in text.split('\n') {
+                    widths[c] = widths[c].max(measure(line));
+                }
             }
         }
-        t
+        let chrome = match look {
+            Look::Bordered => 2 + (columns - 1),
+            Look::Bare => 0,
+        } + (0..columns).map(|c| pad(c).0 + pad(c).1).sum::<usize>();
+        // Too wide: the widest column gives way, a column at a time.
+        if let Some(max) = max {
+            while chrome + widths.iter().sum::<usize>() > max {
+                let Some((c, _)) = widths
+                    .iter()
+                    .enumerate()
+                    .filter(|&(_, &w)| w > 1)
+                    .max_by_key(|&(c, &w)| (w, std::cmp::Reverse(c)))
+                else {
+                    break;
+                };
+                widths[c] -= 1;
+            }
+        }
+        let laid: Vec<Vec<Laid>> = rows
+            .iter()
+            .map(|row| {
+                (0..columns)
+                    .map(|c| match row.get(c) {
+                        Some((text, tone)) => Laid {
+                            lines: text.split('\n').flat_map(|l| fit(l, widths[c])).collect(),
+                            tone: *tone,
+                            right: self.right.contains(&c),
+                        },
+                        None => Laid {
+                            lines: Vec::new(),
+                            tone: Tone::Default,
+                            right: false,
+                        },
+                    })
+                    .collect()
+            })
+            .collect();
+
+        let inner = chrome - 2 * usize::from(look == Look::Bordered) + widths.iter().sum::<usize>();
+        let rule = |l: &str, fill: &str, r: &str| format!("{l}{}{r}", fill.repeat(inner));
+        let mut out = Vec::new();
+        if look == Look::Bordered {
+            out.push(rule("┌", "─", "┐"));
+        }
+        for (i, row) in laid.iter().enumerate() {
+            let height = row.iter().map(|c| c.lines.len()).max().unwrap_or(0).max(1);
+            for k in 0..height {
+                let cells: Vec<String> = row
+                    .iter()
+                    .enumerate()
+                    .map(|(c, cell)| {
+                        let (l, r) = pad(c);
+                        let w = widths[c];
+                        let Some(line) = cell.lines.get(k) else {
+                            return " ".repeat(l + w + r);
+                        };
+                        let room = " ".repeat(w.saturating_sub(measure(line)));
+                        let body = if cell.right {
+                            format!("{room}{line}")
+                        } else {
+                            format!("{line}{room}")
+                        };
+                        let padded = format!("{}{body}{}", " ".repeat(l), " ".repeat(r));
+                        if color {
+                            cell.tone.paint_cell(&padded)
+                        } else {
+                            padded
+                        }
+                    })
+                    .collect();
+                out.push(match look {
+                    Look::Bordered => format!("│{}│", cells.join(" ")),
+                    Look::Bare => cells.concat(),
+                });
+            }
+            if look == Look::Bordered && i == 0 && !self.no_header {
+                out.push(rule("╞", "═", "╡"));
+            }
+        }
+        if look == Look::Bordered {
+            out.push(rule("└", "─", "┘"));
+        }
+        out
     }
 
     /// Borderless, fitted to `width` columns — the box around it is the
     /// border.
     pub(crate) fn boxed(&self, width: usize) -> String {
         let headers = self.headers.iter().map(|h| h.to_uppercase()).collect();
-        let mut t = self.table(headers, crate::color::enabled(crate::color::Stream::Stderr));
-        t.load_preset(NOTHING)
-            .set_content_arrangement(ContentArrangement::Dynamic)
-            .set_width(width as u16);
-        // NOTHING pads every cell by one; the box already has its margin.
-        if let Some(first) = t.column_mut(0) {
-            first.set_padding((0, 1));
-        }
+        let color = crate::color::enabled(crate::color::Stream::Stderr);
         let mut out: Vec<String> = self.lead.clone();
-        out.extend(t.to_string().lines().map(|l| l.trim_end().to_string()));
+        out.extend(
+            self.render(Look::Bare, headers, color, Some(width))
+                .into_iter()
+                .map(|l| l.trim_end().to_string()),
+        );
         out.join("\n")
     }
 
-    /// The bordered table for plain output, coloured only when stdout is.
+    /// The bordered table for plain output, coloured only when stdout is,
+    /// and fitted to stdout's width when stdout is a terminal.
     pub fn plain(&self) -> String {
-        let mut t = self.table(
-            self.headers.clone(),
-            crate::color::enabled(crate::color::Stream::Stdout),
-        );
-        t.load_preset(UTF8_BORDERS_ONLY)
-            .set_content_arrangement(ContentArrangement::Dynamic);
+        let color = crate::color::enabled(crate::color::Stream::Stdout);
         let mut out = self.lead.clone();
-        out.push(t.to_string());
+        out.extend(self.render(
+            Look::Bordered,
+            self.headers.clone(),
+            color,
+            crate::ui::stdout_cols(),
+        ));
         out.join("\n")
     }
+}
+
+/// `line` in lines no wider than `width`: as it is when it fits, else
+/// wrapped at words (a word longer than the line broken, a styled one cut).
+fn fit(line: &str, width: usize) -> Vec<String> {
+    if measure(line) <= width {
+        return vec![line.to_string()];
+    }
+    crate::ui::wrap_to(line, width)
+        .lines()
+        .map(|l| {
+            if measure(l) > width {
+                crate::style::truncate(l, width, "…").into_owned()
+            } else {
+                l.to_string()
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]
