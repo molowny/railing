@@ -54,7 +54,7 @@ The default is the core alone; an app lists the features it uses
 | (core) | `style`, `term`, `render`, `step`, `glyph`, `group`, `spin`, `prompt`: a terminal the caller names, raw mode and keys, the flow's look as strings | libc, unicode-width, zeroize |
 | `flow` | the live flow, `prompts` and lists, `CliError`, `color`, `wait` | — |
 | `fuzzy` | ranked matching in the picker and the grid's filter (substring without it) | `nucleo-matcher` |
-| `table` | `Grid`, `Flow::table`, the browsed grid, `make_table` (+`flow`) | `comfy-table` |
+| `table` | `Grid`, `Flow::table`, the browsed grid, laid out by the kit (+`flow`) | — |
 | `output` | JSON: `Renderable`, the report types, `CliError::to_json` (+`table`) | `serde`, `serde_json` |
 | `args` | `args::parse`, shell completion (+`flow`) | `clap`, `clap_complete` |
 | `logging` | the tracing subscriber; errors also logged (+`flow`) | `tracing`, `tracing-subscriber` |

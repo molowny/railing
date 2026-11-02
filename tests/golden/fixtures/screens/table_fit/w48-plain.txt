@@ -1,0 +1,33 @@
+# table_fit · 48×60 · no colour
+# a table wider than its box: the widest column gives way and its cells wrap at words
+
+── end ──
+cursor 28:1 shown
+┌  Releases
+│
+◇  Releases ────────────────────────────────╮
+│                                           │
+│   VERSION  NOTES                     SIZE │
+│   0.4.0    Resolved the dependency  12 KB │
+│            graph for every                │
+│            workspace member,              │
+│            including the optional         │
+│            features each app              │
+│            enables, in one pass           │
+│   0.3.9    Fixed the picker         11 KB │
+│            drawing past the last          │
+│            row of a short terminal        │
+│   0.3.8    —                        11 KB │
+├───────────────────────────────────────────╯
+│
+◇  About ───────────────────────────────────╮
+│                                           │
+│   description  Resolved the dependency    │
+│                graph for every workspace  │
+│                member, including the      │
+│                optional features each app │
+│                enables, in one pass       │
+├───────────────────────────────────────────╯
+│
+└  ✔ Listed
+exit 0

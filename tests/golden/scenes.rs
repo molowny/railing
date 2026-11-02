@@ -830,6 +830,33 @@ static SCENES: &[Scene] = &[
         },
         script: &[],
     },
+    Scene {
+        name: "table_fit",
+        about: "a table wider than its box: the widest column gives way and its cells wrap at words",
+        widths: NARROW,
+        historical: false,
+        term: XTERM,
+        run: || {
+            let f = Flow::begin("Releases", true);
+            let mut g = Grid::new(&["Version", "Notes", "Size"])
+                .tones([Tone::Strong, Tone::Default, Tone::Muted])
+                .right(&[2]);
+            g.row(["0.4.0", LONG, "12 KB"]);
+            g.row([
+                "0.3.9",
+                "Fixed the picker drawing past the last row of a short terminal",
+                "11 KB",
+            ]);
+            g.row(["0.3.8", "—", "11 KB"]);
+            f.table("Releases", &g);
+            let mut kv = Grid::kv();
+            kv.row(["description", LONG]);
+            f.table("About", &kv);
+            f.done("Listed");
+            0
+        },
+        script: &[],
+    },
 ];
 
 const KINDS: &[(u8, &str, &str)] = &[
