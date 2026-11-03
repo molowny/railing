@@ -166,11 +166,18 @@ fn steps(color: bool) -> String {
         color,
         redraw: true,
     };
+    let secret_typed = |status, entered| Step {
+        status,
+        label: "Master password",
+        desc: "Unlock your sealward vault",
+        body: Body::secret_input(caps, entered),
+        foot: Foot::Hint("hidden as you type · enter to submit · esc to cancel"),
+    };
     let secret = |status| Step {
         status,
         label: "Master password",
         desc: "Unlock your sealward vault",
-        body: Body::silent_input(),
+        body: Body::secret_input(caps, false),
         foot: Foot::Hint("hidden as you type · enter to submit · esc to cancel"),
     };
     let value = |status| Step {
@@ -192,6 +199,10 @@ fn steps(color: bool) -> String {
         };
         out += &format!("[{name}] {} lines, {park}\n{}\n", b.lines, visible(&b.text));
     };
+    show(
+        "secret entered",
+        step::render(caps, &secret_typed(Status::Active, true), 80),
+    );
     show(
         "secret active",
         step::render(caps, &secret(Status::Active), 80),

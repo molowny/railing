@@ -6,7 +6,7 @@ cursor 4:4 shown
 ┌  Setup
 │
 ▲  Master password
-│
+│  nothing typed yet
 └  Input required
 
 ── end ──

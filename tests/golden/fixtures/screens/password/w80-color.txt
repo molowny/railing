@@ -1,20 +1,28 @@
 # password · 80×60 · colour
-# prompts::password: typing changes nothing on screen; submitted with no value row
+# prompts::password: whether anything is typed, never what or how much; cleared with ^U; submitted with no value row
 
 ── active ──
 cursor 4:4 shown
 ⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
 ⟦bright-black⟧│⟦⟧
 ⟦cyan⟧◆⟦⟧  Master password
-⟦cyan⟧│⟦⟧
+⟦cyan⟧│⟦⟧  ⟦dim⟧nothing⟦⟧ ⟦dim⟧typed⟦⟧ ⟦dim⟧yet⟦⟧
 ⟦cyan⟧└⟦⟧  ⟦c246⟧hidden⟦⟧ ⟦c246⟧as⟦⟧ ⟦c246⟧you⟦⟧ ⟦c246⟧type⟦⟧
 
 ── typed ──
+cursor 4:13 shown
+⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
+⟦bright-black⟧│⟦⟧
+⟦cyan⟧◆⟦⟧  Master password
+⟦cyan⟧│⟦⟧  ⟦cyan⟧●⟦⟧ ⟦dim⟧entered⟦⟧
+⟦cyan⟧└⟦⟧  ⟦c246⟧hidden⟦⟧ ⟦c246⟧as⟦⟧ ⟦c246⟧you⟦⟧ ⟦c246⟧type⟦⟧
+
+── cleared ──
 cursor 4:4 shown
 ⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
 ⟦bright-black⟧│⟦⟧
 ⟦cyan⟧◆⟦⟧  Master password
-⟦cyan⟧│⟦⟧
+⟦cyan⟧│⟦⟧  ⟦dim⟧nothing⟦⟧ ⟦dim⟧typed⟦⟧ ⟦dim⟧yet⟦⟧
 ⟦cyan⟧└⟦⟧  ⟦c246⟧hidden⟦⟧ ⟦c246⟧as⟦⟧ ⟦c246⟧you⟦⟧ ⟦c246⟧type⟦⟧
 
 ── end ──

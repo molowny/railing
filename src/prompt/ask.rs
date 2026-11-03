@@ -494,11 +494,13 @@ impl Ask for Confirm {
 
 // ── Password ───────────────────────────────────────────────────────────
 
-/// A password or passphrase on the primary screen: the step is drawn, then
-/// nothing while it is typed (not a mask, not a counter, not a redraw), and
-/// it collapses to `◇  label` with no value row once submitted. An empty
-/// Enter redraws the step as `Input required`, which says nothing about what
-/// was typed. The answer is wiped when dropped.
+/// A password or passphrase on the primary screen: the step is drawn, and
+/// while it is typed it shows one thing, whether anything is typed (`nothing
+/// typed yet` / `● entered`), redrawn only when that changes: never a mask,
+/// a counter or a redraw per key, so nothing about the length or the rhythm
+/// reaches the scrollback ([`crate::prompt::Echo::Presence`]). It collapses
+/// to `◇  label` with no value row once submitted. An empty Enter redraws the
+/// step as `Input required`. The answer is wiped when dropped.
 ///
 /// Read by [`crate::prompt::secret`], which is given the read half of the
 /// terminal only.
@@ -516,14 +518,14 @@ impl Password {
         }
     }
 
-    fn step<'a>(&'a self, status: Status<'a>) -> Step<'a> {
+    fn step<'a>(&'a self, caps: Caps, status: Status<'a>, entered: bool) -> Step<'a> {
         let open = matches!(status, Status::Active | Status::Error(_));
         Step {
             status,
             label: &self.label,
             desc: "",
             body: if open {
-                Body::silent_input()
+                Body::secret_input(caps, entered)
             } else {
                 Body::None
             },
@@ -540,12 +542,22 @@ impl Password {
         let cols = tty.size().map_or(80, |s| usize::from(s.cols));
         let mut region = Region::new(caps);
         let mut raw = tty.raw()?;
-        region.draw(tty, &step::render(caps, &self.step(Status::Active), cols))?;
+        let open = self.step(caps, Status::Active, false);
+        region.draw(tty, &step::render(caps, &open, cols))?;
         loop {
-            let (status, answer) = match secret(&mut raw, Echo::Silent)? {
+            let read = {
+                // Whether anything is typed, when that changes: typing after
+                // `Input required` answers it, so the step is open again.
+                let mut paint = |entered: bool| {
+                    let step = self.step(caps, Status::Active, entered);
+                    region.draw(tty, &step::render(caps, &step, cols))
+                };
+                secret(&mut raw, Echo::Presence { paint: &mut paint })?
+            };
+            let (status, answer) = match read {
                 Secret::Entered(s) => (Status::Submit, Answer::Submitted(s)),
                 Secret::Empty => {
-                    let required = self.step(Status::Error("Input required"));
+                    let required = self.step(caps, Status::Error("Input required"), false);
                     region.draw(tty, &step::render(caps, &required, cols))?;
                     continue;
                 }
@@ -561,7 +573,10 @@ impl Password {
                 }
             };
             raw.restore()?;
-            region.draw(tty, &step::render(caps, &self.step(status), cols))?;
+            region.draw(
+                tty,
+                &step::render(caps, &self.step(caps, status, false), cols),
+            )?;
             region.keep(tty)?;
             return Ok(answer);
         }

@@ -6,7 +6,7 @@ cursor 4:4 shown
 ⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
 ⟦bright-black⟧│⟦⟧
 ⟦yellow⟧▲⟦⟧  Master password
-⟦yellow⟧│⟦⟧
+⟦yellow⟧│⟦⟧  ⟦dim⟧nothing⟦⟧ ⟦dim⟧typed⟦⟧ ⟦dim⟧yet⟦⟧
 ⟦yellow⟧└⟦⟧  ⟦yellow⟧Input⟦⟧ ⟦yellow⟧required⟦⟧
 
 ── end ──

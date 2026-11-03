@@ -99,7 +99,7 @@ fn secret_child(
         status: Status::Active,
         label: "Password",
         desc: "",
-        body: Body::silent_input(),
+        body: Body::secret_input(tty.caps(), false),
         foot: Foot::Hint("hidden as you type"),
     };
     let mut region = Region::new(tty.caps());

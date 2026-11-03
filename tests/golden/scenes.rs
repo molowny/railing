@@ -611,7 +611,7 @@ static SCENES: &[Scene] = &[
     // submitted), frozen as the record of the leak these replace.
     Scene {
         name: "password",
-        about: "prompts::password: typing changes nothing on screen; submitted with no value row",
+        about: "prompts::password: whether anything is typed, never what or how much; cleared with ^U; submitted with no value row",
         widths: WIDE,
         historical: false,
         term: XTERM,
@@ -622,7 +622,10 @@ static SCENES: &[Scene] = &[
             Keys(b"hunter2"),
             Settle,
             Snap("typed"),
-            Keys(b"\r"),
+            Keys(b"\x15"),
+            Settle,
+            Snap("cleared"),
+            Keys(b"pw\r"),
         ],
     },
     Scene {

@@ -1,13 +1,19 @@
+[secret entered] 4 lines, park up 2 col 12
+\e[36m◆\e[0m  Master password
+\e[36m│\e[0m  \e[38;5;246mUnlock your sealward vault\e[0m
+\e[36m│\e[0m  \e[36m●\e[0m \e[2mentered\e[0m
+\e[36m└\e[0m  \e[38;5;246mhidden as you type · enter to submit · esc to cancel\e[0m
+
 [secret active] 4 lines, park up 2 col 3
 \e[36m◆\e[0m  Master password
 \e[36m│\e[0m  \e[38;5;246mUnlock your sealward vault\e[0m
-\e[36m│\e[0m  
+\e[36m│\e[0m  \e[2mnothing typed yet\e[0m
 \e[36m└\e[0m  \e[38;5;246mhidden as you type · enter to submit · esc to cancel\e[0m
 
 [secret error] 4 lines, park up 2 col 3
 \e[33m▲\e[0m  Master password
 \e[33m│\e[0m  \e[38;5;246mUnlock your sealward vault\e[0m
-\e[33m│\e[0m  
+\e[33m│\e[0m  \e[2mnothing typed yet\e[0m
 \e[33m└  Wrong password (4 attempts remaining)\e[0m
 
 [secret submitted] 2 lines, no park
@@ -17,7 +23,7 @@
 [secret cancelled] 4 lines, no park
 \e[31m■\e[0m  Master password
 \e[31m│\e[0m  \e[38;5;246mUnlock your sealward vault\e[0m
-\e[31m│\e[0m  
+\e[31m│\e[0m  \e[2mnothing typed yet\e[0m
 \e[31m└  Operation cancelled.\e[0m
 
 [value active] 4 lines, park up 2 col 8
@@ -35,7 +41,7 @@
 [secret active, 40 columns] 4 lines, park up 2 col 3
 \e[36m◆\e[0m  Master password
 \e[36m│\e[0m  \e[38;5;246mUnlock your sealward vault\e[0m
-\e[36m│\e[0m  
+\e[36m│\e[0m  \e[2mnothing typed yet\e[0m
 \e[36m└\e[0m  \e[38;5;246mhidden as you type · enter to submi…\e[0m
 
 [secret error, plain terminal] 2 lines, park here

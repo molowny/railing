@@ -68,13 +68,30 @@ pub enum Body {
     },
 }
 
+/// The input row of a secret being typed, while nothing is typed.
+pub const SECRET_EMPTY: &str = "nothing typed yet";
+/// The input row of a secret being typed, once anything is.
+pub const SECRET_ENTERED: &str = "entered";
+
 impl Body {
-    /// One empty input row with the cursor on it: a secret being typed,
-    /// echoed nowhere.
-    pub fn silent_input() -> Body {
-        Body::Rows {
-            rows: vec![String::new()],
-            cursor: Some((0, 0)),
+    /// The input row of a secret being typed: whether anything is typed,
+    /// and nothing more. Never what, never how much: `nothing typed yet`
+    /// (dim, the cursor at its start, as an empty input's placeholder), or
+    /// `● entered` (the cursor after it). [`crate::prompt::Echo::Presence`]
+    /// redraws it only when that changes.
+    pub fn secret_input(caps: Caps, entered: bool) -> Body {
+        let dim = Style::new().dim();
+        if entered {
+            let mark = glyph::tinted(caps, State::Active, "●");
+            Body::Rows {
+                rows: vec![format!("{mark} {}", dim.paint(caps, SECRET_ENTERED))],
+                cursor: Some((0, 2 + SECRET_ENTERED.len())),
+            }
+        } else {
+            Body::Rows {
+                rows: vec![dim.paint(caps, SECRET_EMPTY)],
+                cursor: Some((0, 0)),
+            }
         }
     }
 }
@@ -190,7 +207,7 @@ mod tests {
             status,
             label: "Master password",
             desc: "Unlock your sealward vault",
-            body: Body::silent_input(),
+            body: Body::secret_input(Caps::COLOR, false),
             foot: Foot::Hint("hidden as you type · enter to submit · esc to cancel"),
         }
     }
@@ -210,12 +227,27 @@ mod tests {
             [
                 "◆  Master password",
                 "│  Unlock your sealward vault",
-                "│  ",
+                "│  nothing typed yet",
                 "└  hidden as you type · enter to submit · esc to cancel",
             ]
         );
         assert_eq!(b.lines, 4);
         assert_eq!(b.park, Some(Park::At { up: 2, col: 3 }));
+    }
+
+    /// The input row says whether anything is typed and nothing else: its
+    /// two forms are fixed strings, and the cursor waits at the placeholder's
+    /// start or after the mark.
+    #[test]
+    fn a_secret_row_is_one_of_two_fixed_forms() {
+        for caps in [Caps::COLOR, Caps::PLAIN] {
+            let row = |entered| match Body::secret_input(caps, entered) {
+                Body::Rows { rows, cursor } => (style::strip(&rows[0]).into_owned(), cursor),
+                Body::None => unreachable!(),
+            };
+            assert_eq!(row(false), ("nothing typed yet".into(), Some((0, 0))));
+            assert_eq!(row(true), ("● entered".into(), Some((0, 9))));
+        }
     }
 
     #[test]

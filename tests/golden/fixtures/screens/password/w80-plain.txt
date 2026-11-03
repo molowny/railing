@@ -1,20 +1,28 @@
 # password · 80×60 · no colour
-# prompts::password: typing changes nothing on screen; submitted with no value row
+# prompts::password: whether anything is typed, never what or how much; cleared with ^U; submitted with no value row
 
 ── active ──
 cursor 4:4 shown
 ┌  Setup
 │
 ◆  Master password
-│
+│  nothing typed yet
 └  hidden as you type
 
 ── typed ──
+cursor 4:13 shown
+┌  Setup
+│
+◆  Master password
+│  ● entered
+└  hidden as you type
+
+── cleared ──
 cursor 4:4 shown
 ┌  Setup
 │
 ◆  Master password
-│
+│  nothing typed yet
 └  hidden as you type
 
 ── end ──
