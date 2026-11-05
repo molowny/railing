@@ -155,16 +155,43 @@ pub(crate) fn disarm() {
     ARMED.store(false, Ordering::Release);
 }
 
+/// This thread's `errno`, which libc names per platform.
+///
+/// # Safety
+/// The pointer is valid for the calling thread only.
+unsafe fn errno_ptr() -> *mut c_int {
+    // SAFETY: each returns the calling thread's errno location.
+    unsafe {
+        #[cfg(any(
+            target_vendor = "apple",
+            target_os = "freebsd",
+            target_os = "dragonfly"
+        ))]
+        return libc::__error();
+        #[cfg(any(target_os = "netbsd", target_os = "openbsd", target_os = "android"))]
+        return libc::__errno();
+        #[cfg(not(any(
+            target_vendor = "apple",
+            target_os = "freebsd",
+            target_os = "dragonfly",
+            target_os = "netbsd",
+            target_os = "openbsd",
+            target_os = "android"
+        )))]
+        return libc::__errno_location();
+    }
+}
+
 extern "C" fn handler(sig: c_int) {
     // SAFETY: only async-signal-safe calls (write, tcsetattr, signal,
     // raise); errno is put back for the code this interrupted.
     unsafe {
-        let errno = *libc::__errno_location();
+        let errno = *errno_ptr();
         if ARMED.load(Ordering::Acquire) {
             if !PENDING.swap(true, Ordering::AcqRel) {
                 let b = sig as u8;
                 libc::write(WAKE_W.load(Ordering::Acquire), (&raw const b).cast(), 1);
-                *libc::__errno_location() = errno;
+                *errno_ptr() = errno;
                 return;
             }
             libc::tcsetattr(
@@ -177,6 +204,6 @@ extern "C" fn handler(sig: c_int) {
         // signal is blocked while it runs).
         libc::signal(sig, libc::SIG_DFL);
         libc::raise(sig);
-        *libc::__errno_location() = errno;
+        *errno_ptr() = errno;
     }
 }
