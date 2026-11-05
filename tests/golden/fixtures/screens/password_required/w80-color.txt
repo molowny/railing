@@ -2,11 +2,10 @@
 # prompts::password submitted empty: the step's error state, then a value
 
 ── error ──
-cursor 4:4 shown
+cursor 3:21 shown
 ⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
 ⟦bright-black⟧│⟦⟧
-⟦yellow⟧▲⟦⟧  Master password
-⟦yellow⟧│⟦⟧  ⟦dim⟧nothing⟦⟧ ⟦dim⟧typed⟦⟧ ⟦dim⟧yet⟦⟧
+⟦yellow⟧▲⟦⟧  Master password:
 ⟦yellow⟧└⟦⟧  ⟦yellow⟧Input⟦⟧ ⟦yellow⟧required⟦⟧
 
 ── end ──

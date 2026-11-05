@@ -1,29 +1,25 @@
-[secret entered] 4 lines, park up 2 col 12
-◆  Master password
+[secret entered] 3 lines, park up 3 col 20
+◆  Master password: 
 │  Unlock your sealward vault
-│  ● entered
-└  hidden as you type · enter to submit · esc to cancel
+└  ● typed · enter to submit · esc to cancel
 
-[secret active] 4 lines, park up 2 col 3
-◆  Master password
+[secret active] 3 lines, park up 3 col 20
+◆  Master password: 
 │  Unlock your sealward vault
-│  nothing typed yet
-└  hidden as you type · enter to submit · esc to cancel
+└  type it, hidden · esc to cancel
 
-[secret error] 4 lines, park up 2 col 3
-▲  Master password
+[secret error] 3 lines, park up 3 col 20
+▲  Master password: 
 │  Unlock your sealward vault
-│  nothing typed yet
 └  Wrong password (4 attempts remaining)
 
 [secret submitted] 2 lines, no park
 ◇  Master password
 │
 
-[secret cancelled] 4 lines, no park
+[secret cancelled] 3 lines, no park
 ■  Master password
 │  Unlock your sealward vault
-│  nothing typed yet
 └  Operation cancelled.
 
 [value active] 4 lines, park up 2 col 8
@@ -38,11 +34,10 @@
 │  alice
 │
 
-[secret active, 40 columns] 4 lines, park up 2 col 3
-◆  Master password
+[secret active, 40 columns] 3 lines, park up 3 col 20
+◆  Master password: 
 │  Unlock your sealward vault
-│  nothing typed yet
-└  hidden as you type · enter to submi…
+└  type it, hidden · esc to cancel
 
 [secret error, plain terminal] 2 lines, park here
 ▲  Wrong password

@@ -1,29 +1,25 @@
-[secret entered] 4 lines, park up 2 col 12
-\e[36m◆\e[0m  Master password
+[secret entered] 3 lines, park up 3 col 20
+\e[36m◆\e[0m  Master password: 
 \e[36m│\e[0m  \e[38;5;246mUnlock your sealward vault\e[0m
-\e[36m│\e[0m  \e[36m●\e[0m \e[2mentered\e[0m
-\e[36m└\e[0m  \e[38;5;246mhidden as you type · enter to submit · esc to cancel\e[0m
+\e[36m└\e[0m  \e[38;5;246m● typed · enter to submit · esc to cancel\e[0m
 
-[secret active] 4 lines, park up 2 col 3
-\e[36m◆\e[0m  Master password
+[secret active] 3 lines, park up 3 col 20
+\e[36m◆\e[0m  Master password: 
 \e[36m│\e[0m  \e[38;5;246mUnlock your sealward vault\e[0m
-\e[36m│\e[0m  \e[2mnothing typed yet\e[0m
-\e[36m└\e[0m  \e[38;5;246mhidden as you type · enter to submit · esc to cancel\e[0m
+\e[36m└\e[0m  \e[38;5;246mtype it, hidden · esc to cancel\e[0m
 
-[secret error] 4 lines, park up 2 col 3
-\e[33m▲\e[0m  Master password
+[secret error] 3 lines, park up 3 col 20
+\e[33m▲\e[0m  Master password: 
 \e[33m│\e[0m  \e[38;5;246mUnlock your sealward vault\e[0m
-\e[33m│\e[0m  \e[2mnothing typed yet\e[0m
 \e[33m└  Wrong password (4 attempts remaining)\e[0m
 
 [secret submitted] 2 lines, no park
 \e[32m◇\e[0m  Master password
 \e[38;5;8m│\e[0m
 
-[secret cancelled] 4 lines, no park
+[secret cancelled] 3 lines, no park
 \e[31m■\e[0m  Master password
 \e[31m│\e[0m  \e[38;5;246mUnlock your sealward vault\e[0m
-\e[31m│\e[0m  \e[2mnothing typed yet\e[0m
 \e[31m└  Operation cancelled.\e[0m
 
 [value active] 4 lines, park up 2 col 8
@@ -38,11 +34,10 @@
 \e[38;5;8m│\e[0m  alice
 \e[38;5;8m│\e[0m
 
-[secret active, 40 columns] 4 lines, park up 2 col 3
-\e[36m◆\e[0m  Master password
+[secret active, 40 columns] 3 lines, park up 3 col 20
+\e[36m◆\e[0m  Master password: 
 \e[36m│\e[0m  \e[38;5;246mUnlock your sealward vault\e[0m
-\e[36m│\e[0m  \e[2mnothing typed yet\e[0m
-\e[36m└\e[0m  \e[38;5;246mhidden as you type · enter to submi…\e[0m
+\e[36m└\e[0m  \e[38;5;246mtype it, hidden · esc to cancel\e[0m
 
 [secret error, plain terminal] 2 lines, park here
 ▲  Wrong password

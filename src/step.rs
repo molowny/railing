@@ -4,10 +4,14 @@
 //! `┌ sealward unlock`).
 //!
 //! ```text
-//! ◆  Master password                      ← the label (Active: cyan ◆)
-//! │  Unlock your sealward vault           ← desc, dim
-//! │  █                                    ← body: the input rows; the cursor parks here
-//! └  hidden as you type · enter to submit ← the foot
+//! ◆  Project name                ← the label (Active: cyan ◆)
+//! │  Lowercase, no spaces        ← desc, dim
+//! │  alice█                      ← body: the input rows; the cursor parks here
+//! └  [Esc](Preview)              ← the foot
+//!
+//! ◆  Master password: █          ← a secret: typed on the label's line, unseen
+//! │  Unlock your sealward vault
+//! └  ● typed · enter to submit · esc to cancel   ← whether anything is typed
 //! ```
 //!
 //! The foot follows the state: [`Foot`] while active, the error beside `└`
@@ -60,6 +64,11 @@ pub enum Foot<'a> {
 pub enum Body {
     /// Nothing: a submitted secret, which shows no value at all.
     None,
+    /// No rows: the input is typed on the question's line, after `label: `,
+    /// where the cursor waits while the step is open. Nothing is drawn
+    /// there: a secret. Its foot says whether anything is typed
+    /// ([`secret_hint`]).
+    OnLabel,
     /// Styled rows, each drawn after the gutter; the cursor, if the step
     /// takes input, at `(row, column)` within them.
     Rows {
@@ -68,31 +77,15 @@ pub enum Body {
     },
 }
 
-/// The input row of a secret being typed, while nothing is typed.
-pub const SECRET_EMPTY: &str = "nothing typed yet";
-/// The input row of a secret being typed, once anything is.
-pub const SECRET_ENTERED: &str = "entered";
-
-impl Body {
-    /// The input row of a secret being typed: whether anything is typed,
-    /// and nothing more. Never what, never how much: `nothing typed yet`
-    /// (dim, the cursor at its start, as an empty input's placeholder), or
-    /// `● entered` (the cursor after it). [`crate::prompt::Echo::Presence`]
-    /// redraws it only when that changes.
-    pub fn secret_input(caps: Caps, entered: bool) -> Body {
-        let dim = Style::new().dim();
-        if entered {
-            let mark = glyph::tinted(caps, State::Active, "●");
-            Body::Rows {
-                rows: vec![format!("{mark} {}", dim.paint(caps, SECRET_ENTERED))],
-                cursor: Some((0, 2 + SECRET_ENTERED.len())),
-            }
-        } else {
-            Body::Rows {
-                rows: vec![dim.paint(caps, SECRET_EMPTY)],
-                cursor: Some((0, 0)),
-            }
-        }
+/// The foot of a secret step, the one thing it says while it is typed:
+/// whether anything is (`● typed`), and what Enter does once it does. Never
+/// what, never how much; [`crate::prompt::Echo::Presence`] redraws it only
+/// when that changes.
+pub fn secret_hint(entered: bool) -> &'static str {
+    if entered {
+        "● typed · enter to submit · esc to cancel"
+    } else {
+        "type it, hidden · esc to cancel"
     }
 }
 
@@ -125,13 +118,25 @@ pub fn render(caps: Caps, step: &Step, cols: usize) -> Block {
     let state = step.status.glyph();
     let bar = glyph::bar(caps, state);
     let mut lines = Vec::new();
+    // An input on the question's line: `label: `, the cursor after it.
+    let open = matches!(step.status, Status::Active | Status::Error(_));
+    let on_label = open && step.body == Body::OnLabel;
+    let last = step.label.lines().count().saturating_sub(1);
+    let mut park = None;
     for (i, l) in step.label.lines().enumerate() {
         let mark = if i == 0 {
             glyph::step(caps, state)
         } else {
             bar.clone()
         };
-        lines.push(format!("{mark}  {}", fit(l, cols)));
+        let text = if on_label && i == last {
+            let text = fit(&format!("{l}:"), cols.saturating_sub(1));
+            park = Some((i, GUTTER + style::measure(&text) + 1));
+            format!("{text} ")
+        } else {
+            fit(l, cols)
+        };
+        lines.push(format!("{mark}  {text}"));
     }
     if step.label.is_empty() {
         lines.push(format!("{}  ", glyph::step(caps, state)));
@@ -139,14 +144,12 @@ pub fn render(caps: Caps, step: &Step, cols: usize) -> Block {
     for l in step.desc.lines().filter(|l| !l.trim().is_empty()) {
         lines.push(format!("{bar}  {}", glyph::dim(caps, &fit(l, cols))));
     }
-    let mut park = None;
     if let Body::Rows { rows, cursor } = &step.body {
         let first = lines.len();
         for r in rows {
             lines.push(format!("{bar}  {}", fit(r, cols)));
         }
         // Only an open step waits for input.
-        let open = matches!(step.status, Status::Active | Status::Error(_));
         if let (true, Some((row, col))) = (open, cursor) {
             park = Some((first + row, GUTTER + col));
         }
@@ -207,8 +210,8 @@ mod tests {
             status,
             label: "Master password",
             desc: "Unlock your sealward vault",
-            body: Body::secret_input(Caps::COLOR, false),
-            foot: Foot::Hint("hidden as you type · enter to submit · esc to cancel"),
+            body: Body::OnLabel,
+            foot: Foot::Hint(secret_hint(false)),
         }
     }
 
@@ -219,35 +222,42 @@ mod tests {
             .collect()
     }
 
+    /// A secret is typed on the question's line, after `label: `: no input
+    /// row, the cursor waiting there, the foot saying what to do.
     #[test]
-    fn an_open_step_waits_on_its_input_row() {
+    fn a_secret_waits_on_its_question_line() {
         let b = render(Caps::COLOR, &unlock(Status::Active), 80);
         assert_eq!(
             plain_lines(&b),
             [
-                "◆  Master password",
+                "◆  Master password: ",
                 "│  Unlock your sealward vault",
-                "│  nothing typed yet",
-                "└  hidden as you type · enter to submit · esc to cancel",
+                "└  type it, hidden · esc to cancel",
             ]
         );
-        assert_eq!(b.lines, 4);
-        assert_eq!(b.park, Some(Park::At { up: 2, col: 3 }));
+        assert_eq!(b.lines, 3);
+        assert_eq!(b.park, Some(Park::At { up: 3, col: 20 }));
     }
 
-    /// The input row says whether anything is typed and nothing else: its
-    /// two forms are fixed strings, and the cursor waits at the placeholder's
-    /// start or after the mark.
+    /// The foot says whether anything is typed and nothing else: two fixed
+    /// strings, and Enter offered only once there is something to submit.
     #[test]
-    fn a_secret_row_is_one_of_two_fixed_forms() {
-        for caps in [Caps::COLOR, Caps::PLAIN] {
-            let row = |entered| match Body::secret_input(caps, entered) {
-                Body::Rows { rows, cursor } => (style::strip(&rows[0]).into_owned(), cursor),
-                Body::None => unreachable!(),
-            };
-            assert_eq!(row(false), ("nothing typed yet".into(), Some((0, 0))));
-            assert_eq!(row(true), ("● entered".into(), Some((0, 9))));
-        }
+    fn a_secret_foot_is_one_of_two_fixed_forms() {
+        assert_eq!(secret_hint(false), "type it, hidden · esc to cancel");
+        assert_eq!(
+            secret_hint(true),
+            "● typed · enter to submit · esc to cancel"
+        );
+        let typed = Step {
+            foot: Foot::Hint(secret_hint(true)),
+            ..unlock(Status::Active)
+        };
+        let caps = Caps {
+            color: false,
+            redraw: true,
+        };
+        let l = plain_lines(&render(caps, &typed, 80));
+        assert_eq!(l[2], "└  ● typed · enter to submit · esc to cancel");
     }
 
     #[test]
@@ -260,8 +270,8 @@ mod tests {
         );
         assert_eq!(ok.lines, err.lines);
         let l = plain_lines(&err);
-        assert_eq!(l[0], "▲  Master password");
-        assert_eq!(l[3], "└  Wrong password (4 attempts remaining)");
+        assert_eq!(l[0], "▲  Master password: ");
+        assert_eq!(l[2], "└  Wrong password (4 attempts remaining)");
     }
 
     #[test]

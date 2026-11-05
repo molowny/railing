@@ -2,28 +2,25 @@
 # prompts::password: whether anything is typed, never what or how much; cleared with ^U; submitted with no value row
 
 ── active ──
-cursor 4:4 shown
+cursor 3:21 shown
 ⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
 ⟦bright-black⟧│⟦⟧
-⟦cyan⟧◆⟦⟧  Master password
-⟦cyan⟧│⟦⟧  ⟦dim⟧nothing⟦⟧ ⟦dim⟧typed⟦⟧ ⟦dim⟧yet⟦⟧
-⟦cyan⟧└⟦⟧  ⟦c246⟧hidden⟦⟧ ⟦c246⟧as⟦⟧ ⟦c246⟧you⟦⟧ ⟦c246⟧type⟦⟧
+⟦cyan⟧◆⟦⟧  Master password:
+⟦cyan⟧└⟦⟧  ⟦c246⟧type⟦⟧ ⟦c246⟧it,⟦⟧ ⟦c246⟧hidden⟦⟧ ⟦c246⟧·⟦⟧ ⟦c246⟧esc⟦⟧ ⟦c246⟧to⟦⟧ ⟦c246⟧cancel⟦⟧
 
 ── typed ──
-cursor 4:13 shown
+cursor 3:21 shown
 ⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
 ⟦bright-black⟧│⟦⟧
-⟦cyan⟧◆⟦⟧  Master password
-⟦cyan⟧│⟦⟧  ⟦cyan⟧●⟦⟧ ⟦dim⟧entered⟦⟧
-⟦cyan⟧└⟦⟧  ⟦c246⟧hidden⟦⟧ ⟦c246⟧as⟦⟧ ⟦c246⟧you⟦⟧ ⟦c246⟧type⟦⟧
+⟦cyan⟧◆⟦⟧  Master password:
+⟦cyan⟧└⟦⟧  ⟦c246⟧●⟦⟧ ⟦c246⟧typed⟦⟧ ⟦c246⟧·⟦⟧ ⟦c246⟧enter⟦⟧ ⟦c246⟧to⟦⟧ ⟦c246⟧submit⟦⟧ ⟦c246⟧·⟦⟧ ⟦c246⟧esc⟦⟧ ⟦c246⟧to⟦⟧ ⟦c246⟧cancel⟦⟧
 
 ── cleared ──
-cursor 4:4 shown
+cursor 3:21 shown
 ⟦bright-black⟧┌⟦⟧  ⟦bold⟧Setup⟦⟧
 ⟦bright-black⟧│⟦⟧
-⟦cyan⟧◆⟦⟧  Master password
-⟦cyan⟧│⟦⟧  ⟦dim⟧nothing⟦⟧ ⟦dim⟧typed⟦⟧ ⟦dim⟧yet⟦⟧
-⟦cyan⟧└⟦⟧  ⟦c246⟧hidden⟦⟧ ⟦c246⟧as⟦⟧ ⟦c246⟧you⟦⟧ ⟦c246⟧type⟦⟧
+⟦cyan⟧◆⟦⟧  Master password:
+⟦cyan⟧└⟦⟧  ⟦c246⟧type⟦⟧ ⟦c246⟧it,⟦⟧ ⟦c246⟧hidden⟦⟧ ⟦c246⟧·⟦⟧ ⟦c246⟧esc⟦⟧ ⟦c246⟧to⟦⟧ ⟦c246⟧cancel⟦⟧
 
 ── end ──
 cursor 6:1 shown

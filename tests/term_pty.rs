@@ -99,8 +99,8 @@ fn secret_child(
         status: Status::Active,
         label: "Password",
         desc: "",
-        body: Body::secret_input(tty.caps(), false),
-        foot: Foot::Hint("hidden as you type"),
+        body: Body::OnLabel,
+        foot: Foot::Hint(step::secret_hint(false)),
     };
     let mut region = Region::new(tty.caps());
     let mut alt = None;
@@ -551,9 +551,10 @@ fn a_secret_is_read_with_nothing_drawn() {
     s.keys(b"\r");
     s.expect("Entered(3)");
     s.expect("done");
-    // The step goes: back from the input row, up over its three lines, cleared.
+    // The step goes: down from the question's line, where the input was, to
+    // the block's end, up over its two lines, cleared.
     let end = s.painted(Duration::from_millis(100));
-    assert!(end.contains("\x1b[2B\r\x1b[3F\x1b[J\x1b[?25h"), "{end:?}");
+    assert!(end.contains("\x1b[2B\r\x1b[2F\x1b[J\x1b[?25h"), "{end:?}");
 }
 
 #[test]

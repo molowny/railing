@@ -170,15 +170,15 @@ fn steps(color: bool) -> String {
         status,
         label: "Master password",
         desc: "Unlock your sealward vault",
-        body: Body::secret_input(caps, entered),
-        foot: Foot::Hint("hidden as you type · enter to submit · esc to cancel"),
+        body: Body::OnLabel,
+        foot: Foot::Hint(step::secret_hint(entered)),
     };
     let secret = |status| Step {
         status,
         label: "Master password",
         desc: "Unlock your sealward vault",
-        body: Body::secret_input(caps, false),
-        foot: Foot::Hint("hidden as you type · enter to submit · esc to cancel"),
+        body: Body::OnLabel,
+        foot: Foot::Hint(step::secret_hint(false)),
     };
     let value = |status| Step {
         status,
