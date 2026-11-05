@@ -37,6 +37,8 @@ cli-kit = { version = "0.1", features = ["tui"] }
 | `term` | `Tty`: a terminal named by path, fd or `Tty::stderr()`, its caps and size; `Raw` (hardened raw mode, the key reader); `signals` that wake a read instead of killing a raw terminal. Unix; a stub elsewhere (core) |
 | `glyph` | The flow's marks (`◆ ◇ ▲ ■`, `│`, `└`) and the muted tone as strings for given `Caps`, for an app drawing the flow's look on a terminal of its own (core) |
 | `spin` | `Spin`: the pulsing shape and the glow as strings at a steady `PACE` — what `ui::Spinner` and `Wait` animate, and what an app on its own terminal animates itself (core) |
+| `progress` | `progress::bar` (one or more coloured parts of a whole; a part that is not zero always shows) and `progress::line` (`◒  msg  ━━━━────  42/100`) as strings (core) |
+| `live` | `Flow::progress(msg, len)`: the progress line animated, ending as a `◇` step; `Flow::live()` / `Live::stderr()`: a block the caller redraws in place (a `--watch` panel), behind the gutter, cut to width, repainted on resize |
 
 ### Optional
 
@@ -51,8 +53,8 @@ The default is the core alone; an app lists the features it uses
 
 | Flag | Enables | Extra dependencies |
 |------|---------|-------------------|
-| (core) | `style`, `term`, `render`, `step`, `glyph`, `group`, `spin`, `prompt`: a terminal the caller names, raw mode and keys, the flow's look as strings | libc, unicode-width, zeroize |
-| `flow` | the live flow, `prompts` and lists, `CliError`, `color`, `wait` | — |
+| (core) | `style`, `term`, `render`, `step`, `glyph`, `group`, `spin`, `progress`, `prompt`: a terminal the caller names, raw mode and keys, the flow's look as strings | libc, unicode-width, zeroize |
+| `flow` | the live flow, `prompts` and lists, `CliError`, `color`, `wait`, `live` (progress, live panels) | — |
 | `fuzzy` | ranked matching in the picker and the grid's filter (substring without it) | `nucleo-matcher` |
 | `table` | `Grid`, `Flow::table`, the browsed grid, laid out by the kit (+`flow`) | — |
 | `output` | JSON: `Renderable`, the report types, `CliError::to_json` (+`table`) | `serde`, `serde_json` |

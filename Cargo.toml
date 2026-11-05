@@ -151,3 +151,7 @@ required-features = ["full"]
 [[example]]
 name = "ui"
 required-features = ["full"]
+
+[[example]]
+name = "progress"
+required-features = ["full"]
