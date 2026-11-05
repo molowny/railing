@@ -431,6 +431,82 @@ static SCENES: &[Scene] = &[
         },
         script: &[],
     },
+    // ── Progress ───────────────────────────────────────────────────────
+    Scene {
+        name: "live",
+        about: "Flow::live: a panel replaced in place behind the gutter, grown, shrunk, cut to width, kept",
+        widths: NARROW,
+        historical: false,
+        term: XTERM,
+        run: || {
+            use cli_kit::progress::{self, Part};
+            use cli_kit::style::Style;
+            let f = Flow::begin("app watch", true);
+            f.step("submitted r-x");
+            let Some(mut live) = f.live() else {
+                return 2;
+            };
+            let caps = cli_kit::color::caps(cli_kit::color::Stream::Stderr);
+            let frame = |ok: u64, bad: u64, run: u64, extra: &[&str]| {
+                let parts = [
+                    Part::new(ok, Style::new().green()),
+                    Part::new(bad, Style::new().red()),
+                    Part::new(run, Style::new().yellow()),
+                ];
+                let mut s = format!(
+                    "run r-x  ·  1308 files\n\ntranscode {}  {}",
+                    progress::bar(caps, &parts, 1308, 30),
+                    progress::count(ok + bad, 1308)
+                );
+                for l in extra {
+                    s += "\n";
+                    s += l;
+                }
+                s
+            };
+            live.draw(&frame(0, 0, 0, &[]));
+            live.draw(&frame(
+                400,
+                1,
+                64,
+                &[
+                    "",
+                    "running  a-file-name-long-enough-to-be-cut-at-forty-eight-columns.mp4  3m 02s",
+                    "         short.mp4",
+                ],
+            ));
+            live.draw(&frame(1307, 1, 0, &[]));
+            live.keep();
+            f.close(Outcome::Fail, "1 of 1308 files failed");
+            1
+        },
+        script: &[],
+    },
+    Scene {
+        name: "progress",
+        about: "Flow::progress: done leaves a step, clear leaves nothing, fail leaves an error and the flow goes on",
+        widths: WIDE,
+        historical: false,
+        term: XTERM,
+        run: || {
+            let f = Flow::begin("app copy", true);
+            let p = f.progress("Copying files", 3);
+            for _ in 0..3 {
+                std::thread::sleep(std::time::Duration::from_millis(120));
+                p.inc(1);
+            }
+            p.done("Copied 3 files");
+            let p = f.progress("Checking", 2);
+            p.set(1);
+            p.clear();
+            let p = f.progress("Uploading", 10);
+            p.set(4);
+            p.fail("upload stopped at 4 of 10");
+            f.done("done");
+            0
+        },
+        script: &[],
+    },
     // ── Prompts ────────────────────────────────────────────────────────
     Scene {
         name: "input",

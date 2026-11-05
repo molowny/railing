@@ -1,0 +1,13 @@
+# progress · 80×60 · no colour
+# Flow::progress: done leaves a step, clear leaves nothing, fail leaves an error and the flow goes on
+
+── end ──
+cursor 8:1 shown
+┌  app copy
+│
+◇  Copied 3 files
+│
+■  upload stopped at 4 of 10
+│
+└  ✔ done
+exit 0

@@ -1,0 +1,14 @@
+# live · 80×60 · no colour
+# Flow::live: a panel replaced in place behind the gutter, grown, shrunk, cut to width, kept
+
+── end ──
+cursor 9:1 shown
+┌  app watch
+│
+◇  submitted r-x
+│
+│  run r-x  ·  1308 files
+│
+│  transcode ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  1308/1308
+└  ✖ 1 of 1308 files failed
+exit 1
