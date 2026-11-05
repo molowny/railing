@@ -143,6 +143,12 @@ impl Spin {
         (self.started.elapsed().as_millis() / PACE.as_millis()) as usize
     }
 
+    /// Pin the frame (tests elsewhere in the crate).
+    #[cfg(test)]
+    pub(crate) fn fix(&mut self, frame: usize) {
+        self.fixed = Some(frame);
+    }
+
     /// The shape without its dot frame.
     pub fn without_dot(mut self) -> Self {
         self.no_dot = true;

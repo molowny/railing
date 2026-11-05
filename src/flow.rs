@@ -589,6 +589,24 @@ impl Flow {
         self.live.then(|| ui::Spinner::start(msg))
     }
 
+    /// Work of a known size, as a bar that animates on its own line
+    /// ([`crate::Progress`]): `◒  msg  ━━━━────  pos/len` while it runs,
+    /// a `◇` step when it is done. Plain, only how it ended is said.
+    pub fn progress(&self, msg: &str, len: u64) -> crate::Progress<'_> {
+        crate::Progress::start(self, self.live, msg, len)
+    }
+
+    /// A block the caller redraws in place, behind the gutter
+    /// ([`crate::Live`]): a `--watch` panel. `None` when the flow is not
+    /// live, where the caller says it in plain lines instead.
+    pub fn live(&self) -> Option<crate::Live> {
+        if self.live {
+            crate::Live::open(true)
+        } else {
+            None
+        }
+    }
+
     /// Close with success: `└ ✔ msg` (live) or `msg` on stderr (plain).
     pub fn done(self, msg: &str) {
         self.close(Outcome::Ok, msg);

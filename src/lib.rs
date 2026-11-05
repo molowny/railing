@@ -4,12 +4,13 @@
 //! [`style`] (colour per terminal, widths), [`term`] (a named terminal, raw
 //! mode, keys, signals), [`render`] and [`step`] (blocks and the flow's
 //! steps as strings), [`glyph`] and [`group`] (the flow's marks and lines),
-//! [`spin`] (the spinner and its glow) and [`prompt`] (prompts on any
+//! [`spin`] (the spinner and its glow), [`progress`] (bars as strings) and
+//! [`prompt`] (prompts on any
 //! terminal), for a process that draws on a terminal of its own choosing.
 //!
 //! | Feature | Adds | Dependencies |
 //! |---|---|---|
-//! | `flow` | the live flow, `prompts`, `CliError`, `color`, `wait` | — |
+//! | `flow` | the live flow, `prompts`, `CliError`, `color`, `wait`, `live` | — |
 //! | `fuzzy` | ranked matching in the picker and the grid's filter | nucleo-matcher |
 //! | `table` | `Grid`, `Flow::table`, the browsed grid | — |
 //! | `output` | JSON: `Renderable`, reports, `CliError::to_json` | serde, serde_json |
@@ -20,6 +21,7 @@
 //! | `full` | all but `tui` | |
 pub mod glyph;
 pub mod group;
+pub mod progress;
 pub mod prompt;
 pub mod render;
 pub mod spin;
@@ -45,6 +47,8 @@ mod frame;
 pub mod fuzzy;
 #[cfg(feature = "table")]
 pub mod grid;
+#[cfg(feature = "flow")]
+pub mod live;
 #[cfg(feature = "logging")]
 pub mod logging;
 #[cfg(feature = "flow")]
@@ -77,6 +81,8 @@ pub use flow::{Browse, Browsed};
 pub use flow::{Flow, Gutter, Plain, Task};
 #[cfg(feature = "table")]
 pub use grid::{Grid, GridCell, SortKey, Tone};
+#[cfg(feature = "flow")]
+pub use live::{Live, Progress};
 #[cfg(feature = "output")]
 pub use output::{CheckRow, CheckStatus, ChecksReport, DiagnosticsOutput, Renderable};
 #[cfg(feature = "flow")]
