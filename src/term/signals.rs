@@ -9,6 +9,10 @@
 //!   (no `SA_RESTART`, no waiting for a key), restores the terminal and
 //!   returns [`super::Event::Interrupted`]. The app erases what it drew and
 //!   calls [`reraise`].
+//! - **While a line is read in the terminal's own line mode**
+//!   ([`super::Tty::read_line`], which turns echo and `ISIG` off), the same:
+//!   the read wakes, puts the settings back and returns
+//!   [`super::Line::Interrupted`].
 //! - **A second signal while raw** means the app did not get there: the
 //!   handler restores the terminal itself (`tcsetattr` is async-signal-safe)
 //!   and takes the default action. The user's shell never comes back
@@ -136,7 +140,7 @@ pub(crate) fn arm(fd: RawFd, termios: &libc::termios) -> io::Result<()> {
     if ARMED.load(Ordering::Acquire) {
         return Err(io::Error::new(
             io::ErrorKind::AlreadyExists,
-            "another terminal is already raw in this process",
+            "another terminal is already raw (or reading a line) in this process",
         ));
     }
     // SAFETY: not armed, so the handler does not read these.

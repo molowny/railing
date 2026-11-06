@@ -358,6 +358,7 @@ impl Ask for Input {
                 }
                 Line::Cancelled => return Ok(Answer::Cancelled),
                 Line::Hangup => return Ok(Answer::Hangup),
+                Line::Interrupted(sig) => return Ok(Answer::Interrupted(sig)),
             }
         }
     }
@@ -487,6 +488,7 @@ impl Ask for Confirm {
                 },
                 Line::Cancelled => return Ok(Answer::Cancelled),
                 Line::Hangup => return Ok(Answer::Hangup),
+                Line::Interrupted(sig) => return Ok(Answer::Interrupted(sig)),
             }
         }
     }
@@ -585,6 +587,7 @@ impl Password {
                 Line::Entered(s) => return Ok(Answer::Submitted(s)),
                 Line::Cancelled => return Ok(Answer::Cancelled),
                 Line::Hangup => return Ok(Answer::Hangup),
+                Line::Interrupted(sig) => return Ok(Answer::Interrupted(sig)),
             }
         }
     }

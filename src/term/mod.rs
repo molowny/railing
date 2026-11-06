@@ -170,7 +170,9 @@ mod unix {
         /// One line in the terminal's own line mode, for a terminal that
         /// cannot be redrawn: the driver edits (Backspace, Ctrl-U) and echoes
         /// (unless `echo` is off, for a secret). Signal keys are characters
-        /// here too: a Ctrl-C (or Esc) in the line cancels it.
+        /// here too: a Ctrl-C (or Esc) in the line cancels it. An installed
+        /// signal ends the read as it ends a raw one ([`signals`]); like
+        /// [`Tty::raw`], one at a time per process.
         pub fn read_line(&self, echo: bool) -> io::Result<super::Line> {
             super::cooked::read_line(self.input_fd(), echo)
         }
