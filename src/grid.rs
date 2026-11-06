@@ -536,6 +536,18 @@ mod tests {
     }
 
     #[test]
+    fn a_wide_cell_wraps_without_losing_characters() {
+        let _c = colors(false);
+        let mut g = Grid::new(&["Id", "Title"]);
+        let title = "界".repeat(20);
+        g.row(["a1", title.as_str()]);
+        let s = g.boxed(20);
+        assert!(s.lines().all(|l| measure(l) <= 20), "{s}");
+        assert_eq!(s.matches('界').count(), 20, "{s}");
+        assert!(!s.contains('…'), "{s}");
+    }
+
+    #[test]
     fn kv_has_no_header_and_lead_comes_first() {
         let _c = colors(false);
         let mut g = Grid::kv();

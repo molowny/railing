@@ -247,17 +247,14 @@ pub fn wrap_to(text: &str, width: usize) -> String {
             continue;
         }
         let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
+        let indent_w = crate::style::measure(&indent);
         let mut cur = indent.clone();
-        let mut cur_w = crate::style::measure(&cur);
-        let room = width.saturating_sub(indent.len()).max(1);
+        let mut cur_w = indent_w;
+        let room = width.saturating_sub(indent_w).max(1);
         let words = line.split_whitespace().flat_map(|word| {
             let plain = !word.contains('\x1b');
             if plain && crate::style::measure(word) > room {
-                let chars: Vec<char> = word.chars().collect();
-                chars
-                    .chunks(room)
-                    .map(|c| c.iter().collect::<String>())
-                    .collect::<Vec<_>>()
+                break_word(word, room)
             } else {
                 vec![word.to_string()]
             }
@@ -265,11 +262,11 @@ pub fn wrap_to(text: &str, width: usize) -> String {
         for word in words {
             let word = word.as_str();
             let w = crate::style::measure(word);
-            if cur_w > indent.len() && cur_w + 1 + w > width {
+            if cur_w > indent_w && cur_w + 1 + w > width {
                 out.push(std::mem::replace(&mut cur, indent.clone()));
-                cur_w = indent.len();
+                cur_w = indent_w;
             }
-            if cur_w > indent.len() {
+            if cur_w > indent_w {
                 cur.push(' ');
                 cur_w += 1;
             }
@@ -279,6 +276,28 @@ pub fn wrap_to(text: &str, width: usize) -> String {
         out.push(cur);
     }
     out.join("\n")
+}
+
+/// A plain `word` in pieces at most `room` columns wide (a character wider
+/// than `room` a piece of its own): nothing dropped, wide characters
+/// counted as the columns they take.
+fn break_word(word: &str, room: usize) -> Vec<String> {
+    let mut pieces = Vec::new();
+    let mut cur = String::new();
+    let mut cur_w = 0;
+    for c in word.chars() {
+        let w = crate::style::measure(c.encode_utf8(&mut [0; 4]));
+        if cur_w > 0 && cur_w + w > room {
+            pieces.push(std::mem::take(&mut cur));
+            cur_w = 0;
+        }
+        cur.push(c);
+        cur_w += w;
+    }
+    if !cur.is_empty() {
+        pieces.push(cur);
+    }
+    pieces
 }
 
 /// One-line log entries drawn with the prompt group's gutter
@@ -755,5 +774,17 @@ mod wrap_tests {
             "short\n  a long indented line that\n  must wrap somewhere sensible"
         );
         assert!(w.lines().all(|l| l.chars().count() <= 30));
+    }
+
+    #[test]
+    fn breaks_a_wide_word_by_columns_and_keeps_all_of_it() {
+        let word = "界".repeat(20);
+        let w = wrap_to(&word, 20);
+        assert!(w.lines().all(|l| crate::style::measure(l) <= 20), "{w}");
+        assert_eq!(w.replace('\n', ""), word);
+        // An odd room: a wide character never straddles the edge.
+        let w = wrap_to(&format!("  {word}"), 9);
+        assert!(w.lines().all(|l| crate::style::measure(l) <= 9), "{w}");
+        assert_eq!(w.replace(['\n', ' '], ""), word);
     }
 }
