@@ -16,7 +16,7 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use cli_kit::style::{Caps, TermEnv};
-use cli_kit::term::{Event, Key, Tty, signals};
+use cli_kit::term::{Event, Key, Line, Tty, signals};
 
 const MODE: &str = "TERM_PTY_CHILD";
 const PATH: &str = "TERM_PTY_PATH";
@@ -60,6 +60,20 @@ fn child() {
         return secret_child(out, tty, mode == "mask", say);
     }
     let before = termios(&tty);
+    if mode == "line" {
+        // The terminal's own line mode, a secret's: echo off.
+        say(out, "ready".into());
+        let line = tty.read_line(false).unwrap();
+        match &line {
+            Line::Entered(s) => say(out, format!("Entered({})", s.chars().count())),
+            other => say(out, format!("{other:?}")),
+        }
+        say(out, format!("restored {}", same(&before, &termios(&tty))));
+        if let Line::Interrupted(sig) = line {
+            signals::reraise(sig);
+        }
+        return;
+    }
     let mut raw = tty.raw().unwrap();
     say(out, "ready".into());
     if mode == "stall" {
@@ -471,6 +485,36 @@ fn a_signal_with_no_raw_terminal_takes_its_default_action() {
     s.expect("ready");
     s.signal(libc::SIGTERM);
     assert_eq!(s.wait().signal(), Some(libc::SIGTERM));
+}
+
+#[test]
+fn a_line_read_is_entered_and_puts_the_settings_back() {
+    let mut s = started("line", true);
+    s.keys(b"hunter2\r");
+    s.expect("Entered(7)");
+    s.expect("restored true");
+}
+
+#[test]
+fn a_signal_during_a_line_read_puts_echo_back() {
+    // Line mode turns echo and ISIG off, so it is armed as raw mode is: the
+    // signal wakes the read mid-line, the settings come back, the typed
+    // half of the secret is not left for the shell, and the child dies of
+    // the signal.
+    let mut s = started("line", true);
+    s.keys(b"hunt");
+    std::thread::sleep(Duration::from_millis(100));
+    s.signal(libc::SIGTERM);
+    s.expect("Interrupted(15)");
+    s.expect("restored true");
+    assert_eq!(s.wait().signal(), Some(libc::SIGTERM));
+    let t = termios(&s.pty.slave);
+    assert_ne!(t.c_lflag & libc::ECHO, 0, "echo not restored");
+    assert_ne!(t.c_lflag & libc::ISIG, 0, "ISIG not restored");
+    // SAFETY: a valid fd and an out-int.
+    let mut pending: libc::c_int = 0;
+    unsafe { libc::ioctl(s.pty.slave.as_raw_fd(), libc::FIONREAD, &mut pending) };
+    assert_eq!(pending, 0, "typed input left behind");
 }
 
 #[test]
