@@ -16,4 +16,4 @@ mod secret;
 #[cfg(unix)]
 pub use ask::{Answer, Confirm, Input, Password};
 #[cfg(unix)]
-pub use secret::{Echo, Secret, secret};
+pub use secret::{Echo, Paint, Secret, secret};

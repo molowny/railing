@@ -530,31 +530,45 @@ impl Password {
     }
 
     pub fn ask(self, tty: &mut Tty) -> io::Result<Answer<zeroize::Zeroizing<String>>> {
-        use crate::prompt::{Echo, Secret, secret};
+        use crate::prompt::{Echo, Paint, Secret, secret};
         let caps = tty.caps();
         if !caps.redraw {
             return self.plain(tty);
         }
-        let cols = tty.size().map_or(80, |s| usize::from(s.cols));
+        let mut size = tty.size();
+        let mut cols = size.map_or(80, |s| usize::from(s.cols));
         let mut region = Region::new(caps);
         let mut raw = tty.raw()?;
-        let open = self.step(Status::Active, false);
-        region.draw(tty, &step::render(caps, &open, cols))?;
+        let mut shown = self.step(Status::Active, false);
+        region.draw(tty, &step::render(caps, &shown, cols))?;
         loop {
             let read = {
                 // Whether anything is typed, when that changes: typing after
                 // `Input required` answers it, so the step is open again.
-                let mut paint = |entered: bool| {
-                    let step = self.step(Status::Active, entered);
-                    region.draw(tty, &step::render(caps, &step, cols))
+                // Between keys, a resize repaints what is shown at the new
+                // width.
+                let mut paint = |p: Paint| {
+                    match p {
+                        Paint::Changed(entered) => shown = self.step(Status::Active, entered),
+                        Paint::Idle(_) => {
+                            let now = tty.size();
+                            if now == size {
+                                return Ok(());
+                            }
+                            size = now;
+                            cols = now.map_or(80, |s| usize::from(s.cols));
+                            region.resized(cols);
+                        }
+                    }
+                    region.draw(tty, &step::render(caps, &shown, cols))
                 };
                 secret(&mut raw, Echo::Presence { paint: &mut paint })?
             };
             let (status, answer) = match read {
                 Secret::Entered(s) => (Status::Submit, Answer::Submitted(s)),
                 Secret::Empty => {
-                    let required = self.step(Status::Error("Input required"), false);
-                    region.draw(tty, &step::render(caps, &required, cols))?;
+                    shown = self.step(Status::Error("Input required"), false);
+                    region.draw(tty, &step::render(caps, &shown, cols))?;
                     continue;
                 }
                 Secret::Cancelled => (Status::Cancel, Answer::Cancelled),
