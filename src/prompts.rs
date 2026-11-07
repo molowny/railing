@@ -51,10 +51,12 @@ fn ask_on_stderr<T>(
         }
         Ok(Answer::Hangup) => Err(CliError::Cancelled),
         Ok(Answer::Interrupted(sig)) => crate::term::signals::reraise(sig),
-        Err(e) if e.raw_os_error() == Some(libc::ENOTTY) => Err(CliError::Usage(format!(
-            "interactive prompts need a terminal; pass {} as an argument",
-            what_to_pass(what)
-        ))),
+        Err(e) if e.raw_os_error() == Some(rustix::io::Errno::NOTTY.raw_os_error()) => {
+            Err(CliError::Usage(format!(
+                "interactive prompts need a terminal; pass {} as an argument",
+                what_to_pass(what)
+            )))
+        }
         // A list on a terminal that cannot redraw (`TERM=dumb`).
         Err(e) if e.kind() == io::ErrorKind::Unsupported => Err(CliError::Usage(format!(
             "this terminal cannot show a list to choose from; pass {} as an argument",

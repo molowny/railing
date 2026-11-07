@@ -53,7 +53,7 @@ The default is the core alone; an app lists the features it uses
 
 | Flag | Enables | Extra dependencies |
 |------|---------|-------------------|
-| (core) | `style`, `term`, `render`, `step`, `glyph`, `group`, `spin`, `progress`, `prompt`: a terminal the caller names, raw mode and keys, the flow's look as strings | libc, unicode-width, zeroize |
+| (core) | `style`, `term`, `render`, `step`, `glyph`, `group`, `spin`, `progress`, `prompt`: a terminal the caller names, raw mode and keys, the flow's look as strings | rustix, signal-hook (Unix), unicode-width, zeroize — no `unsafe` (`#![forbid(unsafe_code)]`) |
 | `flow` | the live flow, `prompts` and lists, `CliError`, `color`, `wait`, `live` (progress, live panels) | — |
 | `fuzzy` | ranked matching in the picker and the grid's filter (substring without it) | `nucleo-matcher` |
 | `table` | `Grid`, `Flow::table`, the browsed grid, laid out by the kit (+`flow`) | — |

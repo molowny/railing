@@ -1,6 +1,7 @@
 //! Reusable CLI helpers, in features an app picks from.
 //!
-//! The core is always built, over libc, unicode-width and zeroize:
+//! The core is always built, over rustix and signal-hook (Unix),
+//! unicode-width and zeroize:
 //! [`style`] (colour per terminal, widths), [`term`] (a named terminal, raw
 //! mode, keys, signals), [`render`] and [`step`] (blocks and the flow's
 //! steps as strings), [`glyph`] and [`group`] (the flow's marks and lines),
@@ -19,6 +20,11 @@
 //! | `paths` | XDG paths, private files, `workspace::find` | dirs, toml, serde |
 //! | `tui` | ratatui components and the app runner | ratatui, crossterm |
 //! | `full` | all but `tui` | |
+
+// No `unsafe` anywhere in the kit: the OS is reached through rustix and
+// signal-hook, whose safe APIs carry the FFI.
+#![forbid(unsafe_code)]
+
 pub mod glyph;
 pub mod group;
 pub mod progress;

@@ -2,10 +2,12 @@
 //! that cannot be redrawn (`TERM=dumb`), the driver doing the editing.
 
 use std::io;
-use std::os::fd::{AsRawFd, BorrowedFd};
+use std::os::fd::BorrowedFd;
 
+use rustix::termios::{self, InputModes, LocalModes, OptionalActions, QueueSelector};
 use zeroize::Zeroizing;
 
+use super::fdio::{self, Ready};
 use super::signals;
 
 /// How a line read ended.
@@ -30,38 +32,25 @@ pub enum Line {
 ///
 /// The settings are changed, so signals are armed as for a raw terminal
 /// ([`super::signals`]): the first wakes the read, which puts them back and
-/// returns [`Line::Interrupted`]; a second restores them in the handler.
+/// returns [`Line::Interrupted`]; a second restores them on the signal
+/// thread.
 pub(crate) fn read_line(fd: BorrowedFd<'_>, echo: bool) -> io::Result<Line> {
-    let fd = fd.as_raw_fd();
-    // SAFETY: zeroed, then filled in.
-    let mut orig: libc::termios = unsafe { std::mem::zeroed() };
-    // SAFETY: a valid fd and an out-pointer.
-    if unsafe { libc::tcgetattr(fd, &mut orig) } != 0 {
-        return Err(io::Error::last_os_error());
-    }
-    let mut t = orig;
-    t.c_lflag |= libc::ICANON;
-    t.c_lflag &= !libc::ISIG;
-    if echo {
-        t.c_lflag |= libc::ECHO;
-    } else {
-        t.c_lflag &= !libc::ECHO;
-    }
-    t.c_iflag |= libc::ICRNL;
+    let orig = termios::tcgetattr(fd)?;
+    let mut t = orig.clone();
+    t.local_modes.insert(LocalModes::ICANON);
+    t.local_modes.remove(LocalModes::ISIG);
+    t.local_modes.set(LocalModes::ECHO, echo);
+    t.input_modes.insert(InputModes::ICRNL);
     signals::arm(fd, &orig)?;
-    // SAFETY: as above.
-    if unsafe { libc::tcsetattr(fd, libc::TCSANOW, &t) } != 0 {
-        let e = io::Error::last_os_error();
+    if let Err(e) = termios::tcsetattr(fd, OptionalActions::Now, &t) {
         signals::disarm();
-        return Err(e);
+        return Err(e.into());
     }
     let result = read_until_newline(fd);
-    // SAFETY: as above.
-    unsafe { libc::tcsetattr(fd, libc::TCSANOW, &orig) };
+    let _ = termios::tcsetattr(fd, OptionalActions::Now, &orig);
     if matches!(result, Ok(Read::Signal(_))) {
         // What was typed of the line is not left for the shell to read.
-        // SAFETY: as above.
-        unsafe { libc::tcflush(fd, libc::TCIFLUSH) };
+        let _ = termios::tcflush(fd, QueueSelector::IFlush);
     }
     signals::disarm();
     let mut bytes = match result? {
@@ -91,62 +80,24 @@ enum Read {
 /// Bytes up to and with the newline (fewer on end of input or hangup),
 /// waiting on the terminal and the signal pipe both, so a signal wakes it
 /// however it falls between the calls.
-fn read_until_newline(fd: i32) -> io::Result<Read> {
+fn read_until_newline(fd: BorrowedFd<'_>) -> io::Result<Read> {
     let mut out = Zeroizing::new(Vec::new());
-    let wake = signals::wake_fd();
-    let mut b = 0u8;
     loop {
-        if let Some(sig) = signals::take() {
-            return Ok(Read::Signal(sig));
-        }
-        let mut fds = [
-            libc::pollfd {
-                fd,
-                events: libc::POLLIN,
-                revents: 0,
-            },
-            libc::pollfd {
-                fd: wake.unwrap_or(-1),
-                events: libc::POLLIN,
-                revents: 0,
-            },
-        ];
-        // SAFETY: two pollfds; a negative fd is ignored by poll.
-        if unsafe { libc::poll(fds.as_mut_ptr(), 2, -1) } < 0 {
-            let e = io::Error::last_os_error();
-            if e.kind() == io::ErrorKind::Interrupted {
-                continue;
-            }
-            return Err(e);
-        }
-        if fds[1].revents & libc::POLLIN != 0 {
-            continue; // `take` reads it at the top
-        }
-        let r = fds[0].revents;
-        if r & libc::POLLNVAL != 0 {
-            return Err(io::Error::from_raw_os_error(libc::EBADF));
-        }
-        if r & (libc::POLLIN | libc::POLLHUP | libc::POLLERR) == 0 {
-            continue;
+        match fdio::wait(fd, None)? {
+            Ready::Signal(sig) => return Ok(Read::Signal(sig)),
+            Ready::Timeout => continue,
+            Ready::Input => {}
         }
         // Readable in canonical mode: a whole line (or its end) is there.
-        // SAFETY: one byte into a local.
-        match unsafe { libc::read(fd, (&raw mut b).cast(), 1) } {
-            1 => {
+        match fdio::read_byte(fd)? {
+            Some(fdio::Byte::Got(b)) => {
                 out.push(b);
                 if b == b'\n' {
                     return Ok(Read::Bytes(out));
                 }
             }
-            0 => return Ok(Read::Bytes(out)),
-            _ => {
-                let e = io::Error::last_os_error();
-                match e.raw_os_error() {
-                    Some(libc::EINTR | libc::EAGAIN) => continue,
-                    Some(libc::EIO) => return Ok(Read::Bytes(out)),
-                    _ => return Err(e),
-                }
-            }
+            Some(fdio::Byte::End) => return Ok(Read::Bytes(out)),
+            None => {}
         }
     }
 }

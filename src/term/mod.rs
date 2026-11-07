@@ -32,6 +32,8 @@
 mod alt;
 #[cfg(unix)]
 mod cooked;
+#[cfg(unix)]
+mod fdio;
 // The key types (and their decoder, which is pure) everywhere, so code that
 // handles keys builds off Unix; only reading them needs a terminal.
 mod keys;
@@ -63,11 +65,12 @@ pub use unix::{Tty, Writer};
 
 #[cfg(unix)]
 mod unix {
-    use std::fs::{File, OpenOptions};
-    use std::io::{self, Write};
-    use std::os::fd::{AsFd, AsRawFd, BorrowedFd, OwnedFd};
-    use std::os::unix::fs::OpenOptionsExt;
+    use std::fs::File;
+    use std::io::{self, IsTerminal, Write};
+    use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
     use std::path::Path;
+
+    use rustix::fs::{Mode, OFlags};
 
     use super::{AltScreen, Raw, Size};
     use crate::style::{Caps, TermEnv};
@@ -89,12 +92,12 @@ mod unix {
         /// Opened with `O_NOCTTY`, so it never becomes this process's
         /// controlling terminal by being opened.
         pub fn open(path: impl AsRef<Path>, env: &TermEnv) -> io::Result<Tty> {
-            let file = OpenOptions::new()
-                .read(true)
-                .write(true)
-                .custom_flags(libc::O_NOCTTY | libc::O_CLOEXEC)
-                .open(path)?;
-            Ok(Self::from_file(file, env))
+            let fd = rustix::fs::open(
+                path.as_ref(),
+                OFlags::RDWR | OFlags::NOCTTY | OFlags::CLOEXEC,
+                Mode::empty(),
+            )?;
+            Ok(Self::from_fd(fd, env))
         }
 
         /// A terminal (or anything else) already open as `fd`.
@@ -151,11 +154,8 @@ mod unix {
         /// cannot say: there is no guessed 80×24, and no `$COLUMNS`. What to
         /// do without a size is the caller's call.
         pub fn size(&self) -> Option<Size> {
-            // SAFETY: a zeroed winsize is filled in by the ioctl.
-            let mut ws: libc::winsize = unsafe { std::mem::zeroed() };
-            // SAFETY: a valid fd and an out-pointer of the right type.
-            let rc = unsafe { libc::ioctl(self.file.as_raw_fd(), libc::TIOCGWINSZ, &mut ws) };
-            (rc == 0 && ws.ws_row > 0 && ws.ws_col > 0).then_some(Size {
+            let ws = rustix::termios::tcgetwinsize(&self.file).ok()?;
+            (ws.ws_row > 0 && ws.ws_col > 0).then_some(Size {
                 rows: ws.ws_row,
                 cols: ws.ws_col,
             })
@@ -223,17 +223,15 @@ mod unix {
     /// Whether two descriptors are the same terminal device.
     fn same_terminal(a: BorrowedFd<'_>, b: BorrowedFd<'_>) -> bool {
         let dev = |fd: BorrowedFd<'_>| {
-            // SAFETY: a zeroed stat is filled in by fstat.
-            let mut st: libc::stat = unsafe { std::mem::zeroed() };
-            // SAFETY: a valid fd and an out-pointer.
-            (is_terminal(fd) && unsafe { libc::fstat(fd.as_raw_fd(), &mut st) } == 0)
-                .then_some(st.st_rdev)
+            is_terminal(fd)
+                .then(|| rustix::fs::fstat(fd).ok())
+                .flatten()
+                .map(|st| st.st_rdev)
         };
         dev(a).is_some_and(|d| Some(d) == dev(b))
     }
 
     fn is_terminal(fd: BorrowedFd<'_>) -> bool {
-        // SAFETY: a valid fd.
-        unsafe { libc::isatty(fd.as_raw_fd()) == 1 }
+        fd.is_terminal()
     }
 }

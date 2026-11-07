@@ -32,6 +32,7 @@
 //! CLI_KIT_GOLDEN_UPDATE=1 cargo test -p cli-kit --features full --test golden # rewrite
 //! cargo test -p cli-kit --features full --test golden -- input                # scenes matching
 //! ```
+#![forbid(unsafe_code)]
 
 mod pty;
 mod scenes;
@@ -50,6 +51,10 @@ const UPDATE_ENV: &str = "CLI_KIT_GOLDEN_UPDATE";
 
 fn main() -> ExitCode {
     if let Ok(name) = std::env::var(SCENE_ENV) {
+        if let Err(e) = pty::take_terminal() {
+            eprintln!("golden child: {e}");
+            return ExitCode::FAILURE;
+        }
         let color = std::env::var(COLOR_ENV).as_deref() == Ok("1");
         return scenes::run_child(&name, color);
     }

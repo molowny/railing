@@ -35,34 +35,40 @@ pub(crate) fn remove(buf: &mut String, range: Range<usize>) {
 /// exactly the capacity, so nothing reallocates — then cut them off again.
 fn wipe_spare(buf: &mut String) {
     let len = buf.len();
-    let spare = buf.capacity() - len;
-    buf.extend(std::iter::repeat_n('\0', spare));
+    fill_spare(buf);
     buf.truncate(len);
+}
+
+/// The first half of [`wipe_spare`]: the NULs written, not yet cut off.
+fn fill_spare(buf: &mut String) {
+    let spare = buf.capacity() - buf.len();
+    buf.extend(std::iter::repeat_n('\0', spare));
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// The bytes past the end, up to the capacity. Only sound after
-    /// `wipe_spare`, which leaves them initialized (and valid UTF-8).
-    fn spare_bytes(buf: &mut String) -> Vec<u8> {
-        let (len, cap) = (buf.len(), buf.capacity());
-        // SAFETY: the allocation is `cap` bytes, all initialized by
-        // `wipe_spare`; the borrowed `String` is forgotten, never dropped.
-        let probe = std::mem::ManuallyDrop::new(unsafe {
-            String::from_raw_parts(buf.as_mut_ptr(), cap, cap)
-        });
-        probe.as_bytes()[len..cap].to_vec()
-    }
-
     #[test]
     fn removing_zeroes_what_it_removed() {
+        // The spare capacity cannot be read back without `unsafe`, so the
+        // wipe is checked in its two halves: the fill overwrites every byte
+        // up to the capacity, in the same allocation, and the cut that
+        // follows leaves the text and that allocation as they are.
         let mut buf = String::with_capacity(32);
         buf.push_str("hunter2-secret");
+        buf.replace_range(6..14, "");
+        let (ptr, cap) = (buf.as_ptr(), buf.capacity());
+        fill_spare(&mut buf);
+        assert_eq!((buf.as_ptr(), buf.capacity(), buf.len()), (ptr, cap, cap));
+        assert!(buf.as_bytes()[6..].iter().all(|b| *b == 0));
+
+        let mut buf = String::with_capacity(32);
+        buf.push_str("hunter2-secret");
+        let (ptr, cap) = (buf.as_ptr(), buf.capacity());
         remove(&mut buf, 6..14);
         assert_eq!(buf, "hunter");
-        assert!(spare_bytes(&mut buf).iter().all(|b| *b == 0));
+        assert_eq!((buf.as_ptr(), buf.capacity()), (ptr, cap));
     }
 
     #[test]

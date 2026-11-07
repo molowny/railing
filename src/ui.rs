@@ -408,9 +408,13 @@ impl Gutter {
 /// `cli_kit::logging::init` calls this automatically — most binaries
 /// don't need to invoke it explicitly.
 pub fn init_colors() {
+    init_colors_with(std::env::var_os("NO_COLOR").is_some());
+}
+
+/// [`init_colors`] with `NO_COLOR`'s presence given, not read.
+fn init_colors_with(no_color: bool) {
     use crate::color::{Stream, set_stream};
     use std::io::IsTerminal;
-    let no_color = std::env::var_os("NO_COLOR").is_some();
     set_stream(Stream::Stdout, std::io::stdout().is_terminal() && !no_color);
     set_stream(Stream::Stderr, std::io::stderr().is_terminal() && !no_color);
 }
@@ -675,17 +679,10 @@ pub(crate) mod tests {
     #[test]
     fn init_colors_disables_when_no_color_set() {
         let _g = lock();
-        // SAFETY: NO_COLOR mutation is serialized via `lock()`.
-        unsafe {
-            std::env::set_var("NO_COLOR", "1");
-        }
-        init_colors();
+        init_colors_with(true);
         // Whatever stdout/stderr is in the test harness, NO_COLOR forces off.
         assert!(!crate::color::enabled(crate::color::Stream::Stdout));
         assert!(!crate::color::enabled(crate::color::Stream::Stderr));
-        unsafe {
-            std::env::remove_var("NO_COLOR");
-        }
     }
 
     #[test]
@@ -694,25 +691,16 @@ pub(crate) mod tests {
         // Even if we pre-force colors on, NO_COLOR must turn them off.
         crate::color::set_stream(crate::color::Stream::Stdout, true);
         crate::color::set_stream(crate::color::Stream::Stderr, true);
-        unsafe {
-            std::env::set_var("NO_COLOR", "anything");
-        }
-        init_colors();
+        init_colors_with(true);
         assert!(!crate::color::enabled(crate::color::Stream::Stdout));
         assert!(!crate::color::enabled(crate::color::Stream::Stderr));
-        unsafe {
-            std::env::remove_var("NO_COLOR");
-        }
     }
 
     #[test]
     fn init_colors_without_no_color_matches_isterminal_check() {
         use std::io::IsTerminal;
         let _g = lock();
-        unsafe {
-            std::env::remove_var("NO_COLOR");
-        }
-        init_colors();
+        init_colors_with(false);
         // After init_colors, the global flags equal what we'd compute from
         // IsTerminal — which is what `style()` callers depend on.
         assert_eq!(

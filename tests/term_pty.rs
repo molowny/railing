@@ -7,16 +7,22 @@
 //! environment) and talks to it through the pty's master side and the
 //! child's stdout, where it reports every event it read.
 #![cfg(unix)]
+#![forbid(unsafe_code)]
 
 use std::io::{BufRead, BufReader, Read, Write};
-use std::os::fd::{AsFd, AsRawFd, FromRawFd, OwnedFd};
-use std::os::unix::process::{CommandExt, ExitStatusExt};
+use std::os::fd::{AsFd, OwnedFd};
+use std::os::unix::process::ExitStatusExt;
 use std::process::{Child, ChildStdout, Command, Stdio};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use cli_kit::style::{Caps, TermEnv};
-use cli_kit::term::{Event, Key, Line, Tty, signals};
+use cli_kit::term::signals::{self, SIGHUP, SIGINT, SIGTERM};
+use cli_kit::term::{Event, Key, Line, Tty};
+use rustix::event::{PollFd, PollFlags, Timespec};
+use rustix::fs::{Mode, OFlags};
+use rustix::process::{Pid, Signal};
+use rustix::termios::{InputModes, LocalModes, SpecialCodeIndex, Termios, Winsize};
 
 const MODE: &str = "TERM_PTY_CHILD";
 const PATH: &str = "TERM_PTY_PATH";
@@ -31,6 +37,9 @@ fn child() {
     let Ok(mode) = std::env::var(MODE) else {
         return;
     };
+    // A new session with no controlling terminal: like askpass under a
+    // daemon. Done here, not between fork and exec, which needs `unsafe`.
+    rustix::process::setsid().unwrap();
     let out = &mut std::io::stdout();
     let say = |out: &mut std::io::Stdout, line: String| {
         // Marked: libtest writes its own lines to the same stdout.
@@ -42,7 +51,7 @@ fn child() {
         format!("dev-tty {}", std::fs::File::open("/dev/tty").is_ok()),
     );
     if std::env::var_os("TERM_PTY_SIGNALS").is_some() {
-        signals::install(&[libc::SIGTERM, libc::SIGINT, libc::SIGHUP]).unwrap();
+        signals::install(&[SIGTERM, SIGINT, SIGHUP]).unwrap();
     }
     if mode == "idle" {
         say(out, "ready".into());
@@ -157,23 +166,14 @@ fn secret_child(
     say(out, "done".into());
 }
 
-fn termios(fd: &impl AsFd) -> libc::termios {
-    // SAFETY: zeroed, then filled in.
-    let mut t: libc::termios = unsafe { std::mem::zeroed() };
-    // SAFETY: a valid fd.
-    assert_eq!(
-        unsafe { libc::tcgetattr(fd.as_fd().as_raw_fd(), &mut t) },
-        0
-    );
-    t
+fn termios(fd: &impl AsFd) -> Termios {
+    rustix::termios::tcgetattr(fd).unwrap()
 }
 
-fn same(a: &libc::termios, b: &libc::termios) -> bool {
-    a.c_iflag == b.c_iflag
-        && a.c_oflag == b.c_oflag
-        && a.c_cflag == b.c_cflag
-        && a.c_lflag == b.c_lflag
-        && a.c_cc == b.c_cc
+/// Every field, the control codes and speeds with them: `Termios` has no
+/// `PartialEq`, its `Debug` shows it whole.
+fn same(a: &Termios, b: &Termios) -> bool {
+    format!("{a:?}") == format!("{b:?}")
 }
 
 // ── the parent ─────────────────────────────────────────────────────────
@@ -186,36 +186,29 @@ struct Pty {
 }
 
 fn openpty(rows: u16, cols: u16) -> Pty {
-    let (mut m, mut s) = (-1, -1);
-    let ws = libc::winsize {
+    use rustix::pty::{self, OpenptFlags};
+    let master = pty::openpt(OpenptFlags::RDWR | OpenptFlags::NOCTTY | OpenptFlags::CLOEXEC)
+        .expect("openpt");
+    pty::grantpt(&master).unwrap();
+    pty::unlockpt(&master).unwrap();
+    let name = pty::ptsname(&master, Vec::new()).unwrap();
+    let slave = rustix::fs::open(
+        name.as_c_str(),
+        OFlags::RDWR | OFlags::NOCTTY | OFlags::CLOEXEC,
+        Mode::empty(),
+    )
+    .unwrap();
+    let ws = Winsize {
         ws_row: rows,
         ws_col: cols,
         ws_xpixel: 0,
         ws_ypixel: 0,
     };
-    // SAFETY: out-pointers and a valid winsize.
-    let rc = unsafe { libc::openpty(&mut m, &mut s, std::ptr::null_mut(), std::ptr::null(), &ws) };
-    assert_eq!(rc, 0, "openpty");
-    for fd in [m, s] {
-        // SAFETY: fresh fds.
-        unsafe { libc::fcntl(fd, libc::F_SETFD, libc::FD_CLOEXEC) };
-    }
-    // SAFETY: fresh fds owned from here on.
-    let (master, slave) = unsafe { (OwnedFd::from_raw_fd(m), OwnedFd::from_raw_fd(s)) };
-    let mut buf = [0 as libc::c_char; 128];
-    // SAFETY: a buffer of its stated length.
-    assert_eq!(
-        unsafe { libc::ttyname_r(slave.as_raw_fd(), buf.as_mut_ptr(), buf.len()) },
-        0
-    );
-    // SAFETY: NUL-terminated by ttyname_r.
-    let path = unsafe { std::ffi::CStr::from_ptr(buf.as_ptr()) }
-        .to_string_lossy()
-        .into_owned();
+    rustix::termios::tcsetwinsize(&slave, ws).unwrap();
     Pty {
         master: master.into(),
         slave,
-        path,
+        path: name.to_string_lossy().into_owned(),
     }
 }
 
@@ -236,16 +229,6 @@ fn start(mode: &str, signals: bool) -> Session {
         .stderr(Stdio::null());
     if signals {
         cmd.env("TERM_PTY_SIGNALS", "1");
-    }
-    // SAFETY: setsid is async-signal-safe. A new session with no controlling
-    // terminal: like askpass under a daemon.
-    unsafe {
-        cmd.pre_exec(|| {
-            if libc::setsid() < 0 {
-                return Err(std::io::Error::last_os_error());
-            }
-            Ok(())
-        });
     }
     let mut child = cmd.spawn().unwrap();
     let lines = reader(child.stdout.take().unwrap());
@@ -307,17 +290,11 @@ impl Session {
     /// What reached the terminal since the last call, waiting `quiet` for
     /// more each time.
     fn painted(&mut self, quiet: Duration) -> String {
-        let fd = self.pty.master.as_raw_fd();
         let mut out = Vec::new();
+        let quiet = Timespec::try_from(quiet).unwrap();
         loop {
-            let mut p = libc::pollfd {
-                fd,
-                events: libc::POLLIN,
-                revents: 0,
-            };
-            // SAFETY: one pollfd.
-            let n = unsafe { libc::poll(&mut p, 1, quiet.as_millis() as i32) };
-            if n <= 0 {
+            let mut p = [PollFd::new(&self.pty.master, PollFlags::IN)];
+            if !matches!(rustix::event::poll(&mut p, Some(&quiet)), Ok(n) if n > 0) {
                 break;
             }
             let mut buf = [0u8; 4096];
@@ -329,9 +306,8 @@ impl Session {
         String::from_utf8_lossy(&out).into_owned()
     }
 
-    fn signal(&self, sig: libc::c_int) {
-        // SAFETY: a child of ours.
-        unsafe { libc::kill(self.child.id() as libc::pid_t, sig) };
+    fn signal(&self, sig: Signal) {
+        rustix::process::kill_process(Pid::from_child(&self.child), sig).unwrap();
     }
 }
 
@@ -367,25 +343,34 @@ fn raw_mode_is_the_hardened_one_and_is_restored() {
     let mut s = started("read", false);
     let t = termios(&s.pty.slave);
     for (flag, name) in [
-        (libc::ECHO, "ECHO"),
-        (libc::ICANON, "ICANON"),
-        (libc::ISIG, "ISIG"),
-        (libc::IEXTEN, "IEXTEN"),
+        (LocalModes::ECHO, "ECHO"),
+        (LocalModes::ICANON, "ICANON"),
+        (LocalModes::ISIG, "ISIG"),
+        (LocalModes::IEXTEN, "IEXTEN"),
     ] {
-        assert_eq!(t.c_lflag & flag, 0, "{name} left on");
+        assert!(!t.local_modes.intersects(flag), "{name} left on");
     }
     for (flag, name) in [
-        (libc::IXON, "IXON"),
-        (libc::ICRNL, "ICRNL"),
-        (libc::INLCR, "INLCR"),
+        (InputModes::IXON, "IXON"),
+        (InputModes::ICRNL, "ICRNL"),
+        (InputModes::INLCR, "INLCR"),
     ] {
-        assert_eq!(t.c_iflag & flag, 0, "{name} left on");
+        assert!(!t.input_modes.intersects(flag), "{name} left on");
     }
-    assert_eq!((t.c_cc[libc::VMIN], t.c_cc[libc::VTIME]), (1, 0));
+    assert_eq!(
+        (
+            t.special_codes[SpecialCodeIndex::VMIN],
+            t.special_codes[SpecialCodeIndex::VTIME]
+        ),
+        (1, 0)
+    );
     s.keys(b"\r");
     s.expect("Key(Enter)");
     s.expect("restored true");
-    assert_ne!(termios(&s.pty.slave).c_lflag & libc::ECHO, 0);
+    assert_ne!(
+        termios(&s.pty.slave).local_modes & LocalModes::ECHO,
+        LocalModes::empty()
+    );
 }
 
 #[test]
@@ -446,17 +431,20 @@ fn a_signal_wakes_an_idle_read_and_the_terminal_comes_back() {
     // dies of the signal it got.
     let mut s = started("read", true);
     let sent = Instant::now();
-    s.signal(libc::SIGTERM);
+    s.signal(Signal::TERM);
     s.expect("Interrupted(15)");
     s.expect("restored true");
     let status = s.wait();
-    assert_eq!(status.signal(), Some(libc::SIGTERM), "{status:?}");
+    assert_eq!(status.signal(), Some(SIGTERM), "{status:?}");
     assert!(
         sent.elapsed() < Duration::from_secs(1),
         "waited {:?}",
         sent.elapsed()
     );
-    assert_ne!(termios(&s.pty.slave).c_lflag & libc::ECHO, 0);
+    assert_ne!(
+        termios(&s.pty.slave).local_modes & LocalModes::ECHO,
+        LocalModes::empty()
+    );
 }
 
 #[test]
@@ -464,18 +452,24 @@ fn a_second_signal_restores_the_terminal_itself() {
     // A5: raw, and the app never reads. The first signal is pending for the
     // read; the second restores the terminal in the handler and dies.
     let mut s = started("stall", true);
-    s.signal(libc::SIGTERM);
+    s.signal(Signal::TERM);
     std::thread::sleep(Duration::from_millis(100));
     assert!(
         s.child.try_wait().unwrap().is_none(),
         "the first signal is the read's"
     );
-    s.signal(libc::SIGTERM);
+    s.signal(Signal::TERM);
     let status = s.wait();
-    assert_eq!(status.signal(), Some(libc::SIGTERM), "{status:?}");
+    assert_eq!(status.signal(), Some(SIGTERM), "{status:?}");
     let t = termios(&s.pty.slave);
-    assert_ne!(t.c_lflag & libc::ECHO, 0, "echo not restored");
-    assert_ne!(t.c_lflag & libc::ICANON, 0, "canonical mode not restored");
+    assert!(
+        t.local_modes.contains(LocalModes::ECHO),
+        "echo not restored"
+    );
+    assert!(
+        t.local_modes.contains(LocalModes::ICANON),
+        "canonical mode not restored"
+    );
 }
 
 #[test]
@@ -483,8 +477,8 @@ fn a_signal_with_no_raw_terminal_takes_its_default_action() {
     // A5: installed, but nothing to restore: as if nothing were installed.
     let mut s = start("idle", true);
     s.expect("ready");
-    s.signal(libc::SIGTERM);
-    assert_eq!(s.wait().signal(), Some(libc::SIGTERM));
+    s.signal(Signal::TERM);
+    assert_eq!(s.wait().signal(), Some(SIGTERM));
 }
 
 #[test]
@@ -504,16 +498,20 @@ fn a_signal_during_a_line_read_puts_echo_back() {
     let mut s = started("line", true);
     s.keys(b"hunt");
     std::thread::sleep(Duration::from_millis(100));
-    s.signal(libc::SIGTERM);
+    s.signal(Signal::TERM);
     s.expect("Interrupted(15)");
     s.expect("restored true");
-    assert_eq!(s.wait().signal(), Some(libc::SIGTERM));
+    assert_eq!(s.wait().signal(), Some(SIGTERM));
     let t = termios(&s.pty.slave);
-    assert_ne!(t.c_lflag & libc::ECHO, 0, "echo not restored");
-    assert_ne!(t.c_lflag & libc::ISIG, 0, "ISIG not restored");
-    // SAFETY: a valid fd and an out-int.
-    let mut pending: libc::c_int = 0;
-    unsafe { libc::ioctl(s.pty.slave.as_raw_fd(), libc::FIONREAD, &mut pending) };
+    assert!(
+        t.local_modes.contains(LocalModes::ECHO),
+        "echo not restored"
+    );
+    assert!(
+        t.local_modes.contains(LocalModes::ISIG),
+        "ISIG not restored"
+    );
+    let pending = rustix::io::ioctl_fionread(&s.pty.slave).unwrap();
     assert_eq!(pending, 0, "typed input left behind");
 }
 
@@ -542,14 +540,10 @@ fn caps_belong_to_each_terminal() {
 #[test]
 fn a_pipe_has_no_size_and_no_caps() {
     // A3: no guessed size for something that cannot say.
-    let mut fds = [-1; 2];
-    // SAFETY: an out-array of two.
-    assert_eq!(unsafe { libc::pipe(fds.as_mut_ptr()) }, 0);
-    // SAFETY: fresh fds.
-    let (r, w) = unsafe { (OwnedFd::from_raw_fd(fds[0]), OwnedFd::from_raw_fd(fds[1])) };
+    let (r, w) = std::io::pipe().unwrap();
     drop(r);
     let tty = Tty::from_fd(
-        w,
+        OwnedFd::from(w),
         &TermEnv {
             term: Some("xterm".into()),
             no_color: false,

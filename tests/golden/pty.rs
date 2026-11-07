@@ -1,10 +1,12 @@
 //! A child of this binary on a real pty, driven like a user would.
 
 use std::io::{Read, Write};
-use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
-use std::os::unix::process::CommandExt;
+use std::os::fd::OwnedFd;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
+
+use rustix::event::{PollFd, PollFlags, Timespec};
+use rustix::termios::Winsize;
 
 /// How long one wait may take before the scene is declared stuck.
 const PATIENCE: Duration = Duration::from_secs(10);
@@ -57,15 +59,8 @@ impl Session {
             Locale::Utf8 => cmd.env("LANG", "C.UTF-8").env("LC_ALL", "C.UTF-8"),
             Locale::C => cmd.env("LANG", "C"),
         };
-        // SAFETY: only async-signal-safe calls between fork and exec.
-        unsafe {
-            cmd.pre_exec(|| {
-                if libc::setsid() < 0 || libc::ioctl(0, libc::TIOCSCTTY, 0) < 0 {
-                    return Err(std::io::Error::last_os_error());
-                }
-                Ok(())
-            });
-        }
+        // The child makes the pty its controlling terminal itself
+        // (`take_terminal`), first thing in `main`.
         let child = cmd.spawn().map_err(|e| format!("spawn: {e}"))?;
         Ok(Self {
             master: std::fs::File::from(master),
@@ -82,17 +77,8 @@ impl Session {
     /// reports the new size, as a terminal does.
     pub fn resize(&mut self, cols: u16) -> Result<(), String> {
         self.term.resize(usize::from(cols), usize::from(self.rows));
-        let ws = libc::winsize {
-            ws_row: self.rows,
-            ws_col: cols,
-            ws_xpixel: 0,
-            ws_ypixel: 0,
-        };
-        // SAFETY: a valid fd and winsize.
-        if unsafe { libc::ioctl(self.master.as_raw_fd(), libc::TIOCSWINSZ, &ws) } != 0 {
-            return Err(format!("resize: {}", std::io::Error::last_os_error()));
-        }
-        Ok(())
+        rustix::termios::tcsetwinsize(&self.master, winsize(cols, self.rows))
+            .map_err(|e| format!("resize: {e}"))
     }
 
     pub fn term(&self) -> &avt::Terminal {
@@ -108,14 +94,11 @@ impl Session {
         if self.eof {
             return false;
         }
-        let mut fds = libc::pollfd {
-            fd: self.master.as_raw_fd(),
-            events: libc::POLLIN,
-            revents: 0,
+        let Ok(wait) = Timespec::try_from(wait) else {
+            return false;
         };
-        let ms = i32::try_from(wait.as_millis()).unwrap_or(i32::MAX);
-        // SAFETY: one valid pollfd.
-        if unsafe { libc::poll(&mut fds, 1, ms) } <= 0 {
+        let mut fds = [PollFd::new(&self.master, PollFlags::IN)];
+        if !matches!(rustix::event::poll(&mut fds, Some(&wait)), Ok(n) if n > 0) {
             return false;
         }
         let mut buf = [0u8; 4096];
@@ -205,35 +188,42 @@ impl Drop for Session {
     }
 }
 
-fn openpty(cols: u16, rows: u16) -> Result<(OwnedFd, OwnedFd), String> {
-    let mut master = -1;
-    let mut slave = -1;
-    let size = libc::winsize {
+fn winsize(cols: u16, rows: u16) -> Winsize {
+    Winsize {
         ws_row: rows,
         ws_col: cols,
         ws_xpixel: 0,
         ws_ypixel: 0,
-    };
-    // SAFETY: out-pointers to live ints; a valid winsize.
-    let rc = unsafe {
-        libc::openpty(
-            &mut master,
-            &mut slave,
-            std::ptr::null_mut(),
-            std::ptr::null(),
-            &size,
-        )
-    };
-    if rc != 0 {
-        return Err(format!("openpty: {}", std::io::Error::last_os_error()));
     }
-    // SAFETY: openpty returned two fresh fds that nothing else owns.
-    let (master, slave) = unsafe { (OwnedFd::from_raw_fd(master), OwnedFd::from_raw_fd(slave)) };
-    // Neither leaks into the child under its own number: it gets the slave as
-    // stdin/stderr through dup2, which clears the flag on the copies.
-    for fd in [&master, &slave] {
-        // SAFETY: a valid fd.
-        unsafe { libc::fcntl(fd.as_raw_fd(), libc::F_SETFD, libc::FD_CLOEXEC) };
+}
+
+/// In the child, before the scene: a new session with the pty (its stdin)
+/// as the controlling terminal, as a shell gives a command.
+pub fn take_terminal() -> std::io::Result<()> {
+    rustix::process::setsid()?;
+    rustix::process::ioctl_tiocsctty(std::io::stdin())?;
+    Ok(())
+}
+
+/// A pty, both ends close-on-exec: the child gets the slave as
+/// stdin/stderr through dup2, which clears the flag on the copies.
+fn openpty(cols: u16, rows: u16) -> Result<(OwnedFd, OwnedFd), String> {
+    use rustix::fs::{Mode, OFlags};
+    use rustix::pty::{self, OpenptFlags};
+    fn err(what: &'static str) -> impl Fn(rustix::io::Errno) -> String {
+        move |e| format!("{what}: {e}")
     }
+    let master = pty::openpt(OpenptFlags::RDWR | OpenptFlags::NOCTTY | OpenptFlags::CLOEXEC)
+        .map_err(err("openpt"))?;
+    pty::grantpt(&master).map_err(err("grantpt"))?;
+    pty::unlockpt(&master).map_err(err("unlockpt"))?;
+    let name = pty::ptsname(&master, Vec::new()).map_err(err("ptsname"))?;
+    let slave = rustix::fs::open(
+        name.as_c_str(),
+        OFlags::RDWR | OFlags::NOCTTY | OFlags::CLOEXEC,
+        Mode::empty(),
+    )
+    .map_err(err("open slave"))?;
+    rustix::termios::tcsetwinsize(&slave, winsize(cols, rows)).map_err(err("winsize"))?;
     Ok((master, slave))
 }

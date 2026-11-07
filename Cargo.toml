@@ -1,4 +1,3 @@
-
 [package]
 name = "cli-kit"
 version = "0.7.0"
@@ -21,8 +20,12 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = tr
 unicode-width      = "0.2"
 zeroize            = { version = "1.7", features = ["derive", "serde"] }
 
+# The terminal (termios, poll, fstat) through rustix's safe API, and signals
+# through signal-hook's: cli-kit has no `unsafe` of its own
+# (`#![forbid(unsafe_code)]`).
 [target.'cfg(unix)'.dependencies]
-libc = "0.2"
+rustix      = { version = "1.1", default-features = false, features = ["std", "termios", "fs", "event"] }
+signal-hook = { version = "0.3", default-features = false, features = ["iterator"] }
 
 [dev-dependencies]
 tempfile = { version = "3" }
@@ -34,8 +37,9 @@ anyhow   = { version = "1" }
 # (dim), and 0.16+ needs a unicode-width that ratatui's `=0.2.0` pin rules out.
 avt      = "0.19"
 
+# The tests' ptys, sessions and signals, safely as well.
 [target.'cfg(unix)'.dev-dependencies]
-libc = "0.2"
+rustix = { version = "1.1", features = ["termios", "fs", "event", "pty", "process"] }
 
 # What cli-kit draws today, as the refactor's target (docs/core-refactor.md
 # § M0). Its own main: scenes re-run this binary on a pty.
@@ -52,7 +56,8 @@ required-features = ["output", "fuzzy"]
 [features]
 # The core alone (`style`, `term`, `render`, `glyph`, `group`, `spin`,
 # `step`, `prompt`) is always there: a terminal the caller names, raw mode
-# and keys, the flow's look as strings. Over libc, unicode-width and zeroize,
+# and keys, the flow's look as strings. Over rustix and signal-hook (Unix),
+# unicode-width and zeroize,
 # for a process that draws on a terminal it does not own and must keep its
 # dependency tree small (sealward-askpass). That is the default: each app
 # lists what it uses (docs/core-refactor.md § M6).
