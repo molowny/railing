@@ -39,7 +39,7 @@ avt      = "0.19"
 
 # The tests' ptys, sessions and signals, safely as well.
 [target.'cfg(unix)'.dev-dependencies]
-rustix = { version = "1.1", features = ["termios", "fs", "event", "pty", "process"] }
+rustix = { version = "1.1", default-features = false, features = ["std", "termios", "fs", "event", "pty", "process"] }
 
 # What cli-kit draws today, as the refactor's target (docs/core-refactor.md
 # § M0). Its own main: scenes re-run this binary on a pty.
