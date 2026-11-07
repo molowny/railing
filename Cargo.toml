@@ -160,3 +160,7 @@ required-features = ["full"]
 [[example]]
 name = "progress"
 required-features = ["full"]
+
+# No `unsafe` in any target (docs/core-refactor.md, Decision 7).
+[lints.rust]
+unsafe_code = "forbid"
