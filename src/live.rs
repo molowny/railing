@@ -246,24 +246,76 @@ impl Live {
         }))
     }
 
+    /// A step still in progress: `head` as given, its own mark where the
+    /// gutter would be (a [`progress::line`], the spinner in it), `body`
+    /// behind the bar, and the bar below it, as a finished log entry leaves
+    /// one. Bare, `head` and `body` are drawn as given.
+    fn step_block(&self, head: &str, body: &str, cols: usize) -> Block {
+        let head = style::truncate(head, cols.saturating_sub(1), "…").into_owned();
+        let body = self.block(body, cols);
+        let tail = self
+            .gutter
+            .then(|| glyph::bar(self.region.caps(), State::Submit));
+        Block::of_lines(
+            std::iter::once(head)
+                .chain(body.text.lines().map(str::to_owned))
+                .chain(tail),
+        )
+    }
+
     /// Replace what is shown with `text`.
     pub fn draw(&mut self, text: &str) {
         #[cfg(unix)]
         {
-            let cols = cols_of(&self.tty);
-            if cols != self.cols {
-                self.region.resized(cols);
-                self.cols = cols;
-            }
+            let cols = self.repaint_cols();
             let block = self.block(text, cols);
-            if !self.hidden {
-                let _ = std::io::Write::write_all(&mut self.tty, HIDE.as_bytes());
-                self.hidden = true;
-            }
-            let _ = self.region.draw(&mut self.tty, &block);
+            self.paint(&block);
         }
         #[cfg(not(unix))]
         let _ = text;
+    }
+
+    /// Replace what is shown with a step in progress: `head` is its first
+    /// line with its own mark — `progress::line(caps, &spin, …)`, redrawn
+    /// every [`crate::spin::PACE`] so the spinner turns — and `body` the
+    /// lines under it, behind the gutter. When the step is over, [`Live::clear`]
+    /// it and say how it ended as a flow step (`◇`, `■`).
+    ///
+    /// ```text
+    /// ◒  transcode  ━━━━━━━━━━━━━━━━──────────  112/240  46%   ← head
+    /// │  ✓ 110  ✗ 2  ▶ 24 running  ·  104 queued              ← body
+    /// │
+    /// ```
+    pub fn draw_step(&mut self, head: &str, body: &str) {
+        #[cfg(unix)]
+        {
+            let cols = self.repaint_cols();
+            let block = self.step_block(head, body, cols);
+            self.paint(&block);
+        }
+        #[cfg(not(unix))]
+        let _ = (head, body);
+    }
+
+    /// The terminal's width now; a change since the last draw is counted
+    /// before this one.
+    #[cfg(unix)]
+    fn repaint_cols(&mut self) -> usize {
+        let cols = cols_of(&self.tty);
+        if cols != self.cols {
+            self.region.resized(cols);
+            self.cols = cols;
+        }
+        cols
+    }
+
+    #[cfg(unix)]
+    fn paint(&mut self, block: &Block) {
+        if !self.hidden {
+            let _ = std::io::Write::write_all(&mut self.tty, HIDE.as_bytes());
+            self.hidden = true;
+        }
+        let _ = self.region.draw(&mut self.tty, block);
     }
 
     /// Leave the last frame on screen for good; what is written next goes
@@ -331,6 +383,18 @@ mod tests {
         for line in b.text.lines() {
             assert!(style::measure(line) < 20, "{line:?}");
         }
+    }
+
+    #[test]
+    fn a_step_heads_its_block_with_its_own_mark() {
+        let l = live(true);
+        let b = l.step_block("◒  transcode ━━━━━━━━━━━━━━━━━━━━", "✓ 3\n\nrunning a", 20);
+        assert_eq!(b.text, "◒  transcode ━━━━━…\n│  ✓ 3\n│\n│  running a\n│\n");
+        assert_eq!(b.lines, 5);
+
+        let bare = live(false);
+        let b = bare.step_block("◒  t", "  one", 20);
+        assert_eq!(b.text, "◒  t\n  one\n");
     }
 
     #[test]
