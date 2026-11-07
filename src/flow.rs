@@ -522,6 +522,22 @@ impl Flow {
         }
     }
 
+    /// A note whose body is coloured in runs, each its own style (a revealed
+    /// password's digits and symbols). Live, in a titled box with its colours
+    /// kept, when stderr colours; otherwise exactly [`Flow::note`] of its
+    /// text.
+    pub fn note_runs<S: AsRef<str>>(&self, title: &str, runs: &[(S, crate::color::Style)]) {
+        let text: String = runs.iter().map(|(t, _)| t.as_ref()).collect();
+        if !self.live || !crate::color::enabled(crate::color::Stream::Stderr) {
+            return self.note(title, &text);
+        }
+        let body: String = runs
+            .iter()
+            .map(|(t, style)| style.force_styling(true).paint(t.as_ref()))
+            .collect();
+        let _ = ui::stderr_write(&text_box(title, &body));
+    }
+
     /// A completed step (`◇`).
     pub fn step(&self, msg: &str) {
         if self.live {
