@@ -59,6 +59,7 @@ impl Tone {
             text: text.into(),
             tone: Some(self),
             key: None,
+            styles: None,
         }
     }
 
@@ -108,6 +109,8 @@ enum Look {
 /// A laid-out cell: its lines (cut to its column), how it is drawn.
 struct Laid {
     lines: Vec<String>,
+    /// Per line, a style per character: a cell in runs.
+    styles: Option<Vec<Vec<Style>>>,
     tone: Tone,
     right: bool,
 }
@@ -160,9 +163,32 @@ pub struct GridCell {
     text: String,
     tone: Option<Tone>,
     key: Option<SortKey>,
+    /// One style per character of `text`, for a cell coloured in runs
+    /// ([`GridCell::runs`]); its tone is then unused.
+    styles: Option<Vec<Style>>,
 }
 
 impl GridCell {
+    /// A cell coloured in runs, each its own style: a value whose parts mean
+    /// different things (a password's digits and symbols). It wraps at any
+    /// character, not at words, so every character keeps its colour; with
+    /// colour off it is its plain text.
+    pub fn runs<S: AsRef<str>>(runs: impl IntoIterator<Item = (S, Style)>) -> Self {
+        let mut text = String::new();
+        let mut styles = Vec::new();
+        for (t, style) in runs {
+            let t = t.as_ref();
+            text.push_str(t);
+            styles.extend(t.chars().map(|_| style));
+        }
+        Self {
+            text,
+            tone: None,
+            key: None,
+            styles: Some(styles),
+        }
+    }
+
     /// Sort this cell by `key` instead of its text ([`SortKey`]).
     pub fn key(mut self, key: SortKey) -> Self {
         self.key = Some(key);
@@ -197,6 +223,7 @@ impl From<String> for GridCell {
             text,
             tone: None,
             key: None,
+            styles: None,
         }
     }
 }
@@ -353,15 +380,27 @@ impl Grid {
         color: bool,
         max: Option<usize>,
     ) -> Vec<String> {
-        let mut rows: Vec<Vec<(String, Tone)>> = Vec::new();
+        type Row<'g> = Vec<(String, Tone, Option<&'g [Style]>)>;
+        let mut rows: Vec<Row> = Vec::new();
         if !self.no_header {
-            rows.push(headers.into_iter().map(|h| (h, self.header_tone)).collect());
+            rows.push(
+                headers
+                    .into_iter()
+                    .map(|h| (h, self.header_tone, None))
+                    .collect(),
+            );
         }
         for r in &self.rows {
             rows.push(
                 r.iter()
                     .enumerate()
-                    .map(|(i, c)| (self.drawn(i, &c.text).into_owned(), self.tone_of(i, c)))
+                    .map(|(i, c)| {
+                        (
+                            self.drawn(i, &c.text).into_owned(),
+                            self.tone_of(i, c),
+                            c.styles.as_deref(),
+                        )
+                    })
                     .collect(),
             );
         }
@@ -375,7 +414,7 @@ impl Grid {
         };
         let mut widths = vec![0; columns];
         for row in &rows {
-            for (c, (text, _)) in row.iter().enumerate() {
+            for (c, (text, ..)) in row.iter().enumerate() {
                 for line in text.split('\n') {
                     widths[c] = widths[c].max(measure(line));
                 }
@@ -404,13 +443,24 @@ impl Grid {
             .map(|row| {
                 (0..columns)
                     .map(|c| match row.get(c) {
-                        Some((text, tone)) => Laid {
+                        Some((text, tone, Some(styles))) => {
+                            let (lines, styles) = fit_runs(text, styles, widths[c]);
+                            Laid {
+                                lines,
+                                styles: Some(styles),
+                                tone: *tone,
+                                right: self.right.contains(&c),
+                            }
+                        }
+                        Some((text, tone, None)) => Laid {
                             lines: text.split('\n').flat_map(|l| fit(l, widths[c])).collect(),
+                            styles: None,
                             tone: *tone,
                             right: self.right.contains(&c),
                         },
                         None => Laid {
                             lines: Vec::new(),
+                            styles: None,
                             tone: Tone::Default,
                             right: false,
                         },
@@ -438,13 +488,18 @@ impl Grid {
                             return " ".repeat(l + w + r);
                         };
                         let room = " ".repeat(w.saturating_sub(measure(line)));
+                        let runs = cell.styles.as_ref().and_then(|s| s.get(k));
+                        let line = match runs {
+                            Some(styles) if color => paint_runs(line, styles),
+                            _ => line.clone(),
+                        };
                         let body = if cell.right {
                             format!("{room}{line}")
                         } else {
                             format!("{line}{room}")
                         };
                         let padded = format!("{}{body}{}", " ".repeat(l), " ".repeat(r));
-                        if color {
+                        if color && runs.is_none() {
                             cell.tone.paint_cell(&padded)
                         } else {
                             padded
@@ -495,6 +550,56 @@ impl Grid {
     }
 }
 
+/// A cell in runs as lines no wider than `width`, each character keeping its
+/// style: broken at `\n` and wherever the width runs out, never at words.
+/// `text` may be shorter than `styles` (a clipped column's `…`, which takes
+/// the default style).
+fn fit_runs(text: &str, styles: &[Style], width: usize) -> (Vec<String>, Vec<Vec<Style>>) {
+    let mut lines = vec![String::new()];
+    let mut line_styles = vec![Vec::new()];
+    let mut used = 0;
+    for (i, ch) in text.chars().enumerate() {
+        if ch == '\n' {
+            lines.push(String::new());
+            line_styles.push(Vec::new());
+            used = 0;
+            continue;
+        }
+        let w = measure(ch.encode_utf8(&mut [0; 4]));
+        if used + w > width.max(1) && used > 0 {
+            lines.push(String::new());
+            line_styles.push(Vec::new());
+            used = 0;
+        }
+        lines.last_mut().expect("one line").push(ch);
+        line_styles
+            .last_mut()
+            .expect("one line")
+            .push(styles.get(i).copied().unwrap_or_default());
+        used += w;
+    }
+    (lines, line_styles)
+}
+
+/// `line` with each character in its style, a run of one style painted once.
+fn paint_runs(line: &str, styles: &[Style]) -> String {
+    let mut out = String::new();
+    let mut run = String::new();
+    let mut current: Option<Style> = None;
+    for (ch, style) in line.chars().zip(styles.iter().copied()) {
+        if current.is_some_and(|c| c != style) {
+            out.push_str(&current.expect("set").force_styling(true).paint(&run));
+            run.clear();
+        }
+        current = Some(style);
+        run.push(ch);
+    }
+    if let Some(style) = current {
+        out.push_str(&style.force_styling(true).paint(&run));
+    }
+    out
+}
+
 /// `line` in lines no wider than `width`: as it is when it fits, else
 /// wrapped at words (a word longer than the line broken, a styled one cut).
 fn fit(line: &str, width: usize) -> Vec<String> {
@@ -523,6 +628,50 @@ mod tests {
         crate::color::set_stream(crate::color::Stream::Stdout, on);
         crate::color::set_stream(crate::color::Stream::Stderr, on);
         g
+    }
+
+    fn runs_cell() -> GridCell {
+        let digit = Style::new().cyan();
+        GridCell::runs([
+            ("ab", Style::new()),
+            ("12", digit),
+            ("#", Style::new().red()),
+        ])
+    }
+
+    #[test]
+    fn a_cell_in_runs_is_plain_text_without_colour() {
+        let _g = colors(false);
+        let mut g = Grid::kv();
+        g.row([GridCell::from("pw"), runs_cell()]);
+        assert_eq!(g.boxed(40), "pw  ab12#");
+    }
+
+    #[test]
+    fn a_cell_in_runs_paints_each_run() {
+        let _g = colors(true);
+        let mut g = Grid::kv();
+        g.row([GridCell::from("pw"), runs_cell()]);
+        let out = g.boxed(40);
+        assert_eq!(measure(&out), "pw  ab12#".len());
+        let digits = Style::new().cyan().force_styling(true).paint("12");
+        assert!(out.contains(&digits), "{out:?}");
+    }
+
+    #[test]
+    fn a_cell_in_runs_wraps_at_characters_keeping_colours() {
+        let _g = colors(true);
+        let mut g = Grid::kv();
+        g.row([GridCell::from("pw"), runs_cell()]);
+        // "pw", its padding and the value's take 5: 3 columns left for it.
+        let out = g.boxed(8);
+        let lines: Vec<_> = out.lines().map(crate::style::strip).collect();
+        assert_eq!(lines, ["pw  ab1", "    2#"]);
+        let digit = Style::new().cyan().force_styling(true);
+        assert!(
+            out.contains(&digit.paint("1")) && out.contains(&digit.paint("2")),
+            "{out:?}"
+        );
     }
 
     #[test]
