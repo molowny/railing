@@ -18,8 +18,12 @@ use crate::group;
 pub fn error(msg: &str) {
     eprintln!(
         "{} {}",
-        style("✖").for_stderr().red(),
-        style(msg).for_stderr().red()
+        style("✖")
+            .for_stderr()
+            .swatch(crate::theme::current().danger),
+        style(msg)
+            .for_stderr()
+            .swatch(crate::theme::current().danger)
     );
 }
 
@@ -186,19 +190,19 @@ pub fn outro(msg: &str) -> Result<(), CliError> {
 
 /// Show a green success outro that closes the prompt group.
 pub fn outro_success(msg: &str) -> Result<(), CliError> {
-    let line = verdict("✔", msg, crate::style::Style::new().green());
+    let line = verdict("✔", msg, crate::theme::success());
     write_stderr(&group::close(stderr_caps(), &line))
 }
 
 /// Show a red error outro that closes the prompt group.
 pub fn outro_error(msg: &str) -> Result<(), CliError> {
-    let line = verdict("✖", msg, crate::style::Style::new().red());
+    let line = verdict("✖", msg, crate::theme::danger());
     write_stderr(&group::close(stderr_caps(), &line))
 }
 
 /// Show a yellow warning outro that closes the prompt group.
 pub fn outro_warning(msg: &str) -> Result<(), CliError> {
-    let line = verdict("⚠", msg, crate::style::Style::new().yellow());
+    let line = verdict("⚠", msg, crate::theme::warning());
     write_stderr(&group::close(stderr_caps(), &line))
 }
 
@@ -363,7 +367,7 @@ impl Gutter {
     #[allow(clippy::print_stdout)]
     pub fn write(&mut self, delta: &str) {
         use std::io::Write;
-        let bar = style("│").color256(8);
+        let bar = style("│").swatch(crate::theme::current().rule);
         let mut out = std::io::stdout().lock();
         for part in delta.split_inclusive('\n') {
             if self.at_line_start {
@@ -385,7 +389,7 @@ impl Gutter {
         if !self.at_line_start {
             println!();
         }
-        println!("{}", style("│").color256(8));
+        println!("{}", style("│").swatch(crate::theme::current().rule));
         self.at_line_start = true;
         self.open = false;
     }
@@ -428,8 +432,6 @@ fn init_colors_with(no_color: bool) {
 // with `eval`/`source` of stdout. Colour follows stderr's decision
 // (`crate::color`), which `init_colors` makes at startup.
 
-pub use crate::glyph::DIM_256;
-
 /// The caps the full kit draws on stderr with: colour as stderr's decision
 /// says ([`crate::color`], [`init_colors`]), cursor movement on.
 pub(crate) fn stderr_caps() -> crate::style::Caps {
@@ -453,7 +455,7 @@ pub(crate) fn stderr_tty() -> std::io::Result<crate::term::Tty> {
 /// Style for dim text: [`DIM_256`]. Add `.for_stderr()` for stderr-bound
 /// output, so colour follows that stream's decision.
 pub fn dim() -> crate::color::Style {
-    crate::color::Style::new().color256(DIM_256)
+    crate::color::Style::new().swatch(crate::theme::current().muted)
 }
 
 /// Emit a tagged status line to stderr: `{tag}: {body}`.
@@ -479,8 +481,12 @@ pub fn notice(tag: &str, body: &str) {
 pub fn diff_added(name: &str) -> String {
     format!(
         "{}{}",
-        style("+").for_stderr().green(),
-        style(name).for_stderr().green()
+        style("+")
+            .for_stderr()
+            .swatch(crate::theme::current().success),
+        style(name)
+            .for_stderr()
+            .swatch(crate::theme::current().success)
     )
 }
 
@@ -490,8 +496,12 @@ pub fn diff_added(name: &str) -> String {
 pub fn diff_removed(name: &str) -> String {
     format!(
         "{}{}",
-        style("-").for_stderr().red(),
-        style(name).for_stderr().red()
+        style("-")
+            .for_stderr()
+            .swatch(crate::theme::current().danger),
+        style(name)
+            .for_stderr()
+            .swatch(crate::theme::current().danger)
     )
 }
 
@@ -512,7 +522,10 @@ pub fn dim_hint(detail: &str) -> String {
 ///
 /// Stderr-bound; see [`diff_added`] for color-flag rationale.
 pub fn warn_body(body: &str) -> String {
-    style(body).for_stderr().yellow().to_string()
+    style(body)
+        .for_stderr()
+        .swatch(crate::theme::current().warning)
+        .to_string()
 }
 
 /// Like [`notice`] but the body is rendered yellow — for non-fatal

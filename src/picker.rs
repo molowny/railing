@@ -361,7 +361,10 @@ impl<'a> List<'a> {
                 crate::color::Style::new()
             };
             let mut text = match &self.checked {
-                Some(checked) if checked[row.index] => style("◼ ").cyan().for_stderr().to_string(),
+                Some(checked) if checked[row.index] => style("◼ ")
+                    .swatch(crate::theme::current().active)
+                    .for_stderr()
+                    .to_string(),
                 Some(_) => dim("◻ "),
                 None => String::new(),
             };
@@ -371,13 +374,19 @@ impl<'a> List<'a> {
                 let hint = cut(hint, hint_w);
                 text += &pad;
                 text += &if selected {
-                    style(hint).yellow().for_stderr().to_string()
+                    style(hint)
+                        .swatch(crate::theme::current().highlight)
+                        .for_stderr()
+                        .to_string()
                 } else {
                     dim(&hint)
                 };
             }
             let marker = if selected {
-                style("›").cyan().for_stderr().to_string()
+                style("›")
+                    .swatch(crate::theme::current().active)
+                    .for_stderr()
+                    .to_string()
             } else {
                 " ".to_string()
             };

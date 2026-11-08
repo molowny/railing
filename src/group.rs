@@ -15,7 +15,7 @@
 //! rules (`─╮│`) always are. Colours are clack's default theme.
 
 use crate::glyph::{self, State};
-use crate::style::{Caps, Style};
+use crate::style::Caps;
 
 /// The mark a log entry starts with.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -37,12 +37,12 @@ pub enum Mark {
 impl Mark {
     fn paint(self, caps: Caps) -> String {
         let (mark, style) = match self {
-            Mark::Step => ("◇", Style::new().green()),
-            Mark::Info => ("●", Style::new().blue()),
+            Mark::Step => ("◇", crate::theme::done()),
+            Mark::Info => ("●", crate::theme::info()),
             Mark::Remark => return gray(caps, "├"),
-            Mark::Success => ("◆", Style::new().green()),
-            Mark::Warning => ("▲", Style::new().yellow()),
-            Mark::Error => ("■", Style::new().red()),
+            Mark::Success => ("◆", crate::theme::success()),
+            Mark::Warning => ("▲", crate::theme::warning()),
+            Mark::Error => ("■", crate::theme::danger()),
         };
         style.paint(caps, mark)
     }
@@ -65,7 +65,7 @@ pub fn close(caps: Caps, message: &str) -> String {
 
 /// `└  message`, the message red: the group given up.
 pub fn close_cancelled(caps: Caps, message: &str) -> String {
-    close(caps, &Style::new().red().paint(caps, message))
+    close(caps, &crate::theme::danger().paint(caps, message))
 }
 
 /// A log entry: `mark  first line`, a `│` before each line after it, and an

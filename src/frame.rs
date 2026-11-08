@@ -177,8 +177,12 @@ impl Frame {
         let text = cut(text, cols.saturating_sub(4));
         format!(
             "{}  {}\n",
-            style("▲").yellow().for_stderr(),
-            style(text).yellow().for_stderr()
+            style("▲")
+                .swatch(crate::theme::current().warning)
+                .for_stderr(),
+            style(text)
+                .swatch(crate::theme::current().warning)
+                .for_stderr()
         )
     }
 }
@@ -188,9 +192,13 @@ pub(crate) fn dim(text: &str) -> String {
     glyph::dim(crate::ui::stderr_caps(), text)
 }
 
-/// The search colour (`tui::theme::SEARCH`), bold.
+/// The search colour (`tui::theme::search()`), bold.
 fn search(s: &str) -> String {
-    style(s).yellow().bold().for_stderr().to_string()
+    style(s)
+        .swatch(crate::theme::current().highlight)
+        .bold()
+        .for_stderr()
+        .to_string()
 }
 
 /// `s` padded to `w` columns, on the right or the left.
@@ -250,7 +258,12 @@ pub(crate) fn paint_hits(
             return;
         }
         let s = base.apply_to(run.as_str());
-        out += &if hit { s.cyan().underlined() } else { s }.to_string();
+        out += &if hit {
+            s.swatch(crate::theme::current().accent).underlined()
+        } else {
+            s
+        }
+        .to_string();
         run.clear();
     };
     for (k, ch) in text.chars().enumerate() {

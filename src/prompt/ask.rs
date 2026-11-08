@@ -405,7 +405,7 @@ impl Confirm {
         let dim = Style::new().dim();
         match status {
             Status::Active | Status::Error(_) if selected => {
-                format!("{} {label} ", Style::new().green().paint(caps, "●"))
+                format!("{} {label} ", crate::theme::success().paint(caps, "●"))
             }
             Status::Active | Status::Error(_) => {
                 format!("{} {} ", dim.paint(caps, "○"), dim.paint(caps, label))

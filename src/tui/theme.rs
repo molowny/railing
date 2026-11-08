@@ -1,59 +1,70 @@
 use ratatui::style::{Color, Modifier, Style};
 
-/// Background color for the selected/active item.
-///
-/// A grayscale-ramp entry (`#585858`), not palette `DarkGray`: what that slot
-/// looks like is up to the terminal theme, which made the text drawn on it
-/// unpredictable. Fixed, it sits reliably above [`BG_SELECTED_INACTIVE`] and
-/// below [`FG_DIM_SELECTED`].
-pub const BG_SELECTED: Color = Color::Indexed(240);
+// Every colour here is a role of the process's theme (`crate::theme`,
+// `docs/theming.md`), resolved for its background when called: the kit's own
+// look on a dark terminal is the fixed greys and ANSI colours below; on a
+// light one the greys move; an app's installed theme overrides any of them.
 
-/// Dim text on [`BG_SELECTED`]: labels and metadata on the cursor row.
-///
-/// A fixed grey (`#a8a8a8`), because the palette's `Gray` ([`FG_SECONDARY`])
-/// renders as white in many themes and so stops reading as dimmer than the
-/// value beside it. Clearly below any terminal's white, clearly above the row.
-pub const FG_DIM_SELECTED: Color = Color::Indexed(248);
+/// Background of the selected/active row: the theme's `selection` (kit:
+/// 240 `#585858` on dark, 252 on light). A grayscale-ramp entry, not palette
+/// `DarkGray`: what that slot looks like is up to the terminal theme, which
+/// made the text drawn on it unpredictable.
+pub fn bg_selected() -> Color {
+    crate::theme::current().selection.ratatui()
+}
 
-/// Background for the cursor row of a pane that has lost focus.
-///
-/// Fainter than [`BG_SELECTED`], so it never competes with the focused pane's
-/// cursor, but still there: moving focus to a detail pane must not hide which
-/// row the detail belongs to. A grayscale-ramp entry (`#3a3a3a`), the same in
-/// every terminal theme.
-pub const BG_SELECTED_INACTIVE: Color = Color::Indexed(237);
+/// Dim text on [`bg_selected`]: labels and metadata on the cursor row (kit:
+/// 248 on dark, 243 on light). Fixed, because the palette's `Gray` renders
+/// as white in many themes and stops reading as dimmer than the value beside
+/// it.
+pub fn fg_dim_selected() -> Color {
+    crate::theme::current().muted_on_selection.ratatui()
+}
 
-/// Primary text (titles, values).
-pub const FG_PRIMARY: Color = Color::White;
+/// Background for the cursor row of a pane that has lost focus: fainter than
+/// [`bg_selected`], so it never competes with the focused pane's cursor, but
+/// still there (kit: 237 on dark, 254 on light).
+pub fn bg_selected_inactive() -> Color {
+    crate::theme::current().selection_inactive.ratatui()
+}
+
+/// Primary text (titles, values): kit white on dark, the terminal's own
+/// foreground on light.
+pub fn fg_primary() -> Color {
+    crate::theme::current().text.ratatui()
+}
 
 /// Secondary text (subtitles, descriptions).
-pub const FG_SECONDARY: Color = Color::Gray;
+pub fn fg_secondary() -> Color {
+    crate::theme::current().text_secondary.ratatui()
+}
 
-/// Dim text (borders, metadata, inactive hints).
-///
-/// A fixed 256-colour grey (`#949494`) rather than the palette's `DarkGray`
-/// (ANSI 8): what slot 8 looks like is up to the terminal theme, and many make
-/// it too dark to read as text. Grayscale-ramp entries are the same everywhere,
-/// so dim text keeps one contrast across themes. Still clearly below
-/// [`FG_SECONDARY`].
-pub const FG_DIM: Color = Color::Indexed(crate::glyph::DIM_256);
+/// Dim text (borders, metadata, inactive hints): the theme's `muted`, the
+/// same grey the flow and tables use.
+pub fn fg_dim() -> Color {
+    crate::theme::current().muted.ratatui()
+}
 
-/// Lines that only mark where one pane ends and the next begins.
-///
-/// A grayscale-ramp entry (`#444444`) well below [`FG_DIM`]: a separator is
-/// structure, not text, and should be found rather than read.
-pub const FG_SEPARATOR: Color = Color::Indexed(238);
+/// Lines that only mark where one pane ends and the next begins: well below
+/// [`fg_dim`], structure to be found rather than read.
+pub fn fg_separator() -> Color {
+    crate::theme::current().separator.ratatui()
+}
 
-/// Accent color for keycaps, group titles, and other call-to-action chrome.
-pub const ACCENT: Color = Color::Cyan;
+/// Keycaps, group titles and other call-to-action chrome.
+pub fn accent() -> Color {
+    crate::theme::current().accent.ratatui()
+}
 
-/// Color for search/filter queries and mode titles (e.g. the which-key group
-/// name), distinct from the [`ACCENT`] used for keys.
-pub const SEARCH: Color = Color::Yellow;
+/// Search/filter queries and mode titles (e.g. the which-key group name),
+/// distinct from the [`accent`] used for keys.
+pub fn search() -> Color {
+    crate::theme::current().highlight.ratatui()
+}
 
 /// Style for selected row text.
 pub fn selected(bold: bool) -> Style {
-    let s = Style::default().fg(FG_PRIMARY).bg(BG_SELECTED);
+    let s = Style::default().fg(fg_primary()).bg(bg_selected());
     if bold {
         s.add_modifier(Modifier::BOLD)
     } else {
@@ -63,32 +74,34 @@ pub fn selected(bold: bool) -> Style {
 
 /// Style for normal (unselected) text.
 pub fn normal() -> Style {
-    Style::default().fg(FG_PRIMARY)
+    Style::default().fg(fg_primary())
 }
 
 /// Style for dim/metadata text.
 pub fn dim() -> Style {
-    Style::default().fg(FG_DIM)
+    Style::default().fg(fg_dim())
 }
 
 /// Style for dim text on the selected background.
 ///
-/// Not `dim().bg(BG_SELECTED)`: [`FG_DIM`] sits too close to [`BG_SELECTED`]
+/// Not `dim().bg(bg_selected())`: [`fg_dim()`] sits too close to [`bg_selected()`]
 /// to read on it. Metadata on a selected row has to dim *relative to* that
-/// row, which means stepping the foreground down from [`FG_PRIMARY`] rather
-/// than all the way to [`FG_DIM`] — to [`FG_DIM_SELECTED`].
+/// row, which means stepping the foreground down from [`fg_primary()`] rather
+/// than all the way to [`fg_dim()`] — to [`fg_dim_selected()`].
 pub fn dim_selected() -> Style {
-    Style::default().fg(FG_DIM_SELECTED).bg(BG_SELECTED)
+    Style::default().fg(fg_dim_selected()).bg(bg_selected())
 }
 
 /// Background style for selected area (spaces/fill).
 pub fn selected_bg() -> Style {
-    Style::default().bg(BG_SELECTED)
+    Style::default().bg(bg_selected())
 }
 
-/// Style for the cursor row of an unfocused pane, on [`BG_SELECTED_INACTIVE`].
+/// Style for the cursor row of an unfocused pane, on [`bg_selected_inactive()`].
 pub fn selected_inactive() -> Style {
-    Style::default().fg(FG_SECONDARY).bg(BG_SELECTED_INACTIVE)
+    Style::default()
+        .fg(fg_secondary())
+        .bg(bg_selected_inactive())
 }
 
 /// Style for one row of a list or outline, given its selection state and
@@ -122,12 +135,13 @@ impl Countdown {
 
     /// The colour for `secs_left`.
     pub fn color(self, secs_left: u64) -> Color {
+        let t = crate::theme::current();
         if secs_left <= self.urgent_at {
-            Color::Red
+            t.danger.ratatui()
         } else if secs_left <= self.warn_at {
-            Color::Yellow
+            t.warning.ratatui()
         } else {
-            Color::Green
+            t.success.ratatui()
         }
     }
 }
@@ -135,7 +149,7 @@ impl Countdown {
 /// Highlight for in-place substring matches (e.g. detail pane search).
 pub fn match_hit() -> Style {
     Style::default()
-        .fg(Color::Yellow)
+        .fg(search())
         .add_modifier(Modifier::UNDERLINED | Modifier::BOLD)
 }
 
@@ -165,9 +179,13 @@ mod tests {
     #[test]
     fn dim_selected_sits_between_primary_and_the_background() {
         let s = dim_selected();
-        assert_eq!(s.bg, Some(BG_SELECTED), "must keep the selected row's fill");
-        assert_ne!(s.fg, Some(FG_PRIMARY), "not dimmer than primary text");
-        assert_ne!(s.fg, Some(BG_SELECTED), "invisible against its own row");
+        assert_eq!(
+            s.bg,
+            Some(bg_selected()),
+            "must keep the selected row's fill"
+        );
+        assert_ne!(s.fg, Some(fg_primary()), "not dimmer than primary text");
+        assert_ne!(s.fg, Some(bg_selected()), "invisible against its own row");
     }
 
     #[test]
@@ -190,7 +208,13 @@ mod tests {
             Color::Indexed(i) => i,
             other => panic!("{other:?} is a palette colour, theme-dependent"),
         };
-        let ladder = [BG_SELECTED_INACTIVE, BG_SELECTED, FG_DIM, FG_DIM_SELECTED].map(index);
+        let ladder = [
+            bg_selected_inactive(),
+            bg_selected(),
+            fg_dim(),
+            fg_dim_selected(),
+        ]
+        .map(index);
         assert!(ladder.windows(2).all(|w| w[0] < w[1]), "{ladder:?}");
     }
 }

@@ -416,7 +416,12 @@ impl<'a> Browser<'a> {
             }
             let cell = align(&cut(&h, w), w, self.grid.is_right(c));
             let s = style(cell).bold().for_stderr();
-            head += &if sorted { s.cyan() } else { s }.to_string();
+            head += &if sorted {
+                s.swatch(crate::theme::current().accent)
+            } else {
+                s
+            }
+            .to_string();
             if c + 1 < widths.len() {
                 head += &" ".repeat(GAP);
             }

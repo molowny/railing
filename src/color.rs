@@ -118,6 +118,17 @@ macro_rules! builders {
             self
         }
 
+        /// A theme role as the foreground (`style(x).swatch(theme::current().danger)`):
+        /// its colour for this process's background, nothing for the
+        /// terminal's own.
+        #[must_use]
+        pub fn swatch(mut self, swatch: crate::theme::Swatch) -> Self {
+            if let Some(c) = swatch.color() {
+                self.style_mut().0 = self.style_mut().0.fg(c);
+            }
+            self
+        }
+
         #[must_use]
         pub fn color256(mut self, n: u8) -> Self {
             self.style_mut().0 = self.style_mut().0.color256(n);
@@ -258,6 +269,25 @@ impl<D: Display> Display for Styled<D> {
 /// `value`, to be styled: `style("ok").green().for_stderr()`.
 pub fn style<D>(value: D) -> Styled<D> {
     Style::new().apply_to(value)
+}
+
+/// `line` with each character in its style, a run of one style painted once.
+pub(crate) fn paint_runs(line: &str, styles: &[Style]) -> String {
+    let mut out = String::new();
+    let mut run = String::new();
+    let mut current: Option<Style> = None;
+    for (ch, style) in line.chars().zip(styles.iter().copied()) {
+        if current.is_some_and(|c| c != style) {
+            out.push_str(&current.expect("set").force_styling(true).paint(&run));
+            run.clear();
+        }
+        current = Some(style);
+        run.push(ch);
+    }
+    if let Some(style) = current {
+        out.push_str(&style.force_styling(true).paint(&run));
+    }
+    out
 }
 
 #[cfg(test)]

@@ -10,7 +10,8 @@
 //! ▲  Wrong password       ← step(Error): yellow
 //! ```
 //!
-//! Colours are clack's default theme, which the live flow draws with. The
+//! Colours are the process's [`theme`] roles; the kit's own are clack's
+//! default theme, which the live flow draws with. The
 //! marks are always these Unicode ones, whatever the locale: cliclack, which
 //! drew the flow until M3, swapped in ASCII (`o`, `*`) when the locale was
 //! not UTF-8, which mixed with the box rules (`─╮│`) that never did.
@@ -18,15 +19,7 @@
 //! marks are coloured for that terminal and no other.
 
 use crate::style::{Caps, Style};
-
-/// 256-colour index of dim text, everywhere cli-kit draws it: CLI output,
-/// flows, grids, the spinner's glow, and the TUI's `theme::FG_DIM`.
-///
-/// A grayscale-ramp entry (`#949494`) rather than SGR 2 "faint", which
-/// terminals render anywhere from invisible to identical to normal text, or
-/// palette `DarkGray`, whose shade is up to the terminal theme. Readable on
-/// dark backgrounds and still clearly below normal text on light ones.
-pub const DIM_256: u8 = 246;
+use crate::theme;
 
 /// Where a step is: the four states a clack prompt draws.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -42,12 +35,12 @@ pub enum State {
 }
 
 impl State {
-    const fn bar_style(self) -> Style {
+    fn bar_style(self) -> Style {
         match self {
-            Self::Active => Style::new().cyan(),
-            Self::Cancel => Style::new().red(),
-            Self::Submit => Style::new().bright().black(),
-            Self::Error => Style::new().yellow(),
+            Self::Active => theme::active(),
+            Self::Cancel => theme::danger(),
+            Self::Submit => theme::rule(),
+            Self::Error => theme::warning(),
         }
     }
 }
@@ -56,7 +49,7 @@ impl State {
 pub fn step(caps: Caps, state: State) -> String {
     let (mark, color) = match state {
         State::Active => ("◆", state.bar_style()),
-        State::Submit => ("◇", Style::new().green()),
+        State::Submit => ("◇", theme::done()),
         State::Error => ("▲", state.bar_style()),
         State::Cancel => ("■", state.bar_style()),
     };
@@ -93,9 +86,9 @@ pub fn header(caps: Caps, state: State, prompt: &str) -> String {
     out
 }
 
-/// `text` in the muted tone ([`DIM_256`]).
+/// `text` in the muted tone ([`theme::muted`]).
 pub fn dim(caps: Caps, text: &str) -> String {
-    Style::new().color256(DIM_256).paint(caps, text)
+    theme::muted().paint(caps, text)
 }
 
 #[cfg(test)]

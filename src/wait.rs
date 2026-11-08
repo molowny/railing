@@ -220,11 +220,15 @@ impl Wait {
                 .iter()
                 .map(|(mark, text)| {
                     let icon = match mark {
-                        Mark::Done => style("✓").green().to_string(),
+                        Mark::Done => style("✓")
+                            .swatch(crate::theme::current().success)
+                            .to_string(),
                         Mark::Active if frozen => dim("·"),
                         Mark::Active => self.spin.symbol(crate::ui::stderr_caps()),
                         Mark::Pending => dim("·"),
-                        Mark::Failed => style("✖").red().to_string(),
+                        Mark::Failed => style("✖")
+                            .swatch(crate::theme::current().danger)
+                            .to_string(),
                     };
                     (icon, text.clone())
                 })

@@ -188,6 +188,83 @@ mod unix {
         pub fn writer(&self) -> io::Result<Writer> {
             Ok(Writer(self.file.try_clone()?))
         }
+
+        /// The terminal's background colour as it reports it (OSC 11), each
+        /// channel scaled to 0–255; `None` when it doesn't say within
+        /// `timeout`, or isn't a terminal that can be asked.
+        ///
+        /// The query goes out with a primary device attributes request
+        /// (`ESC [ c`), which every terminal answers. Its answer arriving
+        /// first means the terminal doesn't do OSC 11, so one that ignores it
+        /// costs a round trip, not the whole timeout. Both answers are read
+        /// off before raw mode ends, so neither leaks into what is typed
+        /// next. Uses raw mode: not while another [`Tty::raw`] is open.
+        pub fn background_color(&mut self, timeout: std::time::Duration) -> Option<(u8, u8, u8)> {
+            use super::keys::{Byte, Source};
+            if !self.is_terminal() || !is_terminal(self.input_fd()) {
+                return None;
+            }
+            let mut raw = self.raw().ok()?;
+            self.file.write_all(b"\x1b]11;?\x1b\\\x1b[c").ok()?;
+            self.file.flush().ok()?;
+            let deadline = std::time::Instant::now() + timeout;
+            let mut buf = Vec::new();
+            let mut color = None;
+            loop {
+                let left = deadline.saturating_duration_since(std::time::Instant::now());
+                if left.is_zero() {
+                    break;
+                }
+                match raw.byte(Some(left)) {
+                    Ok(Byte::Got(b)) => buf.push(b),
+                    _ => break,
+                }
+                if color.is_none() {
+                    color = parse_osc11(&buf);
+                }
+                // The device attributes answer ends the exchange: `ESC [ ? … c`.
+                if buf.ends_with(b"c") && buf.windows(3).any(|w| w == b"\x1b[?") {
+                    break;
+                }
+                if buf.len() > 256 {
+                    break;
+                }
+            }
+            let _ = raw.restore();
+            color
+        }
+    }
+
+    /// `ESC ] 11 ; rgb:RRRR/GGGG/BBBB` (BEL or ST after it) in `buf`, each
+    /// channel of 1–4 hex digits scaled to 0–255.
+    fn parse_osc11(buf: &[u8]) -> Option<(u8, u8, u8)> {
+        let text = String::from_utf8_lossy(buf);
+        let start = text.find("\x1b]11;")? + 5;
+        let rest = &text[start..];
+        let end = rest.find(['\x07', '\x1b'])?;
+        let spec = rest[..end].strip_prefix("rgb:")?;
+        let mut parts = spec.split('/').map(|h| {
+            let v = u32::from_str_radix(h, 16).ok()?;
+            let max = (1u32 << (4 * h.len().clamp(1, 4))) - 1;
+            Some((v * 255 / max) as u8)
+        });
+        Some((parts.next()??, parts.next()??, parts.next()??))
+    }
+
+    #[cfg(test)]
+    mod osc11 {
+        #[test]
+        fn parses_the_answer_in_its_spellings() {
+            let p = super::parse_osc11;
+            assert_eq!(
+                p(b"\x1b]11;rgb:ffff/ffff/ffff\x1b\\"),
+                Some((255, 255, 255))
+            );
+            assert_eq!(p(b"\x1b]11;rgb:1c1c/1c1c/1c1c\x07"), Some((28, 28, 28)));
+            assert_eq!(p(b"\x1b]11;rgb:f/8/0\x07"), Some((255, 136, 0)));
+            assert_eq!(p(b"\x1b]11;rgb:1c1c/1c1c"), None, "not finished");
+            assert_eq!(p(b"\x1b[?62;c"), None, "only the attributes");
+        }
     }
 
     impl Write for Tty {

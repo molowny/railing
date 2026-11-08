@@ -19,8 +19,7 @@
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::time::{Duration, Instant};
 
-use crate::glyph::DIM_256;
-use crate::style::{self, Caps, Style};
+use crate::style::{self, Caps};
 
 /// What the spinner pulses through. Every style is a ping-pong from a dot to
 /// a solid shape and back, one column wide.
@@ -161,27 +160,23 @@ impl Spin {
         let all = self.style.frames();
         let frames = if self.no_dot { &all[1..] } else { all };
         let symbol = frames[self.frame() % frames.len()];
-        Style::new().cyan().paint(caps, symbol)
+        crate::theme::active().paint(caps, symbol)
     }
 
     /// `text` with the glow at this frame: the letters under it brighten
-    /// (`255`, fading through `252` and `249` either side) over the muted
-    /// tone ([`DIM_256`]). It walks one column a frame, then rests past the
+    /// (on dark `255`, fading through `252` and `249` either side; on light
+    /// the same towards black, [`crate::theme::glow`]) over the muted tone. It walks one column a frame, then rests past the
     /// end for [`GLOW_REST`] frames. Only colour changes, never the text, so
     /// the line never moves.
     pub fn glow(&self, caps: Caps, text: &str) -> String {
         let n = text.chars().count();
         let head = (self.frame() % (n + GLOW_REST)) as isize;
+        let shades = crate::theme::glow();
         text.chars()
             .enumerate()
             .map(|(i, c)| {
-                let shade = match (i as isize - head).unsigned_abs() {
-                    0 => 255,
-                    1 => 252,
-                    2 => 249,
-                    _ => DIM_256,
-                };
-                Style::new().color256(shade).paint(caps, c)
+                let shade = shades[(i as isize - head).unsigned_abs().min(3)];
+                shade.paint(caps, c)
             })
             .collect()
     }
@@ -307,7 +302,7 @@ mod tests {
             cells[2].contains("38;5;252") && cells[4].contains("38;5;252"),
             "{cells:?}"
         );
-        assert!(cells[0].contains(&format!("38;5;{DIM_256}")), "{cells:?}");
+        assert!(cells[0].contains("38;5;246"), "{cells:?}");
         // Past the end the glow rests: every letter is the muted tone.
         let rest = at(msg.len() + 4).glow(c, msg);
         assert!(

@@ -88,7 +88,7 @@ pub enum Outcome {
 pub fn end(outcome: Outcome, message: &str) {
     let closing = outro_text(message);
     let prev = DEPTH
-        .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |d| {
+        .try_update(Ordering::SeqCst, Ordering::SeqCst, |d| {
             Some(d.saturating_sub(1))
         })
         .unwrap_or(0);
@@ -432,8 +432,14 @@ impl Flow {
     pub fn block(&self, mark: Gutter, title: &str, body: &str) {
         if self.live {
             let title = match mark {
-                Gutter::Warn => style(title).for_stderr().yellow().bold(),
-                Gutter::Error => style(title).for_stderr().red().bold(),
+                Gutter::Warn => style(title)
+                    .for_stderr()
+                    .swatch(crate::theme::current().warning)
+                    .bold(),
+                Gutter::Error => style(title)
+                    .for_stderr()
+                    .swatch(crate::theme::current().danger)
+                    .bold(),
                 _ => style(title).for_stderr().bold(),
             };
             let text = if body.is_empty() {
@@ -500,9 +506,9 @@ impl Flow {
             let mut g = Grid::new(&["", "Check", "Detail"]).no_header(true);
             for row in &report.0 {
                 let icon = match row.status {
-                    CheckStatus::Pass => style("✔").green(),
-                    CheckStatus::Warn => style("▲").yellow(),
-                    CheckStatus::Fail => style("✖").red(),
+                    CheckStatus::Pass => style("✔").swatch(crate::theme::current().success),
+                    CheckStatus::Warn => style("▲").swatch(crate::theme::current().warning),
+                    CheckStatus::Fail => style("✖").swatch(crate::theme::current().danger),
                 };
                 g.row([icon.to_string(), row.name.clone(), row.detail.clone()]);
             }
@@ -531,11 +537,20 @@ impl Flow {
         if !self.live || !crate::color::enabled(crate::color::Stream::Stderr) {
             return self.note(title, &text);
         }
-        let body: String = runs
+        // Wrapped at any character, as `ui::note` wraps its width, so a long
+        // secret is never cut by the box; each character keeps its style.
+        let styles: Vec<_> = runs
             .iter()
-            .map(|(t, style)| style.force_styling(true).paint(t.as_ref()))
+            .flat_map(|(t, style)| t.as_ref().chars().map(move |_| *style))
             .collect();
-        let _ = ui::stderr_write(&text_box(title, &body));
+        let width = ui::stderr_size().1.saturating_sub(8).clamp(40, 120);
+        let (lines, line_styles) = crate::style::fit_runs(&text, &styles, width);
+        let body: Vec<String> = lines
+            .iter()
+            .zip(&line_styles)
+            .map(|(line, styles)| crate::color::paint_runs(line, styles))
+            .collect();
+        let _ = ui::stderr_write(&text_box(title, &body.join("\n")));
     }
 
     /// A completed step (`◇`).
@@ -570,7 +585,9 @@ impl Flow {
         if self.live {
             let _ = ui::log::warning(&wrapped(msg));
         } else {
-            let tag = style("warning:").for_stderr().yellow();
+            let tag = style("warning:")
+                .for_stderr()
+                .swatch(crate::theme::current().warning);
             self.write(To::Err, &format!("{tag} {msg}\n"));
         }
     }
@@ -674,7 +691,9 @@ impl Flow {
             Outcome::Ok if !msg.is_empty() => self.write(To::Err, &format!("{msg}\n")),
             Outcome::Ok => {}
             Outcome::Warn => {
-                let tag = style("warning:").for_stderr().yellow();
+                let tag = style("warning:")
+                    .for_stderr()
+                    .swatch(crate::theme::current().warning);
                 self.write(To::Err, &format!("{tag} {msg}\n"));
             }
             Outcome::Fail => self.write_failure(msg),

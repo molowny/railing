@@ -2,7 +2,7 @@
 //!
 //! One flat style, shared with the chord which-key popup
 //! ([`super::which_key`]): an optional bold **accent** group title, then
-//! [`Hint`]s with the key in [`theme::ACCENT`], the label in [`theme::FG_DIM`],
+//! [`Hint`]s with the key in [`theme::accent()`], the label in [`theme::fg_dim()`],
 //! separated by a dim ` · `.
 //!
 //! A hint declares *what it is*, not how it's drawn: [`Hint::action`] for a
@@ -94,10 +94,10 @@ pub(crate) fn render_hint_row(
     }
 
     let title_style = Style::default()
-        .fg(theme::SEARCH)
+        .fg(theme::search())
         .add_modifier(Modifier::BOLD);
-    let key_style = Style::default().fg(theme::ACCENT);
-    let label_style = Style::default().fg(theme::FG_DIM);
+    let key_style = Style::default().fg(theme::accent());
+    let label_style = Style::default().fg(theme::fg_dim());
 
     let has_title = title.is_some();
     let header = title.unwrap_or("");

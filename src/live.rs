@@ -21,7 +21,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::Flow;
 use crate::glyph::{self, State};
-use crate::progress::{self, DONE, Part};
+use crate::progress::{self, Part, done};
 use crate::render::{Block, Region};
 use crate::spin::Animation;
 use crate::style;
@@ -76,7 +76,7 @@ impl<'a> Progress<'a> {
                         caps,
                         spin,
                         &msg,
-                        &[Part::new(pos, DONE)],
+                        &[Part::new(pos, done())],
                         len,
                         &progress::count(pos, len),
                         stderr_size().1,

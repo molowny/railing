@@ -29,10 +29,11 @@ use crate::style::measure;
 
 /// What a piece of table text means; the palette maps it to a style.
 ///
-/// The colours are the 16 ANSI ones, so the terminal's theme picks their
-/// shades for light and dark backgrounds alike. Muted is the exception: it is
-/// [`crate::ui::DIM_256`], because SGR 2 "faint" is unreadable on some
-/// terminals and indistinguishable from normal text on others.
+/// Each tone is a role of the process's theme ([`crate::theme`]). The kit's
+/// own are the 16 ANSI colours, so the terminal's theme picks their shades,
+/// and a fixed grey for muted (on dark 246, on light 240), because SGR 2
+/// "faint" is unreadable on some terminals and indistinguishable from normal
+/// text on others.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Tone {
     /// Plain text.
@@ -67,14 +68,10 @@ impl Tone {
     /// grid.
     pub fn style(self) -> Style {
         let s = Style::new();
-        match self {
-            Tone::Default => s,
-            Tone::Strong => s.bold(),
-            Tone::Muted => s.color256(crate::ui::DIM_256),
-            Tone::Accent => s.cyan(),
-            Tone::Success => s.green(),
-            Tone::Warn => s.yellow(),
-            Tone::Danger => s.red(),
+        match self.swatch() {
+            None if self == Tone::Strong => s.bold(),
+            None => s,
+            Some(swatch) => s.swatch(swatch),
         }
     }
 
@@ -82,16 +79,47 @@ impl Tone {
     /// with `0m`, a colour with `39m` (the foreground only), each as the 256
     /// palette index of the base ANSI colour, as comfy-table wrote them.
     fn paint_cell(self, text: &str) -> String {
-        let fg = |n: u8| format!("\x1b[38;5;{n}m{text}\x1b[39m");
-        match self {
-            Tone::Default => text.to_string(),
-            Tone::Strong => format!("\x1b[1m{text}\x1b[0m"),
-            Tone::Muted => fg(crate::glyph::DIM_256),
-            Tone::Accent => fg(6),
-            Tone::Success => fg(2),
-            Tone::Warn => fg(3),
-            Tone::Danger => fg(1),
+        use crate::style::Color;
+        if self == Tone::Strong {
+            return format!("\x1b[1m{text}\x1b[0m");
         }
+        let code = match self.swatch().and_then(|s| s.color()) {
+            None => return text.to_string(),
+            Some(Color::Ansi256(n)) => format!("38;5;{n}"),
+            Some(Color::Rgb(r, g, b)) => format!("38;2;{r};{g};{b}"),
+            Some(c) => format!("38;5;{}", base_index(c)),
+        };
+        format!("\x1b[{code}m{text}\x1b[39m")
+    }
+
+    /// The theme role this tone paints with; `None` for plain and bold.
+    fn swatch(self) -> Option<crate::theme::Swatch> {
+        let t = crate::theme::current();
+        match self {
+            Tone::Default | Tone::Strong => None,
+            Tone::Muted => Some(t.muted),
+            Tone::Accent => Some(t.accent),
+            Tone::Success => Some(t.success),
+            Tone::Warn => Some(t.warning),
+            Tone::Danger => Some(t.danger),
+        }
+    }
+}
+
+/// The palette index of one of the eight.
+fn base_index(c: crate::style::Color) -> u8 {
+    use crate::style::Color::*;
+    match c {
+        Black => 0,
+        Red => 1,
+        Green => 2,
+        Yellow => 3,
+        Blue => 4,
+        Magenta => 5,
+        Cyan => 6,
+        White => 7,
+        Ansi256(n) => n,
+        Rgb(..) => 7,
     }
 }
 
@@ -444,7 +472,7 @@ impl Grid {
                 (0..columns)
                     .map(|c| match row.get(c) {
                         Some((text, tone, Some(styles))) => {
-                            let (lines, styles) = fit_runs(text, styles, widths[c]);
+                            let (lines, styles) = crate::style::fit_runs(text, styles, widths[c]);
                             Laid {
                                 lines,
                                 styles: Some(styles),
@@ -490,7 +518,7 @@ impl Grid {
                         let room = " ".repeat(w.saturating_sub(measure(line)));
                         let runs = cell.styles.as_ref().and_then(|s| s.get(k));
                         let line = match runs {
-                            Some(styles) if color => paint_runs(line, styles),
+                            Some(styles) if color => crate::color::paint_runs(line, styles),
                             _ => line.clone(),
                         };
                         let body = if cell.right {
@@ -548,56 +576,6 @@ impl Grid {
         ));
         out.join("\n")
     }
-}
-
-/// A cell in runs as lines no wider than `width`, each character keeping its
-/// style: broken at `\n` and wherever the width runs out, never at words.
-/// `text` may be shorter than `styles` (a clipped column's `…`, which takes
-/// the default style).
-fn fit_runs(text: &str, styles: &[Style], width: usize) -> (Vec<String>, Vec<Vec<Style>>) {
-    let mut lines = vec![String::new()];
-    let mut line_styles = vec![Vec::new()];
-    let mut used = 0;
-    for (i, ch) in text.chars().enumerate() {
-        if ch == '\n' {
-            lines.push(String::new());
-            line_styles.push(Vec::new());
-            used = 0;
-            continue;
-        }
-        let w = measure(ch.encode_utf8(&mut [0; 4]));
-        if used + w > width.max(1) && used > 0 {
-            lines.push(String::new());
-            line_styles.push(Vec::new());
-            used = 0;
-        }
-        lines.last_mut().expect("one line").push(ch);
-        line_styles
-            .last_mut()
-            .expect("one line")
-            .push(styles.get(i).copied().unwrap_or_default());
-        used += w;
-    }
-    (lines, line_styles)
-}
-
-/// `line` with each character in its style, a run of one style painted once.
-fn paint_runs(line: &str, styles: &[Style]) -> String {
-    let mut out = String::new();
-    let mut run = String::new();
-    let mut current: Option<Style> = None;
-    for (ch, style) in line.chars().zip(styles.iter().copied()) {
-        if current.is_some_and(|c| c != style) {
-            out.push_str(&current.expect("set").force_styling(true).paint(&run));
-            run.clear();
-        }
-        current = Some(style);
-        run.push(ch);
-    }
-    if let Some(style) = current {
-        out.push_str(&style.force_styling(true).paint(&run));
-    }
-    out
 }
 
 /// `line` in lines no wider than `width`: as it is when it fits, else

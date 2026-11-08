@@ -200,9 +200,9 @@ mod reports {
             use crate::color::style;
             for row in &self.0 {
                 let icon = match row.status {
-                    CheckStatus::Pass => style("→").green(),
-                    CheckStatus::Warn => style("⚠").yellow(),
-                    CheckStatus::Fail => style("✖").red(),
+                    CheckStatus::Pass => style("→").swatch(crate::theme::current().success),
+                    CheckStatus::Warn => style("⚠").swatch(crate::theme::current().warning),
+                    CheckStatus::Fail => style("✖").swatch(crate::theme::current().danger),
                 };
                 println!("{icon} {:<22} {}", row.name, row.detail);
             }

@@ -34,6 +34,7 @@ pub mod spin;
 pub mod step;
 pub mod style;
 pub mod term;
+pub mod theme;
 
 #[cfg(feature = "args")]
 pub mod args;

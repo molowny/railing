@@ -100,6 +100,10 @@ pub enum Color {
     White,
     /// `38;5;n` / `48;5;n`.
     Ansi256(u8),
+    /// 24-bit, `38;2;r;g;b` / `48;2;r;g;b`. Drawn as given: whether the
+    /// terminal takes it is the caller's to know ([`crate::theme`] downgrades
+    /// it to [`Color::Ansi256`] where it doesn't).
+    Rgb(u8, u8, u8),
 }
 
 impl Color {
@@ -114,6 +118,7 @@ impl Color {
             Self::Cyan => 6,
             Self::White => 7,
             Self::Ansi256(n) => n,
+            Self::Rgb(..) => unreachable!("written by `sgr` itself"),
         }
     }
 }
@@ -257,6 +262,7 @@ fn sgr(out: &mut String, base: u8, color: Color, bright: bool) {
     let ext = base + 8;
     let _ = match color {
         Color::Ansi256(n) => write!(out, "\x1b[{ext};5;{n}m"),
+        Color::Rgb(r, g, b) => write!(out, "\x1b[{ext};2;{r};{g};{b}m"),
         c if bright => write!(out, "\x1b[{ext};5;{}m", c.index() + 8),
         c => write!(out, "\x1b[{}m", base + c.index()),
     };
@@ -373,6 +379,41 @@ pub fn pad(s: &str, width: usize) -> String {
     let mut out = s.to_string();
     out.extend(std::iter::repeat_n(' ', width.saturating_sub(w)));
     out
+}
+
+/// Text styled per character (a cell or note in runs) as lines no wider than `width`, each character keeping its
+/// style: broken at `\n` and wherever the width runs out, never at words.
+/// `text` may be shorter than `styles` (a clipped column's `…`, which takes
+/// the default style).
+pub(crate) fn fit_runs<S: Copy + Default>(
+    text: &str,
+    styles: &[S],
+    width: usize,
+) -> (Vec<String>, Vec<Vec<S>>) {
+    let mut lines = vec![String::new()];
+    let mut line_styles = vec![Vec::new()];
+    let mut used = 0;
+    for (i, ch) in text.chars().enumerate() {
+        if ch == '\n' {
+            lines.push(String::new());
+            line_styles.push(Vec::new());
+            used = 0;
+            continue;
+        }
+        let w = measure(ch.encode_utf8(&mut [0; 4]));
+        if used + w > width.max(1) && used > 0 {
+            lines.push(String::new());
+            line_styles.push(Vec::new());
+            used = 0;
+        }
+        lines.last_mut().expect("one line").push(ch);
+        line_styles
+            .last_mut()
+            .expect("one line")
+            .push(styles.get(i).copied().unwrap_or_default());
+        used += w;
+    }
+    (lines, line_styles)
 }
 
 #[cfg(test)]

@@ -15,7 +15,6 @@
 //! The live flow animates the line ([`crate::Flow::progress`]); an app that
 //! draws a panel of its own puts the bar in it ([`crate::Flow::live`]).
 
-use crate::glyph::DIM_256;
 use crate::spin::Spin;
 use crate::style::{self, Caps, Style};
 
@@ -32,9 +31,11 @@ impl Part {
     }
 }
 
-/// The colour of the flow's single-part bar: the cyan of what is in
-/// progress, as the spinner and the open `◆`.
-pub const DONE: Style = Style::new().cyan();
+/// The colour of the flow's single-part bar: the theme's
+/// [`active`](crate::theme::active), as the spinner and the open `◆`.
+pub fn done() -> Style {
+    crate::theme::active()
+}
 
 /// `━` cells for each part in its style, then `─` muted for the rest of
 /// `total`, `width` cells in all. A total smaller than the parts' sum is
@@ -49,7 +50,7 @@ pub fn bar(caps: Caps, parts: &[Part], total: u64, width: usize) -> String {
     }
     let rest = width.saturating_sub(cells.iter().sum());
     if rest > 0 {
-        out += &Style::new().color256(DIM_256).paint(caps, "─".repeat(rest));
+        out += &crate::theme::muted().paint(caps, "─".repeat(rest));
     }
     out
 }
@@ -153,7 +154,7 @@ mod tests {
     }
 
     fn one(n: u64) -> [Part; 1] {
-        [Part::new(n, DONE)]
+        [Part::new(n, done())]
     }
 
     #[test]
@@ -168,7 +169,11 @@ mod tests {
 
     #[test]
     fn parts_add_up_to_their_share_exactly() {
-        let parts = [Part::new(1, DONE), Part::new(1, DONE), Part::new(1, DONE)];
+        let parts = [
+            Part::new(1, done()),
+            Part::new(1, done()),
+            Part::new(1, done()),
+        ];
         // 1/3 each of 10: rounded per part it would be 3+3+3 = 9 or 4+4+4.
         assert_eq!(cells(&parts, 3, 10).iter().sum::<usize>(), 10);
         assert_eq!(cells(&parts, 6, 10).iter().sum::<usize>(), 5);
@@ -178,13 +183,13 @@ mod tests {
     fn a_part_that_is_not_zero_always_shows() {
         let red = Style::new().red();
         // 1 failure in 1308: rounds to nothing, takes a cell from the rest.
-        let parts = [Part::new(412, DONE), Part::new(1, red)];
+        let parts = [Part::new(412, done()), Part::new(1, red)];
         assert_eq!(cells(&parts, 1308, 40), vec![13, 1]);
         // Nothing left over: it takes one from the widest part.
-        let parts = [Part::new(999, DONE), Part::new(1, red)];
+        let parts = [Part::new(999, done()), Part::new(1, red)];
         assert_eq!(cells(&parts, 1000, 20), vec![19, 1]);
         // A zero part stays empty.
-        let parts = [Part::new(5, DONE), Part::new(0, red)];
+        let parts = [Part::new(5, done()), Part::new(0, red)];
         assert_eq!(cells(&parts, 10, 10), vec![5, 0]);
     }
 

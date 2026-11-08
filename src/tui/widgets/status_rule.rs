@@ -91,7 +91,7 @@ impl<'a> StatusRule<'a> {
             return;
         }
 
-        let hr_style = Style::default().fg(crate::tui::theme::FG_DIM);
+        let hr_style = Style::default().fg(crate::tui::theme::fg_dim());
         let pad_style = theme::dim();
 
         // Base rule fill.
