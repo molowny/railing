@@ -342,6 +342,7 @@ fn ask_terminal() -> Option<Background> {
 
 /// `COLORFGBG` is `fg;bg` (sometimes `fg;x;bg`): a background of 7 or
 /// 9–15 is a light one.
+#[cfg(any(feature = "flow", test))]
 fn colorfgbg(value: Option<&str>) -> Option<Background> {
     let bg: u8 = value?.rsplit(';').next()?.trim().parse().ok()?;
     Some(if bg == 7 || (9..=15).contains(&bg) {

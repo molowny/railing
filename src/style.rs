@@ -385,6 +385,7 @@ pub fn pad(s: &str, width: usize) -> String {
 /// style: broken at `\n` and wherever the width runs out, never at words.
 /// `text` may be shorter than `styles` (a clipped column's `…`, which takes
 /// the default style).
+#[cfg(feature = "flow")]
 pub(crate) fn fit_runs<S: Copy + Default>(
     text: &str,
     styles: &[S],
