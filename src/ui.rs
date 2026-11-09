@@ -452,7 +452,7 @@ pub(crate) fn stderr_tty() -> std::io::Result<crate::term::Tty> {
     Ok(tty.with_caps(caps))
 }
 
-/// Style for dim text: [`DIM_256`]. Add `.for_stderr()` for stderr-bound
+/// Style for dim text: the theme's muted role. Add `.for_stderr()` for stderr-bound
 /// output, so colour follows that stream's decision.
 pub fn dim() -> crate::color::Style {
     crate::color::Style::new().swatch(crate::theme::current().muted)
