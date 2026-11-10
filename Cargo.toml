@@ -1,3 +1,4 @@
+
 [package]
 name = "cli-kit"
 version = "0.8.0"
@@ -84,26 +85,6 @@ paths = ["flow", "dep:dirs", "dep:toml", "dep:serde"]
 tui = ["fuzzy", "dep:ratatui", "dep:crossterm"]
 # Everything but `tui`: what apps got before the split.
 full = ["flow", "fuzzy", "table", "output", "args", "logging", "paths"]
-
-[[example]]
-name = "tui"
-required-features = ["tui"]
-
-[[example]]
-name = "chord"
-required-features = ["tui"]
-
-[[example]]
-name = "screen_canary"
-required-features = ["tui"]
-
-[[example]]
-name = "outline"
-required-features = ["tui"]
-
-[[example]]
-name = "text_area"
-required-features = ["tui"]
 
 [[example]]
 name = "wait"

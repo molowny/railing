@@ -1,6 +1,6 @@
 //! A wait with a countdown, a checklist and keys:
 //!
-//!     cargo run -p cli-kit --features tui --example wait
+//!     cargo run -p cli-kit --features full --example wait
 //!
 //! `k` finishes the active step, Esc (or Ctrl‑C) leaves, `x` cancels.
 

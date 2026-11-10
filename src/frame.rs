@@ -192,7 +192,7 @@ pub(crate) fn dim(text: &str) -> String {
     glyph::dim(crate::ui::stderr_caps(), text)
 }
 
-/// The search colour (`tui::theme::search()`), bold.
+/// The search colour (the theme's `highlight`), bold.
 fn search(s: &str) -> String {
     style(s)
         .swatch(crate::theme::current().highlight)

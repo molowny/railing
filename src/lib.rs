@@ -18,8 +18,7 @@
 //! | `args` | `args::parse`, completion | clap |
 //! | `logging` | the tracing subscriber | tracing |
 //! | `paths` | XDG paths, private files, `workspace::find` | dirs, toml, serde |
-//! | `tui` | ratatui components and the app runner | ratatui, crossterm |
-//! | `full` | all but `tui` | |
+//! | `full` | all of the above | |
 
 // No `unsafe` anywhere in the kit: the OS is reached through rustix and
 // signal-hook, whose safe APIs carry the FFI.
@@ -74,9 +73,6 @@ pub mod ui;
 pub mod wait;
 #[cfg(feature = "paths")]
 pub mod workspace;
-
-#[cfg(feature = "tui")]
-pub mod tui;
 
 #[cfg(feature = "flow")]
 pub use color::style;

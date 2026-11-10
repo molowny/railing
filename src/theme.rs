@@ -137,28 +137,6 @@ impl Swatch {
             None => Style::new(),
         }
     }
-
-    /// The colour for ratatui, [`ratatui::style::Color::Reset`] for the
-    /// terminal's own.
-    #[cfg(feature = "tui")]
-    pub fn ratatui(self) -> ratatui::style::Color {
-        use ratatui::style::Color as R;
-        match self.color() {
-            None => R::Reset,
-            Some(Color::Black) => R::Black,
-            Some(Color::Red) => R::Red,
-            Some(Color::Green) => R::Green,
-            Some(Color::Yellow) => R::Yellow,
-            Some(Color::Blue) => R::Blue,
-            Some(Color::Magenta) => R::Magenta,
-            Some(Color::Cyan) => R::Cyan,
-            // ratatui's `Gray` is ANSI 7, what the eight call white.
-            Some(Color::White) => R::Gray,
-            Some(Color::Ansi256(15)) => R::White,
-            Some(Color::Ansi256(n)) => R::Indexed(n),
-            Some(Color::Rgb(r, g, b)) => R::Rgb(r, g, b),
-        }
-    }
 }
 
 /// Every colour the kit draws, by role (`docs/theming.md` → Roles). The
