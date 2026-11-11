@@ -329,8 +329,7 @@ pub(crate) mod tests {
         );
     }
 
-    /// The bytes console wrote for the same styles, which the golden
-    /// fixtures hold every surface to.
+    /// The bytes console wrote for the same styles.
     #[test]
     fn the_bytes_are_consoles() {
         let _g = lock();

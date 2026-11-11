@@ -1,7 +1,7 @@
 //! `term` on a real pty, the way askpass uses it: a child with no controlling
 //! terminal (`setsid`), stdin and stdout on pipes, stderr closed off, drawing
-//! and reading only on the terminal it was given by path. See the askpass
-//! bar in `docs/core-refactor.md` (A1–A5, A7).
+//! and reading only on the terminal it was given by path. What a password
+//! prompt in a separate process needs from the core.
 //!
 //! Each test re-runs this binary as that child (`child` below, picked by
 //! environment) and talks to it through the pty's master side and the

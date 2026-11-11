@@ -16,9 +16,7 @@
 //! ```
 //!
 //! The bytes are the ones `console` wrote for the same style (foreground,
-//! background, then each attribute in order, one reset at the end), which
-//! the kit drew with until M5: the golden fixtures hold every surface to
-//! them.
+//! background, then each attribute in order, one reset at the end).
 
 use std::borrow::Cow;
 use std::fmt::{Display, Write as _};

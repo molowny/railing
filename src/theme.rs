@@ -1,5 +1,4 @@
-//! The colours the kit draws with, by role, and the app's say over them
-//! (`docs/theming.md`).
+//! The colours the kit draws with, by role, and the app's say over them.
 //!
 //! Kit code never names a colour: it paints a role ([`muted`], [`active`],
 //! [`Theme::selection`] …). The process has one [`Theme`], which an app may
@@ -139,7 +138,7 @@ impl Swatch {
     }
 }
 
-/// Every colour the kit draws, by role (`docs/theming.md` → Roles). The
+/// Every colour the kit draws, by role. The
 /// default is the kit's own look: on a dark background, exactly what it drew
 /// before themes; on a light one, the greys moved so they still read.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
