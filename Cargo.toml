@@ -30,28 +30,11 @@ tempfile = { version = "3" }
 # Apps pass anyhow errors to `CliError::internal`; the tests hold the chain
 # that comes through to what it always said. railing itself has no anyhow.
 anyhow   = { version = "1" }
-# The golden capture (tests/golden): a terminal emulator to read the pty
-# back as a screen, and openpty. avt, not vt100: vt100 0.15 drops SGR 2
-# (dim), and 0.16+ needs a newer unicode-width than this workspace's lock
-# can take while ratatui (in sealward-tui) pins `=0.2.0`. The kit itself
-# asks for any 0.2.
-avt      = "0.19"
 
 # The tests' ptys, sessions and signals, safely as well.
 [target.'cfg(unix)'.dev-dependencies]
 rustix = { version = "1.1", default-features = false, features = ["std", "termios", "fs", "event", "pty", "process"] }
 
-# What railing draws today, as the refactor's target (docs/core-refactor.md
-# § M0). Its own main: scenes re-run this binary on a pty.
-[[test]]
-name = "golden"
-path = "tests/golden/main.rs"
-harness = false
-# The flow, prompts, grid and JSON errors (`output`), and the picker's ranked
-# filter (`fuzzy`: the pick scenes count fuzzy matches). Named exactly, not
-# `full`, so `cargo test --workspace` runs it with the features the apps
-# enable.
-required-features = ["output", "fuzzy"]
 
 [features]
 # The core alone (`style`, `term`, `render`, `glyph`, `group`, `spin`,

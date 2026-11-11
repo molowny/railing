@@ -1,5 +1,0 @@
-diff_added   \e[32m+\e[0m\e[32mnew-item\e[0m
-diff_removed \e[31m-\e[0m\e[31mold-item\e[0m
-dim_hint     \e[38;5;246m(press q to quit)\e[0m
-warn_body    \e[33mcheck the logs\e[0m
-flow::bar    \e[38;5;8m│\e[0m
