@@ -1,6 +1,6 @@
 # cli-kit
 
-Reusable CLI helpers library for Rust command-line applications. Provides structured output, interactive prompts, logging bootstrap, and optional TUI components.
+Reusable CLI helpers library for Rust command-line applications. Provides structured output, interactive prompts, and logging bootstrap. No ratatui: an app's full-screen TUI is its own.
 
 ## Installation
 
@@ -15,7 +15,7 @@ To enable optional features:
 
 ```toml
 [dependencies]
-cli-kit = { version = "0.1", features = ["tui"] }
+cli-kit = { version = "0.1", features = ["flow", "output"] }
 ```
 
 ## Modules
@@ -31,7 +31,7 @@ cli-kit = { version = "0.1", features = ["tui"] }
 | `logging` | Tracing subscriber bootstrap with `-v`/`-vv` verbosity levels |
 | `output` | `Renderable` trait for pretty/JSON dual rendering, table helpers, `GlobalOpts`, `set_format` (opt into JSON errors) |
 | `prompts` | Text input, password, confirmation, select, and the filtered picker (`pick`), with automatic cancellation handling |
-| `fuzzy` | `Fuzzy`: the `nucleo-matcher` scorer shared by the picker and the TUIs |
+| `fuzzy` | `Fuzzy`: the `nucleo-matcher` scorer shared by the picker, the grid and apps' own TUIs |
 | `ui` | Colored alerts, spinners, intro/outro banners |
 | `style` | `Style` painted against a terminal's `Caps` (no global colour flag), `TermEnv`, and escape-aware `measure`/`strip`/`truncate`/`pad` (core) |
 | `term` | `Tty`: a terminal named by path, fd or `Tty::stderr()`, its caps and size; `Raw` (hardened raw mode, the key reader); `signals` that wake a read instead of killing a raw terminal. Unix; a stub elsewhere (core) |
@@ -39,12 +39,6 @@ cli-kit = { version = "0.1", features = ["tui"] }
 | `spin` | `Spin`: the pulsing shape and the glow as strings at a steady `PACE` — what `ui::Spinner` and `Wait` animate, and what an app on its own terminal animates itself (core) |
 | `progress` | `progress::bar` (one or more coloured parts of a whole; a part that is not zero always shows) and `progress::line` (`◒  msg  ━━━━────  42/100`) as strings (core) |
 | `live` | `Flow::progress(msg, len)`: the progress line animated, ending as a `◇` step; `Flow::live()` / `Live::stderr()`: a block the caller redraws in place (a `--watch` panel), behind the gutter, cut to width, repainted on resize |
-
-### Optional
-
-| Module | Feature flag | Description |
-|--------|-------------|-------------|
-| `tui` | `tui` | Ratatui-based component model with flex layout, paint utilities, theme constants, widgets, and the [`screen`](#tui-surfaces) app runner |
 
 ## Feature flags
 
@@ -61,8 +55,7 @@ The default is the core alone; an app lists the features it uses
 | `args` | `args::parse`, shell completion (+`flow`) | `clap`, `clap_complete` |
 | `logging` | the tracing subscriber; errors also logged (+`flow`) | `tracing`, `tracing-subscriber` |
 | `paths` | XDG paths, private files, `workspace::find` (+`flow`) | `dirs`, `toml`, `serde` |
-| `tui` | TUI components and layout system (+`fuzzy`) | `ratatui`, `crossterm` |
-| `full` | all of the above but `tui` | |
+| `full` | all of the above | |
 
 The core is what `sealward-askpass` builds: it reads the unlock prompt's keys
 and draws it as a step of the client's flow on a terminal it did not
@@ -89,11 +82,7 @@ Runnable examples live in [`examples/`](examples/) — one per module.
 | `select` | `cargo run --example select` | `prompts::select` over four rows; `-- pick` shows `prompts::pick` over the same rows |
 | `multiselect` | `cargo run --example multiselect` | `prompts::multiselect`, all selected to start |
 | `pick` | `cargo run --example pick` | `prompts::pick` over 60 rows: filtering, scrolling, the count and filter in the box title |
-| `tui` | `cargo run --example tui --features tui` | `FlexRenderable` component model + `top_bar`/`footer`/`prompt` widgets |
-| `screen_canary` | `cargo run --example screen_canary --features tui` | `ScreenApp` on either surface; the probe used by `tools/altscreen-canary.sh` |
-| `outline` | `cargo run --example outline --features tui` | `OutlineBuilder`/`OutlineState` fold-aware tree: keyed fold state, `fold_right`, `expand_all` |
 | `data_grid` | `cargo run --example data_grid` | `Flow::browse_table` over 200 rows, inline: scroll, filter, sort, frozen on `q`; `-- 5` fits, `-- 200 never` is `--no-pager` |
-| `text_area` | `cargo run --example text_area --features tui` | `TextArea` multi-line input: newline on `Enter`, wrapping, `desired_height`, line-scoped `Ctrl-u` |
 
 ## Asking for a left-out argument
 
@@ -169,32 +158,12 @@ So in JSON mode stdout holds exactly one document whether the command
 succeeded or failed, and the exit code says which. Without `set_format`,
 errors stay styled text on stderr.
 
-## TUI surfaces
-
-`tui::screen::run` drives a `ScreenApp` on the surface it asks for:
-
-| Surface | Where it draws | Use for |
-|---------|----------------|---------|
-| `Surface::AltScreen` (default) | Full window, alternate screen | Anything sensitive, anything long-lived. Content never enters scrollback and is discarded on exit; resizing is a plain repaint |
-| `Surface::Inline { height }` | Rows below the shell prompt, primary screen | Short widgets that are part of the session and show nothing secret |
-
-Inline output lands on the primary screen, so a terminal that reflows on resize
-(kitty, VTE, alacritty) can push those rows into scrollback where the app can
-neither find nor erase them — **never render secrets on the inline surface**. On
-its first resize an inline app is moved to the alternate screen, because an
-inline viewport cannot be repaired once the terminal has reflowed around it.
-
-`tools/altscreen-canary.sh` is the regression test for all of this: it drives a
-real kitty instance, resizes it, and asserts a canary string painted by the app
-is gone from screen *and* scrollback afterwards.
-
 ## Design
 
 - **Clean stdout** -- UI, prompts, and logging go to stderr so structured output stays pipeable
 - **Dual rendering** -- Output types implement both pretty-printed and JSON formats via the `Renderable` trait
 - **Prompt cancellation** -- Esc/Ctrl+C maps to `CliError::Cancelled` (exit code 130)
-- **Terminal-aware** -- Footer hints collapse for narrow terminals; picker adapts to terminal height; synchronized rendering eliminates flicker
-- **Explicit surfaces** -- A TUI app states whether it draws inline or on the alternate screen; the default is the one that cannot leak into scrollback
+- **Terminal-aware** -- The picker and the browsed grid adapt to terminal height; synchronized rendering eliminates flicker
 
 ## Contributing
 
