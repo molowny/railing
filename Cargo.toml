@@ -9,10 +9,8 @@ license = "MIT"
 [dependencies]
 clap               = { version = "4", features = ["derive", "env"], optional = true }
 clap_complete      = { version = "4", optional = true }
-crossterm          = { version = "0.28", optional = true }
 dirs               = { version = "6", optional = true }
 nucleo-matcher     = { version = "0.3", optional = true }
-ratatui            = { version = "0.29", optional = true }
 serde              = { version = "1", features = ["derive"], optional = true }
 serde_json         = { version = "1", optional = true }
 toml               = { version = "0.8", optional = true }
@@ -35,7 +33,9 @@ tempfile = { version = "3" }
 anyhow   = { version = "1" }
 # The golden capture (tests/golden): a terminal emulator to read the pty
 # back as a screen, and openpty. avt, not vt100: vt100 0.15 drops SGR 2
-# (dim), and 0.16+ needs a unicode-width that ratatui's `=0.2.0` pin rules out.
+# (dim), and 0.16+ needs a newer unicode-width than this workspace's lock
+# can take while ratatui (in sealward-tui) pins `=0.2.0`. The kit itself
+# asks for any 0.2.
 avt      = "0.19"
 
 # The tests' ptys, sessions and signals, safely as well.
@@ -81,14 +81,12 @@ args = ["flow", "dep:clap", "dep:clap_complete"]
 logging = ["flow", "dep:tracing", "dep:tracing-subscriber"]
 # XDG paths, private files, and the workspace config walk (dirs, toml).
 paths = ["flow", "dep:dirs", "dep:toml", "dep:serde"]
-# Ratatui components and the alternate-screen app runner.
-tui = ["fuzzy", "dep:ratatui", "dep:crossterm"]
-# Everything but `tui`: what apps got before the split.
+# Everything: what apps got before the split.
 full = ["flow", "fuzzy", "table", "output", "args", "logging", "paths"]
 
 [[example]]
 name = "wait"
-required-features = ["tui"]
+required-features = ["full"]
 
 [[example]]
 name = "boxes"
