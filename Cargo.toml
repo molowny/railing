@@ -1,70 +1,9 @@
 [package]
 name = "railing"
 version = "0.8.0"
-description = "Reusable CLI helpers: structured output, interactive prompts, and logging bootstrap"
 edition = "2024"
+description = "Reusable CLI helpers: structured output, interactive prompts, and logging bootstrap"
 license = "MIT"
-
-[dependencies]
-clap               = { version = "4", features = ["derive", "env"], optional = true }
-clap_complete      = { version = "4", optional = true }
-dirs               = { version = "6", optional = true }
-nucleo-matcher     = { version = "0.3", optional = true }
-serde              = { version = "1", features = ["derive"], optional = true }
-serde_json         = { version = "1", optional = true }
-toml               = { version = "0.8", optional = true }
-tracing            = { version = "0.1", optional = true }
-tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
-unicode-width      = "0.2"
-zeroize            = { version = "1.7", features = ["derive", "serde"] }
-
-# The terminal (termios, poll, fstat) through rustix's safe API, and signals
-# through signal-hook's: railing has no `unsafe` of its own
-# (`#![forbid(unsafe_code)]`).
-[target.'cfg(unix)'.dependencies]
-rustix      = { version = "1.1", default-features = false, features = ["std", "termios", "fs", "event"] }
-signal-hook = { version = "0.3", default-features = false, features = ["iterator"] }
-
-[dev-dependencies]
-tempfile = { version = "3" }
-# Apps pass anyhow errors to `CliError::internal`; the tests hold the chain
-# that comes through to what it always said. railing itself has no anyhow.
-anyhow   = { version = "1" }
-
-# The tests' ptys, sessions and signals, safely as well.
-[target.'cfg(unix)'.dev-dependencies]
-rustix = { version = "1.1", default-features = false, features = ["std", "termios", "fs", "event", "pty", "process"] }
-
-
-[features]
-# The core alone (`style`, `term`, `render`, `glyph`, `group`, `spin`,
-# `step`, `prompt`) is always there: a terminal the caller names, raw mode
-# and keys, the flow's look as strings. Over rustix and signal-hook (Unix),
-# unicode-width and zeroize,
-# for a process that draws on a terminal it does not own and must keep its
-# dependency tree small (sealward-askpass). That is the default: each app
-# lists what it uses (docs/core-refactor.md § M6).
-default = []
-# The live flow on the process's own stderr, the prompts and lists on the
-# terminal it inherited, `CliError`, and the colour decision for its own
-# stdout and stderr. No dependencies beyond the core's.
-flow = []
-# Ranked fuzzy matching (nucleo) for the picker, the browsed grid's filter
-# and `fuzzy::Fuzzy`; without it they match substrings.
-fuzzy = ["dep:nucleo-matcher"]
-# `Grid`, `Flow::table`, the browsed grid: tables, laid out by the kit.
-table = ["flow"]
-# JSON output: `Renderable`, the report types, `CliError`'s JSON document
-# and `with_details`.
-output = ["table", "dep:serde", "dep:serde_json"]
-# Argument parsing and shell completion (clap).
-args = ["flow", "dep:clap", "dep:clap_complete"]
-# The tracing subscriber; with it, errors are also logged at `error`.
-logging = ["flow", "dep:tracing", "dep:tracing-subscriber"]
-# XDG paths, private files, and the workspace config walk (dirs, toml).
-paths = ["flow", "dep:dirs", "dep:toml", "dep:serde"]
-# Everything: what apps got before the split.
-full = ["flow", "fuzzy", "table", "output", "args", "logging", "paths"]
 
 [[example]]
 name = "wait"
@@ -122,6 +61,66 @@ required-features = ["full"]
 name = "progress"
 required-features = ["full"]
 
-# No `unsafe` in any target (docs/core-refactor.md, Decision 7).
+[dependencies]
+clap = { version = "4", features = ["derive"], optional = true }
+clap_complete = { version = "4", optional = true }
+dirs = { version = "6", optional = true }
+nucleo-matcher = { version = "0.3", optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+toml = { version = "0.8", optional = true }
+tracing = { version = "0.1", optional = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
+unicode-width = "0.2"
+zeroize = "1.7"
+
+[dev-dependencies]
+# Apps pass anyhow errors to `CliError::internal`; the tests hold the chain
+# that comes through to what it always said. railing itself has no anyhow.
+anyhow = "1"
+tempfile = "3"
+
+# The terminal (termios, poll, fstat) through rustix's safe API, and signals
+# through signal-hook's: railing has no `unsafe` of its own
+# (`#![forbid(unsafe_code)]`).
+[target."cfg(unix)".dependencies]
+rustix = { version = "1.1", default-features = false, features = ["event", "fs", "std", "termios"] }
+signal-hook = { version = "0.3", default-features = false, features = ["iterator"] }
+
+# The tests' ptys, sessions and signals, safely as well.
+[target."cfg(unix)".dev-dependencies]
+rustix = { version = "1.1", default-features = false, features = ["event", "fs", "process", "pty", "std", "termios"] }
+
+[features]
+# The core alone (`style`, `term`, `render`, `glyph`, `group`, `spin`,
+# `step`, `prompt`) is always there: a terminal the caller names, raw mode
+# and keys, the flow's look as strings. Over rustix and signal-hook (Unix),
+# unicode-width and zeroize,
+# for a process that draws on a terminal it does not own and must keep its
+# dependency tree small (sealward-askpass). That is the default: each app
+# lists what it uses.
+default = []
+# Argument parsing and shell completion (clap).
+args = ["dep:clap", "dep:clap_complete", "flow"]
+# The live flow on the process's own stderr, the prompts and lists on the
+# terminal it inherited, `CliError`, and the colour decision for its own
+# stdout and stderr. No dependencies beyond the core's.
+flow = []
+# Everything: what apps got before the split.
+full = ["args", "flow", "fuzzy", "logging", "output", "paths", "table"]
+# Ranked fuzzy matching (nucleo) for the picker, the browsed grid's filter
+# and `fuzzy::Fuzzy`; without it they match substrings.
+fuzzy = ["dep:nucleo-matcher"]
+# The tracing subscriber; with it, errors are also logged at `error`.
+logging = ["dep:tracing", "dep:tracing-subscriber", "flow"]
+# JSON output: `Renderable`, the report types, `CliError`'s JSON document
+# and `with_details`.
+output = ["dep:serde", "dep:serde_json", "table"]
+# XDG paths, private files, and the workspace config walk (dirs, toml).
+paths = ["dep:dirs", "dep:serde", "dep:toml", "flow"]
+# `Grid`, `Flow::table`, the browsed grid: tables, laid out by the kit.
+table = ["flow"]
+
+# No `unsafe` in any target.
 [lints.rust]
 unsafe_code = "forbid"
