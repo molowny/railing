@@ -16,9 +16,9 @@ use std::process::{Child, ChildStdout, Command, Stdio};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-use cli_kit::style::{Caps, TermEnv};
-use cli_kit::term::signals::{self, SIGHUP, SIGINT, SIGTERM};
-use cli_kit::term::{Event, Key, Line, Tty};
+use railing::style::{Caps, TermEnv};
+use railing::term::signals::{self, SIGHUP, SIGINT, SIGTERM};
+use railing::term::{Event, Key, Line, Tty};
 use rustix::event::{PollFd, PollFlags, Timespec};
 use rustix::fs::{Mode, OFlags};
 use rustix::process::{Pid, Signal};
@@ -115,9 +115,9 @@ fn secret_child(
     mask: bool,
     say: impl Fn(&mut std::io::Stdout, String),
 ) {
-    use cli_kit::prompt::{self, Echo, Secret};
-    use cli_kit::render::Region;
-    use cli_kit::step::{self, Body, Foot, Status, Step};
+    use railing::prompt::{self, Echo, Secret};
+    use railing::render::Region;
+    use railing::step::{self, Body, Foot, Status, Step};
     let step = Step {
         status: Status::Active,
         label: "Password",
@@ -136,7 +136,7 @@ fn secret_child(
     let mut raw = tty.raw().unwrap();
     say(out, "ready".into());
     loop {
-        let mut paint = |s: &mut cli_kit::term::AltScreen, n: usize| {
+        let mut paint = |s: &mut railing::term::AltScreen, n: usize| {
             write!(s, "\r[{}]", "▪".repeat(n))?;
             s.flush()
         };
@@ -531,7 +531,7 @@ fn caps_belong_to_each_terminal() {
     let b = Tty::open(&pty.path, &dumb).unwrap();
     assert_eq!(a.caps(), Caps::COLOR);
     assert_eq!(b.caps(), Caps::PLAIN);
-    use cli_kit::glyph::{self, State};
+    use railing::glyph::{self, State};
     assert_eq!(glyph::step(a.caps(), State::Active), "\x1b[36m◆\x1b[0m");
     assert_eq!(glyph::step(b.caps(), State::Active), "◆");
     assert_eq!(a.with_caps(Caps::PLAIN).caps(), Caps::PLAIN);

@@ -11,8 +11,8 @@
 //! ([`crate::color`]) and per terminal ([`crate::style::Caps`]).
 //!
 //! ```
-//! use cli_kit::style::{Caps, Color};
-//! use cli_kit::theme::{self, Background, Ink, Swatch};
+//! use railing::style::{Caps, Color};
+//! use railing::theme::{self, Background, Ink, Swatch};
 //!
 //! let mut t = theme::Theme::default();
 //! t.accent = Swatch::both(Ink::Color(Color::Magenta));

@@ -1,13 +1,13 @@
-//! The scenes: cli-kit's public API run the way apps run it, and the keys a
+//! The scenes: railing's public API run the way apps run it, and the keys a
 //! user would press. Each runs at every listed width, with colour on and off.
 
 use std::fmt::Debug;
 use std::io::Write;
 use std::process::ExitCode;
 
-use cli_kit::flow::{self, Outcome};
-use cli_kit::{CheckRow, CheckStatus, ChecksReport, CliError, Flow, Grid, Gutter, Tone};
-use cli_kit::{prompts, style, ui};
+use railing::flow::{self, Outcome};
+use railing::{CheckRow, CheckStatus, ChecksReport, CliError, Flow, Grid, Gutter, Tone};
+use railing::{prompts, style, ui};
 
 use crate::pty::{Locale, Session};
 use crate::screen;
@@ -134,8 +134,8 @@ fn capture(scene: &Scene, cols: u16, color: bool, locale: Locale) -> Result<Stri
 
 /// In the child: run the scene and exit with its code.
 pub fn run_child(name: &str, color: bool) -> ExitCode {
-    cli_kit::color::set_stream(cli_kit::color::Stream::Stdout, color);
-    cli_kit::color::set_stream(cli_kit::color::Stream::Stderr, color);
+    railing::color::set_stream(railing::color::Stream::Stdout, color);
+    railing::color::set_stream(railing::color::Stream::Stderr, color);
     let Some(scene) = SCENES.iter().find(|s| s.name == name) else {
         eprintln!("no scene {name}");
         return ExitCode::from(99);
@@ -196,7 +196,7 @@ static SCENES: &[Scene] = &[
             f.info("Using profile release");
             f.remark("cached: 12 of 14");
             f.warn("2 tests skipped");
-            f.error("lint failed in cli-kit");
+            f.error("lint failed in railing");
             f.step(LONG);
             f.info("first line\nsecond line");
             f.done("Deployed");
@@ -411,9 +411,9 @@ static SCENES: &[Scene] = &[
         historical: false,
         term: XTERM,
         run: || {
-            use cli_kit::render::{Block, Park, Region};
+            use railing::render::{Block, Park, Region};
             use std::io::Write as _;
-            let mut tty = cli_kit::term::Tty::stderr().expect("stderr");
+            let mut tty = railing::term::Tty::stderr().expect("stderr");
             let _ = writeln!(tty, "above");
             let mut r = Region::new(tty.caps());
             let lines = |ls: &[&str]| Block::of_lines(ls.iter().map(|l| l.to_string()));
@@ -439,14 +439,14 @@ static SCENES: &[Scene] = &[
         historical: false,
         term: XTERM,
         run: || {
-            use cli_kit::progress::{self, Part};
-            use cli_kit::style::Style;
+            use railing::progress::{self, Part};
+            use railing::style::Style;
             let f = Flow::begin("app watch", true);
             f.step("submitted r-x");
             let Some(mut live) = f.live() else {
                 return 2;
             };
-            let caps = cli_kit::color::caps(cli_kit::color::Stream::Stderr);
+            let caps = railing::color::caps(railing::color::Stream::Stderr);
             let frame = |ok: u64, bad: u64, run: u64, extra: &[&str]| {
                 let parts = [
                     Part::new(ok, Style::new().green()),
@@ -867,19 +867,19 @@ static SCENES: &[Scene] = &[
                 .wait()
                 .key('k', "enter recovery kit")
                 .detach("finish later");
-            let view = cli_kit::WaitView {
+            let view = railing::WaitView {
                 title: "Joining".into(),
                 status: "waiting for approval".into(),
                 steps: vec![
-                    (cli_kit::Mark::Done, "code accepted".into()),
-                    (cli_kit::Mark::Active, "approval".into()),
-                    (cli_kit::Mark::Pending, "make the store".into()),
+                    (railing::Mark::Done, "code accepted".into()),
+                    (railing::Mark::Active, "approval".into()),
+                    (railing::Mark::Pending, "make the store".into()),
                 ],
                 deadline: None,
             };
             let tick = loop {
                 match w.tick(&view, std::time::Duration::from_millis(100)) {
-                    Ok(cli_kit::Tick::Idle) => continue,
+                    Ok(railing::Tick::Idle) => continue,
                     other => break other,
                 }
             };

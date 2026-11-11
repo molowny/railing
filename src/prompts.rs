@@ -10,7 +10,7 @@
 //! # Usage
 //!
 //! ```ignore
-//! use cli_kit::prompts;
+//! use railing::prompts;
 //!
 //! let path = prompts::input("Certificate PEM path", "")?;
 //! let pass = prompts::password("Key passphrase (leave blank if none)")?;

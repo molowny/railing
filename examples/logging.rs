@@ -14,7 +14,7 @@ fn main() {
         .map(|a| a.chars().filter(|c| *c == 'v').count() as u8)
         .unwrap_or(0);
 
-    cli_kit::logging::init(verbosity);
+    railing::logging::init(verbosity);
 
     info!("starting up");
     debug!(user = "alice", "loaded profile");

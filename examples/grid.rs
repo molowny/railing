@@ -1,15 +1,15 @@
 //! Every `Tone` in a live flow and as the plain table.
 //!
 //! Run with:
-//!   cargo run -p cli-kit --example grid             # live box on stderr
-//!   cargo run -p cli-kit --example grid | cat       # plain: no colour on stdout
-//!   NO_COLOR=1 cargo run -p cli-kit --example grid  # live, no colour
-//!   cargo run -p cli-kit --example grid -- plain    # plain, coloured on a TTY
+//!   cargo run -p railing --example grid             # live box on stderr
+//!   cargo run -p railing --example grid | cat       # plain: no colour on stdout
+//!   NO_COLOR=1 cargo run -p railing --example grid  # live, no colour
+//!   cargo run -p railing --example grid -- plain    # plain, coloured on a TTY
 
-use cli_kit::{Flow, Grid, Tone};
+use railing::{Flow, Grid, Tone};
 
 fn main() {
-    cli_kit::ui::init_colors();
+    railing::ui::init_colors();
     let plain = std::env::args().any(|a| a == "plain");
     let live = !plain
         && std::io::IsTerminal::is_terminal(&std::io::stderr())

@@ -1,5 +1,5 @@
 [package]
-name = "cli-kit"
+name = "railing"
 version = "0.8.0"
 description = "Reusable CLI helpers: structured output, interactive prompts, and logging bootstrap"
 edition = "2024"
@@ -19,7 +19,7 @@ unicode-width      = "0.2"
 zeroize            = { version = "1.7", features = ["derive", "serde"] }
 
 # The terminal (termios, poll, fstat) through rustix's safe API, and signals
-# through signal-hook's: cli-kit has no `unsafe` of its own
+# through signal-hook's: railing has no `unsafe` of its own
 # (`#![forbid(unsafe_code)]`).
 [target.'cfg(unix)'.dependencies]
 rustix      = { version = "1.1", default-features = false, features = ["std", "termios", "fs", "event"] }
@@ -28,7 +28,7 @@ signal-hook = { version = "0.3", default-features = false, features = ["iterator
 [dev-dependencies]
 tempfile = { version = "3" }
 # Apps pass anyhow errors to `CliError::internal`; the tests hold the chain
-# that comes through to what it always said. cli-kit itself has no anyhow.
+# that comes through to what it always said. railing itself has no anyhow.
 anyhow   = { version = "1" }
 # The golden capture (tests/golden): a terminal emulator to read the pty
 # back as a screen, and openpty. avt, not vt100: vt100 0.15 drops SGR 2
@@ -41,7 +41,7 @@ avt      = "0.19"
 [target.'cfg(unix)'.dev-dependencies]
 rustix = { version = "1.1", default-features = false, features = ["std", "termios", "fs", "event", "pty", "process"] }
 
-# What cli-kit draws today, as the refactor's target (docs/core-refactor.md
+# What railing draws today, as the refactor's target (docs/core-refactor.md
 # § M0). Its own main: scenes re-run this binary on a pty.
 [[test]]
 name = "golden"

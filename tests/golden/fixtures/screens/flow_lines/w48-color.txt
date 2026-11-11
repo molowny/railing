@@ -13,7 +13,7 @@ cursor 21:1 shown
 ⟦bright-black⟧│⟦⟧
 ⟦yellow⟧▲⟦⟧  2 tests skipped
 ⟦bright-black⟧│⟦⟧
-⟦red⟧■⟦⟧  lint failed in cli-kit
+⟦red⟧■⟦⟧  lint failed in railing
 ⟦bright-black⟧│⟦⟧
 ⟦green⟧◇⟦⟧  Resolved the dependency graph for every
 ⟦bright-black⟧│⟦⟧  workspace member, including the optional

@@ -17,8 +17,8 @@ use crate::term::{AltScreen, Event, Key, Raw};
 /// changes. A mask needs the alternate screen, held:
 ///
 /// ```compile_fail
-/// # use cli_kit::prompt::Echo;
-/// # fn f(tty: &mut cli_kit::term::Tty) {
+/// # use railing::prompt::Echo;
+/// # fn f(tty: &mut railing::term::Tty) {
 /// // A Tty is not an AltScreen: there is no way to mask inline.
 /// let echo = Echo::Mask { screen: tty, paint: &mut |_, _| Ok(()) };
 /// # }

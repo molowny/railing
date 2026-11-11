@@ -4,7 +4,7 @@
 //!   cargo run --example output
 //!   cargo run --example output -- json
 
-use cli_kit::{DiagnosticsOutput, Grid, OutputFormat, Renderable};
+use railing::{DiagnosticsOutput, Grid, OutputFormat, Renderable};
 
 struct User {
     name: String,

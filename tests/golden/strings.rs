@@ -1,9 +1,9 @@
 //! Pure strings, byte for byte: escapes are written `\e` so a fixture shows
 //! exactly what was emitted, not what a terminal made of it.
 
-use cli_kit::glyph::{self, State};
-use cli_kit::style::Caps;
-use cli_kit::{CliError, Grid, Tone, style, ui};
+use railing::glyph::{self, State};
+use railing::style::Caps;
+use railing::{CliError, Grid, Tone, style, ui};
 
 pub fn all() -> Vec<(String, Result<String, String>)> {
     let mut out = Vec::new();
@@ -24,8 +24,8 @@ pub fn all() -> Vec<(String, Result<String, String>)> {
 }
 
 fn colors(on: bool) {
-    cli_kit::color::set_stream(cli_kit::color::Stream::Stdout, on);
-    cli_kit::color::set_stream(cli_kit::color::Stream::Stderr, on);
+    railing::color::set_stream(railing::color::Stream::Stdout, on);
+    railing::color::set_stream(railing::color::Stream::Stderr, on);
 }
 
 fn visible(s: &str) -> String {
@@ -92,7 +92,7 @@ fn ui_styles() -> String {
         ("diff_removed", ui::diff_removed("old-item")),
         ("dim_hint", ui::dim_hint("press q to quit")),
         ("warn_body", ui::warn_body("check the logs")),
-        ("flow::bar", cli_kit::flow::bar()),
+        ("flow::bar", railing::flow::bar()),
     ]
     .iter()
     .map(|(name, s)| format!("{name:<13}{}\n", visible(s)))
@@ -160,8 +160,8 @@ fn errors() -> String {
 /// cancelled forms, an input row with a value, and the plain form for a
 /// terminal that cannot redraw.
 fn steps(color: bool) -> String {
-    use cli_kit::render::Park;
-    use cli_kit::step::{self, Body, Foot, Status, Step};
+    use railing::render::Park;
+    use railing::step::{self, Body, Foot, Status, Step};
     let caps = Caps {
         color,
         redraw: true,
@@ -191,7 +191,7 @@ fn steps(color: bool) -> String {
         foot: Foot::Message("[Esc](Preview)"),
     };
     let mut out = String::new();
-    let mut show = |name: &str, b: cli_kit::render::Block| {
+    let mut show = |name: &str, b: railing::render::Block| {
         let park = match b.park {
             Some(Park::At { up, col }) => format!("park up {up} col {col}"),
             Some(Park::Here) => "park here".into(),

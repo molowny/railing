@@ -4,7 +4,7 @@
 
 use std::process::ExitCode;
 
-use cli_kit::CliError;
+use railing::CliError;
 
 fn do_work(kind: &str) -> Result<(), CliError> {
     match kind {

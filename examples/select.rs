@@ -2,10 +2,10 @@
 //! over the same rows.
 //!
 //! Run with:
-//!   cargo run -p cli-kit --example select           # select
-//!   cargo run -p cli-kit --example select -- pick   # the picker, same rows
+//!   cargo run -p railing --example select           # select
+//!   cargo run -p railing --example select -- pick   # the picker, same rows
 
-use cli_kit::{CliError, prompts, ui};
+use railing::{CliError, prompts, ui};
 
 fn run(pick: bool) -> Result<(), CliError> {
     ui::intro("select example")?;

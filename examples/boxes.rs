@@ -3,11 +3,11 @@
 //! and — last — the browsed grid frozen on its view (`q` to finish).
 //!
 //! Run with:
-//!   cargo run -p cli-kit --example boxes              # all boxes, then the grid
-//!   cargo run -p cli-kit --example boxes -- no-grid   # the static boxes only
+//!   cargo run -p railing --example boxes              # all boxes, then the grid
+//!   cargo run -p railing --example boxes -- no-grid   # the static boxes only
 
-use cli_kit::flow::text_box;
-use cli_kit::{Browse, CheckRow, CheckStatus, ChecksReport, CliError, Flow, Grid, Tone};
+use railing::flow::text_box;
+use railing::{Browse, CheckRow, CheckStatus, ChecksReport, CliError, Flow, Grid, Tone};
 
 fn items() -> Grid {
     let mut g = Grid::new(&["Id", "Type", "Title", "Size"])
@@ -56,7 +56,7 @@ fn run(flow: &Flow, grid: bool) -> Result<(), CliError> {
 }
 
 fn main() -> std::process::ExitCode {
-    cli_kit::ui::init_colors();
+    railing::ui::init_colors();
     let grid = !std::env::args().any(|a| a == "no-grid");
     let live = std::io::IsTerminal::is_terminal(&std::io::stderr())
         && std::io::IsTerminal::is_terminal(&std::io::stdout());
@@ -66,6 +66,6 @@ fn main() -> std::process::ExitCode {
             flow.done("every box shown");
             std::process::ExitCode::SUCCESS
         }
-        Err(e) => cli_kit::flow::render_error(&e),
+        Err(e) => railing::flow::render_error(&e),
     }
 }

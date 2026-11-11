@@ -1,20 +1,20 @@
 //! A progress bar and a live panel in one flow.
 //!
 //! ```text
-//! cargo run -p cli-kit --features full --example progress
+//! cargo run -p railing --features full --example progress
 //! ```
 
 use std::thread::sleep;
 use std::time::Duration;
 
-use cli_kit::Flow;
-use cli_kit::color::{self, Stream};
-use cli_kit::flow::Outcome;
-use cli_kit::progress::{self, Part};
-use cli_kit::style::Style;
+use railing::Flow;
+use railing::color::{self, Stream};
+use railing::flow::Outcome;
+use railing::progress::{self, Part};
+use railing::style::Style;
 
 fn main() {
-    cli_kit::ui::init_colors();
+    railing::ui::init_colors();
     let flow = Flow::begin("example progress", true);
 
     // A bar on its own line, animated for us.
@@ -47,7 +47,7 @@ fn main() {
                 progress::bar(caps, &parts, total, w),
                 progress::count(ok + bad, total),
                 progress::percent(ok + bad, total),
-                cli_kit::glyph::dim(caps, &format!("✓ {ok}  ✗ {bad}  ▶ {running} running")),
+                railing::glyph::dim(caps, &format!("✓ {ok}  ✗ {bad}  ▶ {running} running")),
             ));
             sleep(Duration::from_millis(60));
         }

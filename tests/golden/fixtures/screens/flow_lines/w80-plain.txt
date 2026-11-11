@@ -13,7 +13,7 @@ cursor 20:1 shown
 │
 ▲  2 tests skipped
 │
-■  lint failed in cli-kit
+■  lint failed in railing
 │
 ◇  Resolved the dependency graph for every workspace member, including the
 │  optional features each app enables, in one pass

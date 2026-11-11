@@ -16,7 +16,7 @@
 //! a terminal, `TERM` not unset, empty or `dumb`, `NO_COLOR` not set.
 //!
 //! ```
-//! use cli_kit::color::{self, style};
+//! use railing::color::{self, style};
 //!
 //! color::set(true, false);
 //! assert_eq!(style("ok").green().to_string(), "\x1b[32mok\x1b[0m");

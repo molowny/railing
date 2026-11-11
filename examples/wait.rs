@@ -1,12 +1,12 @@
 //! A wait with a countdown, a checklist and keys:
 //!
-//!     cargo run -p cli-kit --features full --example wait
+//!     cargo run -p railing --features full --example wait
 //!
 //! `k` finishes the active step, Esc (or Ctrl‑C) leaves, `x` cancels.
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use cli_kit::{CliError, Flow, Mark, Tick, WaitView};
+use railing::{CliError, Flow, Mark, Tick, WaitView};
 
 fn main() -> Result<(), CliError> {
     let flow = Flow::begin("wait demo", true);

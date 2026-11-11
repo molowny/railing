@@ -1,15 +1,15 @@
 //! Demonstrates the spinner and intro/outro banners. Messages inside a
-//! command go through `cli_kit::Flow` (see the `grid` example).
+//! command go through `railing::Flow` (see the `grid` example).
 //!
 //! Run with: `cargo run --example ui`
 
 use std::thread::sleep;
 use std::time::Duration;
 
-use cli_kit::{CliError, ui};
+use railing::{CliError, ui};
 
 fn run() -> Result<(), CliError> {
-    ui::intro("cli-kit ui demo")?;
+    ui::intro("railing ui demo")?;
 
     ui::log::info("3 items loaded")?;
     ui::log::warning("cache is stale")?;

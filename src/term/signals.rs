@@ -1,9 +1,9 @@
 //! Signals that wake a key read instead of killing a raw terminal.
 //!
-//! Opt-in: nothing here runs until an app calls [`install`] (cli-kit is a
+//! Opt-in: nothing here runs until an app calls [`install`] (railing is a
 //! library, and signal disposition is the app's). Once installed, each
 //! signal is received on a thread of its own (signal-hook's self-pipe, read
-//! by a thread named `cli-kit-signals`), so everything below is ordinary
+//! by a thread named `railing-signals`), so everything below is ordinary
 //! code, not a signal handler:
 //!
 //! - **While a terminal is raw** (a [`super::Raw`] is alive), the first
@@ -81,7 +81,7 @@ pub fn install(signals: &[c_int]) -> io::Result<()> {
     let mut sigs = Signals::new(signals)?;
     *installed = Some(sigs.handle());
     std::thread::Builder::new()
-        .name("cli-kit-signals".into())
+        .name("railing-signals".into())
         .spawn(move || {
             for sig in sigs.forever() {
                 deliver(wake, sig);

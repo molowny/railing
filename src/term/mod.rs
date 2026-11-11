@@ -10,8 +10,8 @@
 //! command drawing on its own stderr.
 //!
 //! ```no_run
-//! use cli_kit::style::TermEnv;
-//! use cli_kit::term::{Event, Key, Tty};
+//! use railing::style::TermEnv;
+//! use railing::term::{Event, Key, Tty};
 //!
 //! let tty = Tty::open("/dev/pts/3", &TermEnv::of_process())?;
 //! let mut raw = tty.raw()?;

@@ -2,15 +2,15 @@
 //! opens inline in the flow and freezes on the view the person ends on.
 //!
 //! Run with:
-//!   cargo run -p cli-kit --example data_grid               # grid when 200 rows do not fit
-//!   cargo run -p cli-kit --example data_grid -- 5          # fits: the table, no grid
-//!   cargo run -p cli-kit --example data_grid -- 200 never  # `--no-pager`
-//!   cargo run -p cli-kit --example data_grid | cat         # plain: the table on stdout
+//!   cargo run -p railing --example data_grid               # grid when 200 rows do not fit
+//!   cargo run -p railing --example data_grid -- 5          # fits: the table, no grid
+//!   cargo run -p railing --example data_grid -- 200 never  # `--no-pager`
+//!   cargo run -p railing --example data_grid | cat         # plain: the table on stdout
 
-use cli_kit::{Browse, CliError, Flow, Grid, GridCell, SortKey, Tone};
+use railing::{Browse, CliError, Flow, Grid, GridCell, SortKey, Tone};
 
 fn main() -> std::process::ExitCode {
-    cli_kit::ui::init_colors();
+    railing::ui::init_colors();
     let mut args = std::env::args().skip(1);
     let n: usize = args.next().and_then(|a| a.parse().ok()).unwrap_or(200);
     let policy = match args.next().as_deref() {
@@ -22,7 +22,7 @@ fn main() -> std::process::ExitCode {
         && std::io::IsTerminal::is_terminal(&std::io::stdout());
     match run(Flow::begin("data_grid example", live).browse(policy), n) {
         Ok(()) => std::process::ExitCode::SUCCESS,
-        Err(e) => cli_kit::flow::render_error(&e),
+        Err(e) => railing::flow::render_error(&e),
     }
 }
 

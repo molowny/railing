@@ -1,13 +1,13 @@
-//! Demonstrates every prompt helper in `cli_kit::prompts`.
+//! Demonstrates every prompt helper in `railing::prompts`.
 //!
 //! Run with: `cargo run --example prompts`
 //!
 //! Press Esc or Ctrl+C at any prompt to see `CliError::Cancelled` propagate.
 
-use cli_kit::{CliError, prompts, ui};
+use railing::{CliError, prompts, ui};
 
 fn run() -> Result<(), CliError> {
-    ui::intro("cli-kit prompts demo")?;
+    ui::intro("railing prompts demo")?;
 
     let name = prompts::input("What is your name?", "e.g. Ada")?;
     let nickname = prompts::input_with_default("Nickname", &name)?;

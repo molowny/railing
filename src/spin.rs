@@ -79,7 +79,7 @@ impl std::str::FromStr for SpinnerStyle {
 static STYLE: AtomicU8 = AtomicU8::new(1);
 
 /// Use `style` for every spinner started from now on (`Flow::task`,
-/// `ui::Spinner`, a `Wait`'s active step). The app's choice — cli-kit only
+/// `ui::Spinner`, a `Wait`'s active step). The app's choice — railing only
 /// offers the styles.
 pub fn set_spinner_style(style: SpinnerStyle) {
     let i = SpinnerStyle::ALL
@@ -154,7 +154,7 @@ impl Spin {
         self
     }
 
-    /// The pulsing shape, in cli-kit's colour for what is in progress: the
+    /// The pulsing shape, in railing's colour for what is in progress: the
     /// cyan of the open `◆`, the active frame and the picker's cursor.
     pub fn symbol(&self, caps: Caps) -> String {
         let all = self.style.frames();

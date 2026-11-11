@@ -409,7 +409,7 @@ impl Gutter {
 /// notices and tables. Calling this once early in `main()` makes the
 /// decision explicit; without it each stream detects on first use.
 ///
-/// `cli_kit::logging::init` calls this automatically — most binaries
+/// `railing::logging::init` calls this automatically — most binaries
 /// don't need to invoke it explicitly.
 pub fn init_colors() {
     init_colors_with(std::env::var_os("NO_COLOR").is_some());

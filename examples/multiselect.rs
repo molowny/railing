@@ -1,8 +1,8 @@
 //! `prompts::multiselect` — zero or more choices, all selected to start.
 //!
-//! Run with: `cargo run -p cli-kit --example multiselect`
+//! Run with: `cargo run -p railing --example multiselect`
 
-use cli_kit::{CliError, prompts, ui};
+use railing::{CliError, prompts, ui};
 
 fn run() -> Result<(), CliError> {
     ui::intro("multiselect example")?;

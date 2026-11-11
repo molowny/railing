@@ -1,4 +1,4 @@
-# cli-kit
+# railing
 
 Reusable CLI helpers library for Rust command-line applications. Provides structured output, interactive prompts, and logging bootstrap. No ratatui: an app's full-screen TUI is its own.
 
@@ -8,14 +8,14 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-cli-kit = "0.1"
+railing = "0.1"
 ```
 
 To enable optional features:
 
 ```toml
 [dependencies]
-cli-kit = { version = "0.1", features = ["flow", "output"] }
+railing = { version = "0.1", features = ["flow", "output"] }
 ```
 
 ## Modules
@@ -43,7 +43,7 @@ cli-kit = { version = "0.1", features = ["flow", "output"] }
 ## Feature flags
 
 The default is the core alone; an app lists the features it uses
-(`cli-kit = { workspace = true, features = ["output", "args"] }`).
+(`railing = { workspace = true, features = ["output", "args"] }`).
 
 | Flag | Enables | Extra dependencies |
 |------|---------|-------------------|
@@ -64,7 +64,7 @@ terminal (`Caps`); `flow` adds the process's decision for its own stdout and
 stderr (`color`, with `style("x").green().for_stderr()`), and draws its
 prompts and lists through `term` as well
 ([docs/core-refactor.md](docs/core-refactor.md)). `mise run
-cli-kit:check:features` builds and tests each feature on its own.
+railing:check:features` builds and tests each feature on its own.
 
 ## Examples
 
@@ -134,8 +134,8 @@ keys; the app's own handler, if any, is put back after.
 An app with a JSON mode opts in once, after parsing:
 
 ```rust
-let cli: Cli = cli_kit::args::parse();     // clap errors honour --json too
-cli_kit::output::set_format(opts.format);   // errors reaching main follow it
+let cli: Cli = railing::args::parse();     // clap errors honour --json too
+railing::output::set_format(opts.format);   // errors reaching main follow it
 ```
 
 From then on, in JSON mode, an error that reaches `main`
@@ -235,13 +235,13 @@ The Bash and PowerShell/Elvish startup snippets regenerate on each shell launch.
 
 ### App integration
 
-Use `cli_kit::completion::Shell` as a clap `#[arg(value_enum)]` argument on a
+Use `railing::completion::Shell` as a clap `#[arg(value_enum)]` argument on a
 `Completions { shell }` subcommand. Immediately after parsing, before logging
 or configuration loading, handle it with:
 
 ```rust,ignore
 if let Commands::Completions { shell } = &cli.command {
-    return cli_kit::completion::print::<Cli>(*shell);
+    return railing::completion::print::<Cli>(*shell);
 }
 ```
 

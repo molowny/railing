@@ -3,18 +3,18 @@
 //! line; then one task that is cleared and one bare spinner.
 //!
 //! Run with:
-//!   cargo run -p cli-kit --example spinner                  # every style, one after another
-//!   cargo run -p cli-kit --example spinner -- slow          # three times as long, to watch it
-//!   cargo run -p cli-kit --example spinner -- square slow   # one style: star, diamond, square, circle
+//!   cargo run -p railing --example spinner                  # every style, one after another
+//!   cargo run -p railing --example spinner -- slow          # three times as long, to watch it
+//!   cargo run -p railing --example spinner -- square slow   # one style: star, diamond, square, circle
 
 use std::thread::sleep;
 use std::time::Duration;
 
-use cli_kit::Flow;
-use cli_kit::ui::{SpinnerStyle, set_spinner_style};
+use railing::Flow;
+use railing::ui::{SpinnerStyle, set_spinner_style};
 
 fn main() {
-    cli_kit::ui::init_colors();
+    railing::ui::init_colors();
     let args: Vec<String> = std::env::args().skip(1).collect();
     let pace = if args.iter().any(|a| a == "slow") {
         3

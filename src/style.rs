@@ -8,7 +8,7 @@
 //! follows a flag that belongs to stdout.
 //!
 //! ```
-//! use cli_kit::style::{Caps, Style};
+//! use railing::style::{Caps, Style};
 //!
 //! let cyan = Style::new().cyan();
 //! assert_eq!(cyan.paint(Caps::COLOR, "◆"), "\x1b[36m◆\x1b[0m");

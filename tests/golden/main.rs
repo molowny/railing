@@ -1,9 +1,9 @@
-//! Golden capture (core refactor, M0): what cli-kit draws today, as the target
+//! Golden capture (core refactor, M0): what railing draws today, as the target
 //! the refactor must reproduce. See `docs/core-refactor.md` § M0.
 //!
 //! Two kinds of fixture, both under `tests/golden/fixtures/`:
 //!
-//! - **Screens** (`screens/<scene>/<variant>.txt`). Each scene runs cli-kit's
+//! - **Screens** (`screens/<scene>/<variant>.txt`). Each scene runs railing's
 //!   public API (a `Flow`, a prompt, an error reaching `main`) in a child of
 //!   this binary on a real pty, with the pty as its controlling terminal. The
 //!   test drives keys into the pty and snapshots what a terminal would show
@@ -28,9 +28,9 @@
 //! written): the flow's marks do not depend on the locale.
 //!
 //! ```text
-//! cargo test -p cli-kit --features full --test golden                         # compare
-//! CLI_KIT_GOLDEN_UPDATE=1 cargo test -p cli-kit --features full --test golden # rewrite
-//! cargo test -p cli-kit --features full --test golden -- input                # scenes matching
+//! cargo test -p railing --features full --test golden                         # compare
+//! RAILING_GOLDEN_UPDATE=1 cargo test -p railing --features full --test golden # rewrite
+//! cargo test -p railing --features full --test golden -- input                # scenes matching
 //! ```
 #![forbid(unsafe_code)]
 
@@ -44,10 +44,10 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 /// Set in a child: the scene to run.
-const SCENE_ENV: &str = "CLI_KIT_GOLDEN_SCENE";
+const SCENE_ENV: &str = "RAILING_GOLDEN_SCENE";
 /// Set in a child: `1` to force colour on, `0` off.
-const COLOR_ENV: &str = "CLI_KIT_GOLDEN_COLOR";
-const UPDATE_ENV: &str = "CLI_KIT_GOLDEN_UPDATE";
+const COLOR_ENV: &str = "RAILING_GOLDEN_COLOR";
+const UPDATE_ENV: &str = "RAILING_GOLDEN_UPDATE";
 
 fn main() -> ExitCode {
     if let Ok(name) = std::env::var(SCENE_ENV) {
