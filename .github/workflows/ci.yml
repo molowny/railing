@@ -30,7 +30,7 @@ jobs:
       matrix:
         feature: [core, flow, fuzzy, table, output, args, logging, paths, full]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -54,7 +54,7 @@ jobs:
     name: test (full)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --locked --features full --all-targets
@@ -75,7 +75,7 @@ jobs:
           - name: full
             args: --features full
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-gnu
