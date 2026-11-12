@@ -3,7 +3,6 @@
 //!
 //! ```text
 //! ◆  Joining ──────────────────────────────────── 9:12 left ─╮
-//! │                                                          │
 //! │   ✓ code accepted                                        │
 //! │   ◓ approval — on desktop run: app approve 3f9a          │
 //! │   · make the store and pull it                           │
@@ -246,7 +245,6 @@ impl Wait {
         let state = if frozen { State::Submit } else { State::Active };
         let frame = Frame::new(inner, state);
         let mut out = frame.head(title, "", Filter::Applied, &left);
-        out += &frame.line("");
         for ((icon, text), (mark, _)) in body.iter().zip(
             view.steps
                 .iter()
@@ -470,13 +468,13 @@ mod tests {
             40,
             false,
         ));
-        // head, blank, two steps, bottom rule, bar, controls
-        assert_eq!(rows.len(), 7, "{rows:#?}");
+        // head, two steps, bottom rule, bar, controls
+        assert_eq!(rows.len(), 6, "{rows:#?}");
         for r in &rows {
             assert!(width(r) < 40, "{r:?} is wider than 40");
         }
         assert!(rows[0].starts_with("◆  Pairing "), "{rows:#?}");
-        assert_eq!(rows[6], "◇  k kit · esc leave", "{rows:#?}");
+        assert_eq!(rows[5], "◇  k kit · esc leave", "{rows:#?}");
     }
 
     #[test]
@@ -526,8 +524,8 @@ mod tests {
         };
         let rows = plain_rows(&Wait::new(false).rows(&bare, 80, false));
         assert!(rows[0].starts_with("◆  Waiting "), "{rows:#?}");
-        assert!(rows[2].contains("waiting for the server"), "{rows:#?}");
-        assert!(spinning(&rows[2]), "{rows:#?}");
+        assert!(rows[1].contains("waiting for the server"), "{rows:#?}");
+        assert!(spinning(&rows[1]), "{rows:#?}");
     }
 
     #[test]

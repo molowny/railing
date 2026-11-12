@@ -3,7 +3,6 @@
 //!
 //! ```text
 //! ◆  Items ▸ [/]git ──────────── 50 of 200 match · 1–4 ─╮
-//! │                                                     │
 //! │ › first row                                         │
 //! │   second row                                        │
 //! ├─────────────────────────────────────────────────────╯
@@ -134,7 +133,6 @@ impl Frame {
             .unwrap_or(0);
         let frame = Frame::new(inner, State::Submit);
         let mut out = frame.head(title, "", Filter::Applied, "");
-        out += &frame.line("");
         for l in body.lines() {
             out += &frame.line(l);
         }
@@ -333,18 +331,17 @@ mod tests {
         let s = Frame::boxed("Items", "ID  TITLE\na1  github");
         let l: Vec<&str> = s.lines().collect();
         assert_eq!(l[0], "◇  Items ──────╮", "{s}");
-        assert_eq!(l[1], "│              │", "{s}");
-        assert_eq!(l[2], "│   ID  TITLE  │", "{s}");
-        assert_eq!(l[3], "│   a1  github │", "{s}");
-        assert!(l[4].starts_with("├") && l[4].ends_with("╯"), "{s}");
-        assert_eq!(l[5], "│");
+        assert_eq!(l[1], "│   ID  TITLE  │", "{s}");
+        assert_eq!(l[2], "│   a1  github │", "{s}");
+        assert!(l[3].starts_with("├") && l[3].ends_with("╯"), "{s}");
+        assert_eq!(l[4], "│");
         let w = core_style::measure(l[0]);
-        assert!(l[..5].iter().all(|x| core_style::measure(x) == w), "{s}");
+        assert!(l[..4].iter().all(|x| core_style::measure(x) == w), "{s}");
         // A title wider than the body widens the box.
         let wide = Frame::boxed("A much longer title", "x");
         let w = core_style::measure(wide.lines().next().unwrap());
         assert_eq!(
-            core_style::measure(wide.lines().nth(2).unwrap()),
+            core_style::measure(wide.lines().nth(1).unwrap()),
             w,
             "{wide}"
         );

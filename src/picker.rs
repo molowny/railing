@@ -3,7 +3,6 @@
 //!
 //! ```text
 //! ◆  Item ▸ /serv▌ ─────────────────── 13 of 60 match · 1–10 ─╮
-//! │                                                            │
 //! │ › Private/service-00                                login   │
 //! │   Homelab/service-01                                note    │
 //! ├────────────────────────────────────────────────────────────╯
@@ -347,7 +346,6 @@ impl<'a> List<'a> {
             };
             frame.head(self.prompt, "", Filter::Applied, &status)
         };
-        out += &frame.line("");
 
         let window = self.window();
         let end = (self.start + window).min(self.shown.len());
@@ -608,7 +606,7 @@ mod tests {
         let frame = plain(&l, &Step::Active);
         let lines: Vec<&str> = frame.lines().collect();
         assert!(lines[0].contains(" 3 of 3 selected "), "{frame}");
-        assert!(lines[2].starts_with("│ › ◼ Cheese"), "{frame}");
+        assert!(lines[1].starts_with("│ › ◼ Cheese"), "{frame}");
         assert!(lines.last().unwrap().contains("space toggle"), "{frame}");
         l.on(Key::Char(' '));
         l.on(Key::Char('j'));
@@ -661,28 +659,28 @@ mod tests {
         l.on(Key::Down);
         let frame = plain(&l, &Step::Active);
         let lines: Vec<&str> = frame.lines().collect();
-        // head, blank, 10 rows, bottom rule, bar, controls
-        assert_eq!(lines.len(), 15, "{frame}");
+        // head, 10 rows, bottom rule, bar, controls
+        assert_eq!(lines.len(), 14, "{frame}");
         assert!(
             lines[0].starts_with("◆  Item ") && lines[0].ends_with(" 1–10 of 40 ─╮"),
             "{frame}"
         );
         assert!(
-            lines[2].starts_with("│   item-00  ") && lines[2].contains("login"),
+            lines[1].starts_with("│   item-00  ") && lines[1].contains("login"),
             "{frame}"
         );
         assert!(
-            lines[3].starts_with("│ › item-01  ") && lines[3].contains("note"),
+            lines[2].starts_with("│ › item-01  ") && lines[2].contains("note"),
             "{frame}"
         );
         assert!(
-            lines[12].starts_with("├") && lines[12].ends_with("╯"),
+            lines[11].starts_with("├") && lines[11].ends_with("╯"),
             "{frame}"
         );
-        assert!(lines[14].starts_with("◇  type to filter"), "{frame}");
+        assert!(lines[13].starts_with("◇  type to filter"), "{frame}");
         let w = core_style::measure(lines[0]);
         assert!(
-            lines[..13].iter().all(|x| core_style::measure(x) == w),
+            lines[..12].iter().all(|x| core_style::measure(x) == w),
             "{frame}"
         );
 

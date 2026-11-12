@@ -4,7 +4,6 @@
 //! ┌  app cmd
 //! │
 //! ◇  Items ────────────────────────╮
-//! │                                │
 //! │  ID   TITLE    UPDATED         │
 //! │  a1   github   2026-10-09      │
 //! ├────────────────────────────────╯
@@ -856,8 +855,8 @@ mod tests {
         }
         let boxed = boxed_note("Items", &g.boxed(80));
         let h = boxed.lines().count();
-        // title, blank, header, 10 rows, bottom rule, trailing bar.
-        assert_eq!(h, 15, "{boxed}");
+        // title, header, 10 rows, bottom rule, trailing bar.
+        assert_eq!(h, 14, "{boxed}");
         assert!(fits(&boxed, h + FRAME_LINES));
         assert!(!fits(&boxed, h + FRAME_LINES - 1));
         // A cell that wraps takes the lines it wraps to.

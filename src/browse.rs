@@ -3,7 +3,6 @@
 //!
 //! ```text
 //! ◆  Items ▸ [/]git ──────────── 50 of 200 match · 1–4 · size ▲ ─╮
-//! │                                                              │
 //! │   ID      TYPE    TITLE      SIZE ▲  STATE                   │
 //! │   784f84  login   item 076   1844 B  synced                  │
 //! │   …                                                          │
@@ -47,9 +46,9 @@ use crate::grid::{Grid, SortKey, Tone};
 const GAP: usize = 2;
 /// A column is never squeezed below this (or its natural width, if less).
 const MIN_COL: usize = 6;
-/// Lines of frame besides the lead lines and rows: the title rule, the blank
-/// under it, the column header, the bottom rule, the bar and the controls.
-const CHROME: usize = 6;
+/// Lines of frame besides the lead lines and rows: the title rule, the
+/// column header, the bottom rule, the bar and the controls.
+const CHROME: usize = 5;
 /// Lines kept free above the frame, so the steps before it stay in view.
 const ABOVE: usize = 6;
 /// The tallest window, however tall the terminal.
@@ -396,7 +395,6 @@ impl<'a> Browser<'a> {
             filter,
             &self.status(finished),
         );
-        out += &line("");
         for l in lead {
             out += &line(&dim(&cut(&one_line(l), inner)));
         }
@@ -733,22 +731,22 @@ mod tests {
         );
         assert!(l[0].ends_with("─╮"), "{frame}");
         assert!(
-            l[2].trim_start_matches("│")
+            l[1].trim_start_matches("│")
                 .trim_start()
                 .starts_with("NAME"),
             "{frame}"
         );
-        assert!(l[3].contains("beta") && l[3].contains("900 B"), "{frame}");
-        assert!(l[7].starts_with("├") && l[7].ends_with("╯"), "{frame}");
-        assert_eq!(l[8], "│");
+        assert!(l[2].contains("beta") && l[2].contains("900 B"), "{frame}");
+        assert!(l[6].starts_with("├") && l[6].ends_with("╯"), "{frame}");
+        assert_eq!(l[7], "│");
         assert!(
-            l[9].starts_with("◇  ↑↓ scroll") && l[9].contains("q done"),
+            l[8].starts_with("◇  ↑↓ scroll") && l[8].contains("q done"),
             "{frame}"
         );
         // Every line of the box is the same width.
         let w = core_style::measure(l[0]);
         assert!(
-            l[..8].iter().all(|x| core_style::measure(x) == w),
+            l[..7].iter().all(|x| core_style::measure(x) == w),
             "{frame}"
         );
     }
@@ -796,7 +794,7 @@ mod tests {
         let frame = Browser::new("T", &grid).render(80, 40, false);
         let l = lines(&frame);
         let end = |s: &str| s.find(" B").unwrap();
-        assert_eq!(end(l[3]), end(l[6]), "{frame}");
+        assert_eq!(end(l[2]), end(l[5]), "{frame}");
     }
 
     #[test]
@@ -820,7 +818,7 @@ mod tests {
         grid.row(["one\ntwo"]);
         let frame = Browser::new("T", &grid).render(80, 40, false);
         let l = lines(&frame);
-        assert!(l[2].contains("First 1 of 9 loaded"), "{frame}");
-        assert!(l[4].contains("one two"), "{frame}");
+        assert!(l[1].contains("First 1 of 9 loaded"), "{frame}");
+        assert!(l[3].contains("one two"), "{frame}");
     }
 }
