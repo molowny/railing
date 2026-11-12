@@ -179,9 +179,11 @@ impl Drop for Progress<'_> {
 pub struct Live {
     #[cfg(unix)]
     tty: crate::term::Tty,
+    #[cfg_attr(not(unix), allow(dead_code))] // drawn only where a Live opens
     region: Region,
     gutter: bool,
     cols: usize,
+    #[cfg_attr(not(unix), allow(dead_code))]
     hidden: bool,
 }
 
@@ -232,6 +234,7 @@ impl Live {
 
     /// The block `text` would be at `cols`: each line behind the gutter and
     /// cut to fit.
+    #[cfg_attr(not(unix), allow(dead_code))]
     fn block(&self, text: &str, cols: usize) -> Block {
         let caps = self.region.caps();
         let width = cols.saturating_sub(1 + self.indent());
@@ -250,6 +253,7 @@ impl Live {
     /// gutter would be (a [`progress::line`], the spinner in it), `body`
     /// behind the bar, and the bar below it, as a finished log entry leaves
     /// one. Bare, `head` and `body` are drawn as given.
+    #[cfg_attr(not(unix), allow(dead_code))]
     fn step_block(&self, head: &str, body: &str, cols: usize) -> Block {
         let head = style::truncate(head, cols.saturating_sub(1), "…").into_owned();
         let body = self.block(body, cols);
