@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Each feature built and unit-tested on its own, and the core with none.
+  # An app lists the features it uses, so each one has to build alone: a gate
+  # that only ever builds with everything on rots unnoticed. Warnings fail it
+  # too, since an unused import under one feature set is what a missing cfg
+  # looks like.
+  features:
+    name: features (${{ matrix.feature }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        feature: [core, flow, fuzzy, table, output, args, logging, paths, full]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.feature }}
+      - name: Feature flags
+        run: |
+          if [ "${{ matrix.feature }}" = core ]; then
+            echo "FEATURE_ARGS=--no-default-features" >> "$GITHUB_ENV"
+          else
+            echo "FEATURE_ARGS=--no-default-features --features ${{ matrix.feature }}" >> "$GITHUB_ENV"
+          fi
+      - name: Check
+        run: cargo check --locked $FEATURE_ARGS --lib
+        env:
+          RUSTFLAGS: -D warnings
+      - name: Unit tests
+        run: cargo test --locked $FEATURE_ARGS --lib
+
+  # Everything on: integration tests (the pty ones included), examples, doctests.
+  test:
+    name: test (full)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --locked --features full --all-targets
+      - run: cargo test --locked --features full --doc
+
+  # Interactive terminals are Unix-only: elsewhere `term` is a stub, a live
+  # flow drops to plain output, and a prompt is a usage error. This keeps that
+  # stub compiling, for the core alone and for the full kit.
+  non-unix:
+    name: non-unix (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: core
+            args: --no-default-features
+          - name: full
+            args: --features full
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-gnu
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: windows-${{ matrix.name }}
+      - run: cargo check --locked --target x86_64-pc-windows-gnu ${{ matrix.args }}
