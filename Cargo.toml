@@ -1,6 +1,6 @@
 [package]
 name = "railing"
-version = "0.9.0"
+version = "0.9.1"
 edition = "2024"
 description = "Building blocks for Rust command-line apps: step-by-step output, interactive prompts, tables, JSON output, structured errors"
 license = "MIT"
