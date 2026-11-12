@@ -4,6 +4,8 @@ version = "0.9.0"
 edition = "2024"
 description = "Reusable CLI helpers: structured output, interactive prompts, and logging bootstrap"
 license = "MIT"
+repository = "https://github.com/molowny/railing"
+exclude = [".github/", ".gitignore", "release-plz.toml"]
 
 [[example]]
 name = "wait"
@@ -124,3 +126,6 @@ table = ["flow"]
 # No `unsafe` in any target.
 [lints.rust]
 unsafe_code = "forbid"
+
+[package.metadata.docs.rs]
+all-features = true

@@ -1,0 +1,8 @@
+[workspace]
+# Breaking changes (`feat!`, or an API break cargo-semver-checks finds) bump
+# 0.x to 0.(x+1); `feat` and `fix` bump the patch.
+semver_check = true
+features_always_increment_minor = false
+changelog_update = true
+git_release_enable = true
+git_tag_name = "v{{ version }}"
