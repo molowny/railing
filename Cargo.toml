@@ -68,11 +68,11 @@ required-features = ["full"]
 [dependencies]
 clap = { version = "4", features = ["derive"], optional = true }
 clap_complete = { version = "4", optional = true }
-dirs = { version = "6", optional = true }
+dirs = { version = "7", optional = true }
 nucleo-matcher = { version = "0.3", optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
-toml = { version = "0.8", optional = true }
+toml = { version = "1.2", optional = true }
 tracing = { version = "0.1", optional = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
 unicode-width = "0.2"
@@ -89,7 +89,7 @@ tempfile = "3"
 # (`#![forbid(unsafe_code)]`).
 [target."cfg(unix)".dependencies]
 rustix = { version = "1.1", default-features = false, features = ["event", "fs", "std", "termios"] }
-signal-hook = { version = "0.3", default-features = false, features = ["iterator"] }
+signal-hook = { version = "0.4", default-features = false, features = ["iterator"] }
 
 # The tests' ptys, sessions and signals, safely as well.
 [target."cfg(unix)".dev-dependencies]
