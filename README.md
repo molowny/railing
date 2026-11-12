@@ -1,249 +1,42 @@
 # railing
 
-Reusable CLI helpers library for Rust command-line applications. Provides structured output, interactive prompts, and logging bootstrap. No ratatui: an app's full-screen TUI is its own.
+Building blocks for Rust command-line apps: step-by-step output, interactive
+prompts, tables, JSON output, structured errors, logging.
 
-## Installation
-
-Add to your `Cargo.toml`:
-
-```toml
-[dependencies]
-railing = "0.1"
-```
-
-To enable optional features:
+## Install
 
 ```toml
 [dependencies]
-railing = { version = "0.1", features = ["flow", "output"] }
+railing = { version = "0.5", features = ["flow"] }
 ```
 
-## Modules
+## Features
 
-### Core
+The core needs no features: terminal handling, raw mode, key input, styling.
+Everything else is opt-in.
 
-| Module | Description |
-|--------|-------------|
-| `flow` | One command as one clack prompt group (`┌ … ◇ … └ ✔`): `Flow` (live or plain), `Grid` tables boxed inside steps (`table_box` for an app with its own gutter), checks, error close via `render_error`; `browse_table` opens a long list as an interactive grid inline in the flow under the app's `Browse` policy (`docs/cli.md` §8.1.1) |
-| `completion` | Static shell completion scripts from the app's clap command tree |
-| `args` | `args::parse::<Cli>()`: clap parsing whose errors follow the JSON error contract when the arguments ask for JSON |
-| `error` | Categorized `CliError` enum (Usage, Cancelled, Auth, Config, External, Internal) with styled rendering, proper exit codes, and a JSON form (`kind`, `to_json`, `with_details`) |
-| `logging` | Tracing subscriber bootstrap with `-v`/`-vv` verbosity levels |
-| `output` | `Renderable` trait for pretty/JSON dual rendering, table helpers, `GlobalOpts`, `set_format` (opt into JSON errors) |
-| `prompts` | Text input, password, confirmation, select, and the filtered picker (`pick`), with automatic cancellation handling |
-| `fuzzy` | `Fuzzy`: the `nucleo-matcher` scorer shared by the picker, the grid and apps' own TUIs |
-| `ui` | Colored alerts, spinners, intro/outro banners |
-| `style` | `Style` painted against a terminal's `Caps` (no global colour flag), `TermEnv`, and escape-aware `measure`/`strip`/`truncate`/`pad` (core) |
-| `term` | `Tty`: a terminal named by path, fd or `Tty::stderr()`, its caps and size; `Raw` (hardened raw mode, the key reader); `signals` that wake a read instead of killing a raw terminal. Unix; a stub elsewhere (core) |
-| `glyph` | The flow's marks (`◆ ◇ ▲ ■`, `│`, `└`) and the muted tone as strings for given `Caps`, for an app drawing the flow's look on a terminal of its own (core) |
-| `spin` | `Spin`: the pulsing shape and the glow as strings at a steady `PACE` — what `ui::Spinner` and `Wait` animate, and what an app on its own terminal animates itself (core) |
-| `progress` | `progress::bar` (one or more coloured parts of a whole; a part that is not zero always shows) and `progress::line` (`◒  msg  ━━━━────  42/100`) as strings (core) |
-| `live` | `Flow::progress(msg, len)`: the progress line animated, ending as a `◇` step; `Flow::live()` / `Live::stderr()`: a block the caller redraws in place (a `--watch` panel), behind the gutter, cut to width, repainted on resize |
+| Feature   | Adds                                             |
+|-----------|--------------------------------------------------|
+| `flow`    | The output flow, prompts, `CliError`             |
+| `fuzzy`   | Fuzzy matching in pickers and table filters      |
+| `table`   | Tables (`Grid`)                                  |
+| `output`  | JSON output and JSON errors                      |
+| `args`    | clap parsing and shell completion                |
+| `logging` | tracing subscriber setup                         |
+| `paths`   | XDG paths and config file lookup                 |
+| `full`    | All of the above                                 |
 
-## Feature flags
-
-The default is the core alone; an app lists the features it uses
-(`railing = { workspace = true, features = ["output", "args"] }`).
-
-| Flag | Enables | Extra dependencies |
-|------|---------|-------------------|
-| (core) | `style`, `term`, `render`, `step`, `glyph`, `group`, `spin`, `progress`, `prompt`: a terminal the caller names, raw mode and keys, the flow's look as strings | rustix, signal-hook (Unix), unicode-width, zeroize — no `unsafe` (`#![forbid(unsafe_code)]`) |
-| `flow` | the live flow, `prompts` and lists, `CliError`, `color`, `wait`, `live` (progress, live panels) | — |
-| `fuzzy` | ranked matching in the picker and the grid's filter (substring without it) | `nucleo-matcher` |
-| `table` | `Grid`, `Flow::table`, the browsed grid, laid out by the kit (+`flow`) | — |
-| `output` | JSON: `Renderable`, the report types, `CliError::to_json` (+`table`) | `serde`, `serde_json` |
-| `args` | `args::parse`, shell completion (+`flow`) | `clap`, `clap_complete` |
-| `logging` | the tracing subscriber; errors also logged (+`flow`) | `tracing`, `tracing-subscriber` |
-| `paths` | XDG paths, private files, `workspace::find` (+`flow`) | `dirs`, `toml`, `serde` |
-| `full` | all of the above | |
-
-The core is what `sealward-askpass` builds: it reads the unlock prompt's keys
-and draws it as a step of the client's flow on a terminal it did not
-inherit, and must keep its dependency tree small. Colour is decided per
-terminal (`Caps`); `flow` adds the process's decision for its own stdout and
-stderr (`color`, with `style("x").green().for_stderr()`), and draws its
-prompts and lists through `term` as well
-([docs/core-refactor.md](docs/core-refactor.md)). `mise run
-railing:check:features` builds and tests each feature on its own.
+Interactive terminal features are Unix-only. Elsewhere, output falls back to
+plain text.
 
 ## Examples
 
-Runnable examples live in [`examples/`](examples/) — one per module.
-
-| Example | Run with | Covers |
-|---------|----------|--------|
-| `errors` | `cargo run --example errors` | Every `CliError` variant, `chain()`, and `render()` exit codes |
-| `logging` | `cargo run --example logging -- -vv` | `logging::init` verbosity levels, stderr-only output |
-| `output` | `cargo run --example output -- json` | `Renderable` trait, `make_table`, `DiagnosticsOutput`, pretty vs JSON |
-| `prompts` | `cargo run --example prompts` | `input`, `password`, `confirm`, `select`, `multiselect`, cancellation |
-| `ui` | `cargo run --example ui` | Gutter log lines (`ui::log`), `Spinner`, intro/outro banners |
-| `boxes` | `cargo run --example boxes` | Every box a flow draws, in one run: `flow.table`, `Grid::kv`, `text_box`, `flow.note`, `flow.checks`, then the frozen `browse_table` (`-- no-grid` skips it) |
-| `spinner` | `cargo run --example spinner` | `Flow::task` / `ui::Spinner` in every `SpinnerStyle` (star, diamond, square, circle) one after another: the pulsing shape and the glow, a task that updates and ends as `◇`, then one cleared (`-- slow` to watch; `-- square` for one style) |
-| `select` | `cargo run --example select` | `prompts::select` over four rows; `-- pick` shows `prompts::pick` over the same rows |
-| `multiselect` | `cargo run --example multiselect` | `prompts::multiselect`, all selected to start |
-| `pick` | `cargo run --example pick` | `prompts::pick` over 60 rows: filtering, scrolling, the count and filter in the box title |
-| `data_grid` | `cargo run --example data_grid` | `Flow::browse_table` over 200 rows, inline: scroll, filter, sort, frozen on `q`; `-- 5` fits, `-- 200 never` is `--no-pager` |
-
-## Asking for a left-out argument
-
-A command that needs something it can list (an item, a run, a profile) asks
-for it when it is left out — but only where asking cannot hang a script or
-end up in captured output:
-
-```rust
-let id = match id {
-    Some(id) => id,
-    None if flow.can_ask() => prompts::pick("Run", &rows)?, // rows: (value, label, hint)
-    None => return Err(CliError::needs("app status", "run", "`app ls` lists them")),
-};
+```sh
+cargo run --features full --example prompts
 ```
 
-- `Flow::can_ask()` — the frame is live (the app's own policy) and stdin is a
-  terminal.
-- `prompts::pick` — a filtered select over owned rows. It shows `Rows::Auto` rows at a
-  time — half the terminal, between 5 and 25; `Picker::new(prompt).rows(Rows::Fixed(n))`
-  sets another number for one call. It draws in the browsed grid's box: the filter is a chip
-  on the title, the count is at its right (`1–12 of 60`, `6 of 60 match · 1–6`), every row
-  shows its hint, and the controls are their own `◇` line. Typing filters the labels with
-  `Fuzzy` — a space separates words; matches rank best first. Esc clears what was typed,
-  then cancels. Once chosen, the box collapses to the prompt and its answer.
-
-```
-◆  Item ▸ /home 1  ───────── 6 of 60 match · 1–6 ─╮
-│                                               │
-│ › Homelab/service-10  ssh key                 │
-│   Homelab/service-13  note                    │
-│   Homelab/service-16  login                   │
-│   …                                           │
-├───────────────────────────────────────────────╯
-│
-◇  ↑↓ move · enter pick · esc clear
-```
-- `CliError::needs(cmd, noun, how)` — the usage error (exit 2) off a terminal:
-  `` `app status` needs a run — `app ls` lists them ``.
-
-Pickers choose; they never skip a confirmation.
-
-Ctrl-C at any prompt is a cancel, not a kill: the prompt closes with
-`Operation cancelled.`, the cursor comes back, and the call returns
-`CliError::Cancelled` (exit 130). SIGINT is ignored only while a prompt reads
-keys; the app's own handler, if any, is put back after.
-
-## JSON errors
-
-An app with a JSON mode opts in once, after parsing:
-
-```rust
-let cli: Cli = railing::args::parse();     // clap errors honour --json too
-railing::output::set_format(opts.format);   // errors reaching main follow it
-```
-
-From then on, in JSON mode, an error that reaches `main`
-(`flow::render_error` / `CliError::render`) is one document on **stdout**,
-where the client is already reading, and nothing is printed on stderr:
-
-```json
-{"error": {"kind": "usage", "message": "…", "exit_code": 2, "details": {}}}
-```
-
-- `kind`: `usage` · `cancelled` · `auth` · `config` · `external` ·
-  `internal` · `failed` (a flow already showed it: `Flow::fail`).
-- `message`: the bare message, without the text prefix (`API error: `);
-  for `internal`, the whole context chain.
-- `exit_code`: the process exit code (2 usage, 130 cancelled, 1 otherwise).
-- `details`: present only when the error carries data
-  (`CliError::with_details`), e.g. an ambiguous lookup's candidates.
-
-So in JSON mode stdout holds exactly one document whether the command
-succeeded or failed, and the exit code says which. Without `set_format`,
-errors stay styled text on stderr.
-
-## Design
-
-- **Clean stdout** -- UI, prompts, and logging go to stderr so structured output stays pipeable
-- **Dual rendering** -- Output types implement both pretty-printed and JSON formats via the `Renderable` trait
-- **Prompt cancellation** -- Esc/Ctrl+C maps to `CliError::Cancelled` (exit code 130)
-- **Terminal-aware** -- The picker and the browsed grid adapt to terminal height; synchronized rendering eliminates flicker
-
-## Contributing
-
-Contributions are welcome! Please open an issue or submit a pull request.
+See [`examples/`](examples/) for the rest.
 
 ## License
 
 [MIT](LICENSE)
-
-## Shell completions
-
-`ksef`, `hackbox`, `plmt`, and `sealward` all provide:
-
-```sh
-ksef completions bash
-```
-
-Replace `ksef` with any of those apps. Supported shells are `bash`, `zsh`,
-`fish`, `powershell`, and `elvish`. The command writes only a shell script to
-stdout, including when JSON or quiet flags are set, and needs no configuration,
-credentials, or running services. These are static completions for the clap
-command tree (commands, flags, and declared choices), not live application data.
-Wright is not included yet.
-
-### Shell setup
-
-For Bash, add this to `~/.bashrc` (or run it in the current shell):
-
-```bash
-for app in ksef hackbox plmt sealward; do
-    if command -v "$app" >/dev/null 2>&1; then
-        source <("$app" completions bash)
-    fi
-done
-```
-
-For Zsh, generate completion files:
-
-```zsh
-mkdir -p ~/.zsh/completions
-for app in ksef hackbox plmt sealward; do
-    if command -v "$app" >/dev/null 2>&1; then
-        "$app" completions zsh > ~/.zsh/completions/_"$app"
-    fi
-done
-```
-
-Add `fpath=(~/.zsh/completions $fpath)` to `~/.zshrc` before your existing
-`compinit` call. If you do not already initialize completion, follow it with
-`autoload -Uz compinit; compinit`.
-
-For Fish, run this in Fish:
-
-```fish
-mkdir -p ~/.config/fish/completions
-for app in ksef hackbox plmt sealward
-    if command -q $app
-        $app completions fish > ~/.config/fish/completions/$app.fish
-    end
-end
-```
-
-For PowerShell, add `ksef completions powershell | Out-String | Invoke-Expression`
-to your `$PROFILE`, repeating for each app. For Elvish, add
-`eval (ksef completions elvish | slurp)` to your rc file for each app.
-
-Regenerate saved scripts after upgrading an app, then start a new shell.
-The Bash and PowerShell/Elvish startup snippets regenerate on each shell launch.
-
-### App integration
-
-Use `railing::completion::Shell` as a clap `#[arg(value_enum)]` argument on a
-`Completions { shell }` subcommand. Immediately after parsing, before logging
-or configuration loading, handle it with:
-
-```rust,ignore
-if let Commands::Completions { shell } = &cli.command {
-    return railing::completion::print::<Cli>(*shell);
-}
-```
-
-The helper derives the executable name and command structure from
-`Cli::command()` and reports stdout write failures as `CliError`.
