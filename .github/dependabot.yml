@@ -1,0 +1,25 @@
+version: 2
+updates:
+  # Workflow actions (checkout, rust-cache, release-plz, …), one PR a week.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Cargo.lock refreshes, and Cargo.toml when a new major version is out.
+  # `chore(deps)`: release-plz does not cut a release for these.
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      cargo:
+        patterns: ["*"]
