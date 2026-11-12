@@ -83,3 +83,5 @@ jobs:
         with:
           key: windows-${{ matrix.name }}
       - run: cargo check --locked --target x86_64-pc-windows-gnu ${{ matrix.args }}
+        env:
+          RUSTFLAGS: -D warnings
