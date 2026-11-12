@@ -2,9 +2,11 @@
 name = "railing"
 version = "0.9.0"
 edition = "2024"
-description = "Reusable CLI helpers: structured output, interactive prompts, and logging bootstrap"
+description = "Building blocks for Rust command-line apps: step-by-step output, interactive prompts, tables, JSON output, structured errors"
 license = "MIT"
 repository = "https://github.com/molowny/railing"
+keywords = ["cli", "terminal", "prompt", "table", "json"]
+categories = ["command-line-interface"]
 exclude = [".github/", ".gitignore", "release-plz.toml"]
 
 [[example]]
