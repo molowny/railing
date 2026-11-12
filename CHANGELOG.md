@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.2](https://github.com/molowny/railing/compare/0.9.1...0.9.2) - 2026-11-12
+
+### Fixed
+
+- *(deps)* bump the cargo group with 3 updates ([#3](https://github.com/molowny/railing/pull/3))
+
 ## [0.9.1](https://github.com/molowny/railing/compare/0.9.0...0.9.1) - 2026-11-12
 
 ### Fixed
