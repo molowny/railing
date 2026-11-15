@@ -187,8 +187,16 @@ struct Pty {
 
 fn openpty(rows: u16, cols: u16) -> Pty {
     use rustix::pty::{self, OpenptFlags};
+    // macOS's posix_openpt takes no O_CLOEXEC, so the flag is set after.
+    #[cfg(not(target_vendor = "apple"))]
     let master = pty::openpt(OpenptFlags::RDWR | OpenptFlags::NOCTTY | OpenptFlags::CLOEXEC)
         .expect("openpt");
+    #[cfg(target_vendor = "apple")]
+    let master = {
+        let master = pty::openpt(OpenptFlags::RDWR | OpenptFlags::NOCTTY).expect("openpt");
+        rustix::io::fcntl_setfd(&master, rustix::io::FdFlags::CLOEXEC).unwrap();
+        master
+    };
     pty::grantpt(&master).unwrap();
     pty::unlockpt(&master).unwrap();
     let name = pty::ptsname(&master, Vec::new()).unwrap();
