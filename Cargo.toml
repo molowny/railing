@@ -86,9 +86,10 @@ tempfile = "3"
 
 # The terminal (termios, poll, fstat) through rustix's safe API, and signals
 # through signal-hook's: railing has no `unsafe` of its own
-# (`#![forbid(unsafe_code)]`).
+# (`#![forbid(unsafe_code)]`). `process` for `geteuid`: `paths` checks a
+# runtime directory is this user's.
 [target."cfg(unix)".dependencies]
-rustix = { version = "1.1", default-features = false, features = ["event", "fs", "std", "termios"] }
+rustix = { version = "1.1", default-features = false, features = ["event", "fs", "process", "std", "termios"] }
 signal-hook = { version = "0.4", default-features = false, features = ["iterator"] }
 
 # The tests' ptys, sessions and signals, safely as well.
