@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.10.0](https://github.com/molowny/railing/compare/0.9.3...0.10.0) - 2026-11-15
+
+### Added
+
+- *(paths)* [**breaking**] XDG layout on macOS, private runtime dir fallback
+
+### Other
+
+- *(term)* fix pty tests not compiling on macOS
+
 ## [0.9.3](https://github.com/molowny/railing/compare/0.9.2...0.9.3) - 2026-11-12
 
 ### Added
